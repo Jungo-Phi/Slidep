@@ -207,4 +207,23 @@ describe("apply_actions auto-closes a belt a gesture makes looped", () => {
     expect(b?.closed).toBe(true);
     expect(validate_mechanism(result)).toBeNull();
   });
+  // The node becomes the junction, which carries nothing but its belt.
+  it("drops a force on the node it closes on", () => {
+    const mech = {
+      ...mechanism(loose_belt_on_join()),
+      loads: [
+        { type: "force" as const, id: id("f1"), targetID: J1, vector: new Point2(0, -1), frame: "world" as const },
+      ],
+    };
+    const result = apply_actions(mech, [
+      {
+        type: "ConnectsFixedNodeEnd",
+        disconnect: false,
+        elementID: BELT,
+        connectID: J1,
+      },
+    ]);
+    expect(result.loads).toEqual([]);
+    expect(validate_mechanism(result)).toBeNull();
+  });
 });

@@ -255,30 +255,8 @@ export type Link = {
       // The junction rides the REDUCED loop (disconnected gears skipped); s0/thetaRef0/refIndex are re-baked at the disconnect event so it doesn't jump.
       disconnected?: boolean[];
       // One-way: the node rides the belt without driving it — no θ_ref, no pulley.
-      // Set on a closure node nobody but the belt has a say in, whose position is then a readout of the belt travel rather than a hold on it.
+      // Set on every closed belt's junction, which carries nothing but its belt: its position is a readout of the belt travel rather than a hold on it.
       passive?: boolean;
-    }
-  // Belt follows tangent (simulation): a beam welded to the belt junction keeps its orientation aligned with the belt tangent at the junction — angle(driven − pivot) = tangentAngle(s) + offset, s = s0 + r_ref·ε_ref·(θ_ref − θ_ref0).
-  // Bidirectional, weighted by the local curvature: on an arc, rotating the beam advances the belt; on a straight run the tangent is fixed so the beam just tracks it.
-  // Baked geometry.
-  | {
-      type: "BeltFollowsTangent";
-      ddl: 1;
-      beltID: ID; // owning belt (owner is the welded beam, so the belt is named here)
-      pivotKey: string;
-      drivenKey: string;
-      gearPosKeys: string[];
-      gearAngleKeys: string[]; // bare gear ids, for reference re-election on disconnect
-      radii: number[];
-      directions: boolean[];
-      refIndex: number;
-      refAngleKey: string; // bare gear id (angle node, not fused)
-      s0: number;
-      thetaRef0: number;
-      offset: number;
-      // Pulleys that lost contact mid-sim (copied from BeltLength).
-      // The tangent is read from the REDUCED loop; s0/thetaRef0/refIndex re-baked at disconnect.
-      disconnected?: boolean[];
     }
   | {
       type: "MotorBeam";

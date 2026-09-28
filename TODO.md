@@ -10,21 +10,18 @@
 
 **Priorités sur le plan général**
 
-- Masse suspendue affiche plus de 150 J d’écart ?
-- Pourquoi la non-convergence chronique de CP, Core XY et Puente ?
-- Le choc en butée de glissière, sur Core XY et Test slider. Crée de l'instabilité
-- (Clock, Jansen, Hoist, Huygens, Vilbrequin + masse lourde) : c’est le levier du chantier performance.
-
-- 🔨 Régler problèmes DDL
-- 🔨 Clean les graphiques
+- 🔨 Passer la cinématique et édition en solver direct
 - 🤔 Clarifier le grab en dynamique (grab -> force ?)
 - 🤔 Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
+- 🆕 Ajouter un paramètre pour inclure/exclure des collisions par élément
+- 🆕 Ajouter un paramètre pour mettre des enroulements en édition
+- 🚨 Faire fonctionner les treuils
+
 - 🔨 Améliorer les performances en édition
 - 🔨 Améliorer les performances en simulation
+- 🔨 Régler problèmes DDL
+- 🔨 Clean les graphiques
 - 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
-- 🆕 Ajouter un paramètre pour inclure/exclure des collisions par élément
-- 🔨 Supprimer poutre sur joint de courroie
-- 🚨 Faire fonctionner les treuils
 - 🆕 Mobile mode
 - 🆕 Copié-collé
 - 🆕 Ajouter contraintes de distance parallèle
@@ -34,19 +31,22 @@
 
 **Rendre la physique exacte (cas faux)**
 
-- 🔨 Finir le boulot de "ratio-masse-convergence-dynamique.md" sur CP.slidep
+- 🚨 On manque d'un moment de réaction d'appuis sur le slider de "Puente"
+- 🚨 Comment est-ce qu'on peut avoir des réactions d'appuis "moment" sur un pivot, wtf !?
 - 🤔 Pas plus fins près des points morts (ex. vilbrequin) ?
+- 🤔 Donner une élasticité aux courroies ?
 
 ---
 
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
-- 🚨 Comment est-ce qu'on peut avoir des réactions d'appuis "moment" sur un pivot, wtf !?
 
 ### À faire rapidement
 
 **Very qwick fix**
 
+- 🚨 Le point sur la timeline n'est pas attrapable quand il est sur un marqueur
+- 🚨 Clicker sur le canvas après avoir sélectionné un élément ne doit pas afficher la sélection multiple (ou seulement après avoir commencé le drag).
 - 🔨 Hover le bilan des moments ne doit pas faire apparitre le cg, seulement à la sélection. Et n'afficher la croix que si on n'affiche pas de moment à sa position
 - 🔨 Bords tags en thème blueprint
 - 🔨 Afficher les contraintes d'un élément sélectionné
@@ -54,9 +54,14 @@
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
 - 🚨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
+- 🔨 Dans les diagrammes des efforts, la directions des flèches au hover doit suivre le graph
+- 🔨 Afficher les contraintes (ou juste "contrainte max") dans SelectionInspector des poutres
+- 🔨 Afficher les unités des efforts internes
+- 🔨 Mieux afficher les unités des graphs globaux
 - 🚨 En simulation, clicker sur l'icon force, puis esc, puis reprendre la simu nous remet sur l'icon force.
 - 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
 - 🔨 Ne pas enregistrer un mécanisme vide
+- 🔨 Afficher l'angle total ET modulo 360
 
 - 🔨 N'afficher un moteur qu'une seul fois au maximum dans les DDL
 - 🔨 afficher en priorité les éléments avec une masse (ex. Mass-ressort) dans les DDL
@@ -206,7 +211,7 @@
 
 - 🔨 Placer force on gearTooth
 - 🔨 Moteurs ancrés sur gears
-- 🔨 Force ref : ajouter gear et belt (join de courroie) en plus des edges
+- 🔨 Force ref : ajouter gear en plus des edges
 
 **Contraintes et dimensions**
 

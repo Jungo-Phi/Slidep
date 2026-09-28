@@ -54,11 +54,19 @@ export function applyBeltValidityContacts(nodes: Nodes, s: LinkSlots, link: Belt
   return worst;
 }
 
+/**
+ * The closest two neighbouring pulleys may come for the strand between them to exist: rims apart for a crossed strand, neither swallowing the other for a straight one, `GAP_MARGIN` short of either.
+ * 0 when any distance will do.
+ */
+export function strand_limit(ra: number, ccwA: boolean, rb: number, ccwB: boolean): number {
+  const gap = ccwA === ccwB ? Math.abs(ra - rb) : ra + rb;
+  return gap > 0 ? gap * (1 + GAP_MARGIN) : 0;
+}
+
 /** Hold two neighbouring pulleys far enough apart for the strand between them to exist. */
 function keep_strand(nodes: Nodes, a: Pulley, b: Pulley): number {
-  const gap = a.ccw === b.ccw ? Math.abs(a.r - b.r) : a.r + b.r;
-  if (gap <= 0) return 0;
-  const target = gap * (1 + GAP_MARGIN);
+  const target = strand_limit(a.r, a.ccw, b.r, b.ccw);
+  if (target <= 0) return 0;
   const dx = nodes.x[b.slot] - nodes.x[a.slot];
   const dy = nodes.y[b.slot] - nodes.y[a.slot];
   const d = Math.sqrt(dx * dx + dy * dy);

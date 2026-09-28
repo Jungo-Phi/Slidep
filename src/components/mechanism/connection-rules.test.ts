@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { legality_for_state, SAME_ENDPOINTS } from "./connection-rules";
+import {
+  JUNCTION_CARRIES_NOTHING,
+  legality_for_state,
+  SAME_ENDPOINTS,
+} from "./connection-rules";
 import { Point2 } from "../../types/point2";
 import type { ID, MechanicalElement } from "../../types/element";
 import type { CanvasState } from "../../types/canvas-state";
@@ -236,5 +240,59 @@ describe("legality_for_state", () => {
       elements,
     )(element_of(elements, PIVOT));
     expect(verdict.allowed).toBe(false);
+  });
+});
+
+describe("la jonction d'une courroie fermée", () => {
+  const JOIN = id(9);
+  const BELT = id(10);
+  const join = (): MechanicalElement => ({
+    type: "join",
+    id: JOIN,
+    probes: [],
+    overlays: {},
+    position: new Point2(100, 50),
+    isGrounded: false,
+    fixedEdgesIDs: [BELT],
+  });
+  const belt = (): MechanicalElement => ({
+    type: "belt",
+    id: BELT,
+    probes: [],
+    overlays: {},
+    positionStart: new Point2(100, 50),
+    positionEnd: new Point2(100, 50),
+    fixedNodeStartID: JOIN,
+    fixedNodeEndID: JOIN,
+    attachedGearsIDs: [
+      { id: GEAR_A, clockwise: false },
+      { id: PIVOT, clockwise: false },
+    ],
+    closed: true,
+  });
+  const closedLoop = () => [...build(), join(), belt()];
+
+  it("refuse qu'une barre s'y accroche", () => {
+    const elements = closedLoop();
+    const verdict = legality_for_state({ type: "PlacingBeamStart" }, elements)(element_of(elements, JOIN));
+    expect(verdict).toMatchObject({ allowed: false, blocks: true, reason: JUNCTION_CARRIES_NOTHING });
+  });
+
+  it("refuse qu'on y dépose un nœud", () => {
+    const elements = closedLoop();
+    const verdict = legality_for_state({ type: "PlacingPivot" }, elements)(element_of(elements, JOIN));
+    expect(verdict).toMatchObject({ allowed: false, blocks: true, reason: "rule_node_onto_junction" });
+  });
+
+  it("refuse de la déposer sur un autre nœud", () => {
+    const elements = closedLoop();
+    const verdict = legality_for_state({ type: "MovingNode", elementID: JOIN }, elements)(element_of(elements, PIVOT));
+    expect(verdict).toMatchObject({ allowed: false, reason: JUNCTION_CARRIES_NOTHING });
+  });
+
+  it("laisse une cote la viser : elle ne s'y accroche pas", () => {
+    const elements = closedLoop();
+    const verdict = legality_for_state({ type: "DimensionNode", nodeID: PIVOT }, elements)(element_of(elements, JOIN));
+    expect(verdict.allowed).toBe(true);
   });
 });

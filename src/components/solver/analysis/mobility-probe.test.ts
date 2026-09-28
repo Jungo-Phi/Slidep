@@ -319,7 +319,7 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
     const junctions = [
       ...model.links,
       ...model.pruned.map((p) => p.link),
-    ].filter((l) => l.type === "BeltPin" || l.type === "BeltFollowsTangent");
+    ].filter((l) => l.type === "BeltPin");
     expect(junctions.length).toBeGreaterThan(0);
     for (const junction of junctions)
       expect(junction.disconnected).toEqual(off);

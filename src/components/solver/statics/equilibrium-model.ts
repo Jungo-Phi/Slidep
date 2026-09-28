@@ -36,7 +36,6 @@ const MODELLED_LINK_TYPES = new Set([
   "BeamFollowsAngle",
   // The belt family, once a belt is a run of two-force members — see `StaticsBelt`.
   // Every one of these is a way of writing the same inextensible path, and the strand tensions are what that path pulls with.
-  // `BeltFollowsTangent` is deliberately NOT here: a beam welded to the belt asks a strand to carry a couple, which needs a bending stiffness the model does not have.
   "BeltLength",
   "BeltSegmentNoSlip",
   "BeltSubChainAggregate",
@@ -191,7 +190,6 @@ const BELT_LINK_TYPES = new Set([
   "BeltLoopClosure",
   "BeltJunction",
   "BeltPin",
-  "BeltFollowsTangent",
 ]);
 
 /** Which belt a belt-family link belongs to. Every one of them is filed under its belt, as `beltID` or as `owner`. */

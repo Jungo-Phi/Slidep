@@ -1429,6 +1429,12 @@ export const STRINGS = {
     de: "offener Riemen, dessen beide Enden an {name} hängen — er muss geschlossen sein.",
     es: "correa abierta con ambos extremos sujetos a {name}: debe estar cerrada.",
   },
+  validation_loaded_belt_junction: {
+    fr: "est la jonction de {name} et porte autre chose — une jonction ne porte que sa courroie.",
+    en: "is the junction of {name} and carries something else — a junction carries only its belt.",
+    de: "ist die Verbindungsstelle von {name} und trägt noch etwas anderes — eine Verbindungsstelle trägt nur ihren Riemen.",
+    es: "es la unión de {name} y lleva otra cosa: una unión solo lleva su correa.",
+  },
   validation_belts_joined: {
     fr: "tient les extrémités de {count} courroies différentes ({names}) — deux courroies ne se rejoignent jamais.",
     en: "holds the ends of {count} different belts ({names}) — two belts never meet.",
@@ -2806,6 +2812,24 @@ export const STRINGS = {
     en: "A belt does not connect to another belt",
     de: "Ein Riemen verbindet sich nicht mit einem anderen Riemen",
     es: "Una correa no se conecta a otra correa",
+  },
+  rule_junction_carries_nothing: {
+    fr: "On ne peut rien connecter sur la jonction d'une courroie fermée",
+    en: "Nothing can connect to the junction of a closed belt",
+    de: "An der Verbindungsstelle eines geschlossenen Riemens lässt sich nichts anschließen",
+    es: "No se puede conectar nada a la unión de una correa cerrada",
+  },
+  rule_belt_close_on_loaded_node: {
+    fr: "On ne peut pas fermer une courroie sur un nœud qui porte déjà autre chose",
+    en: "A belt cannot close on a node that already carries something else",
+    de: "Ein Riemen kann sich nicht an einem Knoten schließen, der schon etwas anderes trägt",
+    es: "Una correa no puede cerrarse sobre un nodo que ya lleva otra cosa",
+  },
+  rule_node_onto_junction: {
+    fr: "On ne peut pas déposer un autre nœud sur une jonction",
+    en: "Another node cannot be dropped onto a junction",
+    de: "Auf eine Verbindungsstelle lässt sich kein anderer Knoten setzen",
+    es: "No se puede colocar otro nodo sobre una unión",
   },
   rule_belt_cannot_close: {
     fr: "Une courroie doit passer par {count} poulies pour se refermer",

@@ -14,7 +14,7 @@ import {
   edge_newness,
   superposition_fusions,
 } from "./superposition";
-import { belt_is_looped } from "../../utils/belt-rules";
+import { belt_is_looped, belt_junction_id } from "../../utils/belt-rules";
 import { bundle_geometry, continues_previous_gesture } from "./action-geometry";
 import { is_noop_action, is_noop_entry } from "./no-op-action";
 
@@ -51,7 +51,8 @@ function with_superposition_fusions(
 }
 
 /**
- * Appends the corrections a bundle owes to the belt-closure invariant, in both directions: a belt whose loop no longer holds (a pulley lost, a terminal freed from its junction) must open; a belt that a gesture just made looped (both terminals brought onto one node, ≥2 pulleys) must close.
+ * Appends the corrections a bundle owes to the belt-closure invariant, in both directions: a belt whose loop is broken (a pulley lost, a terminal freed from its junction) must open; a belt that a gesture just made looped (both terminals brought onto one node, ≥2 pulleys) must close.
+ * A load on the node a belt closes on goes: the junction carries nothing but its belt.
  * Stated once here, against the state the bundle leaves, rather than at every call site.
  *
  * The corrections join the bundle, so they solve, record and undo as one with it.
@@ -70,10 +71,16 @@ function with_belt_closure_corrections(
 
   const after = actionReducer(clone_mechanism(mechanism), actions, false);
   const corrections = after.mechanicalElements.flatMap((el): Action[] => {
-    if (el.type !== "belt" || el.closed === belt_is_looped(el)) return [];
+    if (el.type !== "belt") return [];
+    const looped = belt_is_looped(el);
+    const junction = looped ? belt_junction_id(el) : undefined;
+    const unloaded: Action[] = after.loads
+      .filter((load) => load.targetID === junction)
+      .map((load) => ({ type: "DeleteElement", element: load }));
+    if (el.closed === looped) return unloaded;
     return el.closed
       ? open_belt(el)
-      : [{ type: "CloseBelt", id: el.id, closed: true }];
+      : [{ type: "CloseBelt", id: el.id, closed: true }, ...unloaded];
   });
   return corrections.length ? [...actions, ...corrections] : actions;
 }
@@ -289,7 +296,7 @@ export function apply_actions(mechanism: Mechanism, actions: Action[]): Mechanis
       ? mechanism.history[mechanism.history.length - 1]
       : undefined;
   const lastAction = lastActions?.[lastActions.length - 1];
-  // Whether the entry this call is NOT going to merge into (different type, different id, or nothing to merge with) turned out, now that nothing else will ever touch it, to have netted to no change — a drag or value edit that ended up back where it started.
+  // Whether the entry this call is NOT going to merge into (different type, different id, or nothing to merge with) nets to no change, since nothing else will ever touch it — a drag or value edit that ended up back where it started.
   const staleNoop = is_noop_entry(lastActions);
 
   // The value editor's first commit right after placing the element is part of the creation gesture, not a follow-up edit: it folds into the same history entry so a single undo removes the whole dimension.

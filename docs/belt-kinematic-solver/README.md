@@ -190,9 +190,9 @@ sont closes et aucune n'est bloquante** ; reste la refonte elle-même (`BeltPhas
 ### Dettes assumées
 
 - **Le solveur n'a pas de métrique angulaire cohérente.** `GearPerimeterPin`, `BeltPhaseGear` et
-  `BeltPin` sont déjà en `rim` (`w_θ = 1/r²`) ; `GearMeshAngle`, `CoaxialAngle`, `BeamFollowsAngle`
-  et `BeltFollowsTangent` ne le sont pas — les deux dernières sont rim **par rapport à la longueur
-  de la poutre**, pas au rayon. Il n'existe **aucun `w_θ` unique** qui laisse simultanément
+  `BeltPin` sont déjà en `rim` (`w_θ = 1/r²`) ; `GearMeshAngle`, `CoaxialAngle` et
+  `BeamFollowsAngle` ne le sont pas — la dernière est rim **par rapport à la longueur de la
+  poutre**, pas au rayon. Il n'existe **aucun `w_θ` unique** qui laisse simultanément
   `GearPerimeterPin` et `BeamFollowsAngle` inchangées. Porter la métrique sur le lien plutôt que
   globalement est un contournement délibéré ; la cohérence reste à faire.
 - **La limite de 300 balayages par frame est arbitraire.** À réviser après les optimisations

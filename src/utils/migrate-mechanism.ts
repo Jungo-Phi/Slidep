@@ -14,7 +14,7 @@ import {
 import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 14;
+export const CURRENT_FORMAT_VERSION = 15;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -200,6 +200,12 @@ const MIGRATIONS: MigrationStep[] = [
       history: drop_end_reaction_probes_in_stack(doc.history),
       future: drop_end_reaction_probes_in_stack(doc.future),
     }),
+  },
+  {
+    to: 15,
+    // Only a document that had such a junction loses its stack, inside the step: an entry there could put the belt back on a node that carries something else.
+    preservesHistory: true,
+    apply: (doc) => free_belt_junctions(doc),
   },
 ];
 
@@ -512,6 +518,85 @@ const drop_end_reaction_probes_in_stack = (stack: unknown): unknown[][] =>
   as_array(stack).map((bundle) =>
     as_array(bundle).map(drop_end_reaction_probes_in_action),
   );
+
+/**
+ * v14 → v15: a closed belt's junction is a bare join that carries its belt and nothing else — no other element, no ground, no load, no mass.
+ * A junction that carried something is split: the node keeps everything it held but the belt, and the belt closes on a new bare join at the same place.
+ * One that carried nothing but was of another kind (pivot, mass…) becomes a join in place, keeping its ID for the probes and dimensions that name it.
+ */
+const free_belt_junctions = (doc: RawDocument): RawDocument => {
+  const elements = as_array(doc.mechanicalElements).filter(is_record);
+  const loads = as_array(doc.loads);
+  const byID = new Map(elements.map((element) => [element.id, element]));
+  const replaced = new Map<unknown, Record<string, unknown>>();
+  const added: Record<string, unknown>[] = [];
+
+  for (const belt of elements) {
+    if (belt.type !== "belt" || belt.closed !== true) continue;
+    const id = belt.fixedNodeStartID;
+    const node = replaced.get(id) ?? byID.get(id);
+    if (id === undefined || !node) continue;
+    const others = (field: string) => as_array(node[field]).filter((other) => other !== belt.id);
+    const carries =
+      node.isGrounded === true ||
+      node.parentBeamID !== undefined ||
+      node.motor !== undefined ||
+      others("fixedEdgesIDs").length > 0 ||
+      others("rotatingEdgesIDs").length > 0 ||
+      others("fixedGearsIDs").length > 0 ||
+      elements.some(
+        (element) =>
+          element !== belt &&
+          (element.fixedNodeStartID === id ||
+            element.fixedNodeEndID === id ||
+            element.parentAxleID === id ||
+            as_array(element.fixedNodesBodyIDs).includes(id)),
+      ) ||
+      loads.some((load) => is_record(load) && load.targetID === id);
+    if (!carries) {
+      if (node.type === "join") continue;
+      replaced.set(id, bare_join(id, node.position, belt.id, node));
+      continue;
+    }
+    const join = bare_join(crypto.randomUUID(), node.position, belt.id);
+    added.push(join);
+    replaced.set(id, {
+      ...node,
+      ...("fixedEdgesIDs" in node ? { fixedEdgesIDs: others("fixedEdgesIDs") } : {}),
+      ...("rotatingEdgesIDs" in node ? { rotatingEdgesIDs: others("rotatingEdgesIDs") } : {}),
+    });
+    replaced.set(belt.id, { ...belt, fixedNodeStartID: join.id, fixedNodeEndID: join.id });
+  }
+
+  if (replaced.size === 0) return doc;
+  return {
+    ...doc,
+    mechanicalElements: [
+      ...as_array(doc.mechanicalElements).map((element) =>
+        is_record(element) ? (replaced.get(element.id) ?? element) : element,
+      ),
+      ...added,
+    ],
+    history: [],
+    future: [],
+  };
+};
+
+/** A join holding nothing but `beltID`, with `from`'s probes and overlays when it takes that node's place. */
+const bare_join = (
+  id: unknown,
+  position: unknown,
+  beltID: unknown,
+  from?: Record<string, unknown>,
+): Record<string, unknown> => ({
+  type: "join",
+  id,
+  probes: as_array(from?.probes),
+  overlays: is_record(from?.overlays) ? from.overlays : {},
+  fixedEdgesIDs: [beltID],
+  position,
+  isGrounded: false,
+});
 
 const is_record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

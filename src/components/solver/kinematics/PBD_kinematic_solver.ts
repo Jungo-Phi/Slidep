@@ -3,7 +3,6 @@ import { ConstraintResidual, LinkReaction } from "../../../types/runtime-state";
 import {
   applyAngleConstraint,
   applyBeamFollowsAngleConstraint,
-  applyBeltFollowsTangentConstraint,
   applyBeltJunctionConstraint,
   applyBeltLengthConstraint,
   applyBeltPinConstraint,
@@ -50,7 +49,7 @@ import { Drive, apply_drives, finish_drives, resolve_drives } from "../dynamics/
 import { reversed_sweep_order } from "./sweep-order";
 import { ContactSet, segment_side } from "../dynamics/collision-detection";
 import { CONTACT_SLACK_RATIO } from "../dynamics/collision-restitution";
-import { DIRECT_LINK_TYPES } from "../direct/direct-rows";
+import { DIRECT_LINK_TYPES, direct_follower } from "../direct/direct-rows";
 import {
   accumulate_reactions,
   create_direct_state,
@@ -636,7 +635,7 @@ export function PBD_solve(
   // Not when the direct solve takes every link but the contacts: it solves those chains outright, and the sweep has nothing left to order.
   let fullyDirect = dynamics?.direct === true && dynamics.dt > 0;
   for (let k = 0; fullyDirect && k < (dynamics?.contactsFrom ?? links.length); k++)
-    fullyDirect = DIRECT_LINK_TYPES.has(links[k].type);
+    fullyDirect = DIRECT_LINK_TYPES.has(links[k].type) || direct_follower(links[k]);
   const reversed = dynamics && !fullyDirect ? reversed_sweep_order(links, slots, nodes) : null;
 
   // ── Collision contacts far from touching sit out of the sweep ──
@@ -967,19 +966,6 @@ export function PBD_solve(
             link.closed ?? true,
             1.0,
             link.passive,
-          );
-          break;
-        case "BeltFollowsTangent":
-          err = applyBeltFollowsTangentConstraint(
-            nodes,
-            s,
-            link.radii,
-            link.directions,
-            link.refIndex,
-            link.s0,
-            link.thetaRef0,
-            link.offset,
-            link.disconnected,
           );
           break;
         case "MotorBeam":

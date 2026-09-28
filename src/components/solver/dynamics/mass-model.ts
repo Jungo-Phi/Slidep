@@ -21,7 +21,7 @@ export interface DynamicMassModel {
    */
   groundedMasses: Map<string, number>;
   /**
-   * Keys whose `posMasses` entry is `MASS_FLOOR` alone and which no constraint ever projects: a passive follower's node (`mark_passive_belt_pins`) is placed by its belt and has a say in nothing.
+   * Keys whose `posMasses` entry is `MASS_FLOOR` alone and which no constraint ever projects: a closed belt's junction (`belt_pin_link`) is placed by its belt and has a say in nothing.
    * Readings leave that mass out, since the mechanism does not have it, while the solve keeps it: a collision link appearing mid-run would divide by it.
    */
   phantomKeys: Set<string>;

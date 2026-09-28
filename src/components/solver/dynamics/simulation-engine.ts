@@ -22,7 +22,6 @@ import {
   belt_q_links,
   get_links_simulation,
   get_sim_nodes,
-  mark_passive_belt_pins,
   rebuild_belt_q_links,
 } from "../kinematics/parsing";
 import { DynamicsInput, PBD_kinematic_solver, SolverMaps } from "../kinematics/PBD_kinematic_solver";
@@ -80,7 +79,7 @@ import {
   snapshot_point,
 } from "../snapshot";
 import { sort_links } from "../utils";
-import { DIRECT_LINK_TYPES } from "../direct/direct-rows";
+import { DIRECT_LINK_TYPES, direct_follower } from "../direct/direct-rows";
 
 /**
  * The step every recorded instant is spaced by, whatever the playback speed and whatever the machine.
@@ -274,8 +273,8 @@ type SnapshotFill = {
   slots: Int32Array;
 };
 
-/** The junction links a belt topology change rewrites in place. */
-type JunctionLink = Extract<Link, { type: "BeltPin" | "BeltFollowsTangent" }>;
+/** The junction link a belt topology change rewrites in place. */
+type JunctionLink = Extract<Link, { type: "BeltPin" }>;
 
 /**
  * What a belt topology change rewrites in a compiled model: the link list, whose no-slip links are rebuilt against the new loop, and the junction references baked into it.
@@ -297,7 +296,7 @@ export type RewireState = {
 function capture_rewire_state(model: SimulationModel): RewireState {
   const pins: RewireState["pins"] = [];
   for (const link of model.links)
-    if (link.type === "BeltPin" || link.type === "BeltFollowsTangent")
+    if (link.type === "BeltPin")
       pins.push({
         link,
         refIndex: link.refIndex,
@@ -492,7 +491,7 @@ function reattach_belt_pulleys(
 }
 
 /**
- * Re-bake the closed-belt junction constraints (BeltPin + BeltFollowsTangent) of belts that just lost a pulley.
+ * Re-bake the closed-belt junction pins of belts that just lost a pulley.
  * The junction rides the loop at s = s0 + rε·(θ − θ0); s0 is an arc-length on the loop, so when a pulley disconnects the loop shrinks, s0's meaning shifts, and the junction would JUMP. Fix (mirrors how rewire_belt_mesh re-bakes the mesh θ0): re-project the junction onto the REDUCED loop for a fresh s0 and reset θ0 to the current reference angle (so s = s0 at this frame → no jump).
  * If the reference pulley itself disconnected (its θ has stopped being coupled to φ), re-elect the first still-connected pulley.
  * Called once per disconnect event; permanent for the run (reset on recompile).
@@ -521,11 +520,7 @@ export function rebake_belt_pin_refs(
       ? viaToGear.map((g) => belt.wraps![g] ?? 0)
       : undefined;
     for (const link of links) {
-      if (
-        (link.type !== "BeltPin" && link.type !== "BeltFollowsTangent") ||
-        link.beltID !== belt.owner
-      )
-        continue;
+      if (link.type !== "BeltPin" || link.beltID !== belt.owner) continue;
       // Re-elect a reference if the current one just disconnected.
       if (disconnected?.[link.refIndex]) {
         const newRef = viaToGear[0];
@@ -534,15 +529,10 @@ export function rebake_belt_pin_refs(
       }
       const theta = angles.get(link.refAngleKey);
       if (theta === undefined) continue;
-      const J =
-        link.type === "BeltPin"
-          ? positions.get(link.nodeKey)
-          : positions.get(link.pivotKey);
+      const J = positions.get(link.nodeKey);
       if (!J) continue;
-      // BeltPin's arc-length parametrization includes winding (wraps); BeltFollowsTangent's does not — match each constraint's own usage.
-      const projWraps = link.type === "BeltPin" ? activeWraps : undefined;
       link.thetaRef0 = theta;
-      link.s0 = belt_project(vias, J, true, projWraps).s;
+      link.s0 = belt_project(vias, J, true, activeWraps).s;
     }
   }
 }
@@ -587,7 +577,7 @@ function share_belt_disconnections(
     if (belt.owner !== undefined && belt.disconnected)
       byBelt.set(belt.owner, belt.disconnected);
   for (const link of links)
-    if (link.type === "BeltPin" || link.type === "BeltFollowsTangent") {
+    if (link.type === "BeltPin") {
       const mask = byBelt.get(link.beltID);
       if (mask) link.disconnected = mask;
     }
@@ -646,11 +636,13 @@ const KINEMATIC_ONLY: ReadonlySet<Link["type"]> = new Set<Link["type"]>(["Spring
 
 /**
  * Whether the direct solver takes every link the dynamics solves: where it does, it is faster and far more accurate than the sweeps.
- * Where it does not — a belt — the sweeps and the direct solve take turns within each substep, which costs more than the sweeps alone.
+ * Where it does not, the sweeps and the direct solve would take turns within each substep, which costs more than the sweeps alone.
  * The grab is left out of the question: it comes and goes with the user's hand, and the sweep takes it alongside the direct solve while it lasts.
  */
 function covered_by_direct_solve(links: Link[]): boolean {
-  return links.every((link) => KINEMATIC_ONLY.has(link.type) || DIRECT_LINK_TYPES.has(link.type));
+  return links.every(
+    (link) => KINEMATIC_ONLY.has(link.type) || DIRECT_LINK_TYPES.has(link.type) || direct_follower(link),
+  );
 }
 
 export function compile_simulation_model(
@@ -717,7 +709,6 @@ export function compile_simulation_model(
   links = links.filter((link) => link.type !== "Coincidence");
 
   // ── Belt no-slip, on the fused geometry and the complete link list ──
-  mark_passive_belt_pins(nodes, links);
   links.push(...belt_q_links(nodes, links));
 
   // ── Sort links (anchored nodes first for better convergence) ──
@@ -1096,7 +1087,7 @@ export function step_simulation(
     }
   }
 
-  // Share each belt's sim state — continuous wraps (so a wound pulley >2π is traversed smoothly, not just its fractional arc) and the disconnected mask (so the junction rides the same reduced loop the belt is drawn on) — from its BeltLength link with its BeltPin + BeltFollowsTangent links. gearPosKeys order matches (all built from the belt).
+  // Share each belt's sim state — continuous wraps (so a wound pulley >2π is traversed smoothly, not just its fractional arc) and the disconnected mask (so the junction rides the same reduced loop the belt is drawn on) — from its BeltLength link with its BeltPin. gearPosKeys order matches (all built from the belt).
   const wrapsByBelt = new Map<ID, number[]>();
   const arrivalsByBelt = new Map<ID, number[]>();
   const disconnectedByBelt = new Map<ID, boolean[]>();
@@ -1107,14 +1098,11 @@ export function step_simulation(
       if (link.disconnected)
         disconnectedByBelt.set(link.owner, link.disconnected);
     }
-  for (const link of model.links) {
+  for (const link of model.links)
     if (link.type === "BeltPin") {
       link.wraps = wrapsByBelt.get(link.beltID);
       link.disconnected = disconnectedByBelt.get(link.beltID);
-    } else if (link.type === "BeltFollowsTangent") {
-      link.disconnected = disconnectedByBelt.get(link.beltID);
     }
-  }
 
   // ── Grab (transient, this frame only) ──
   const grabbed = grab_links(model, grab, positions, wrapsByBelt, disconnectedByBelt);
@@ -1420,14 +1408,11 @@ export function step_dynamic_simulation(
         if (link.arrivals) arrivalsByBelt.set(link.owner, link.arrivals);
         if (link.disconnected) disconnectedByBelt.set(link.owner, link.disconnected);
       }
-    for (const link of model.links) {
+    for (const link of model.links)
       if (link.type === "BeltPin") {
         link.wraps = wrapsByBelt.get(link.beltID);
         link.disconnected = disconnectedByBelt.get(link.beltID);
-      } else if (link.type === "BeltFollowsTangent") {
-        link.disconnected = disconnectedByBelt.get(link.beltID);
       }
-    }
 
     // ── Beam midpoints (dynamics-only, every substep) ── a virtual mass, not a real
     // element: pinned onto the live segment so the beam's own rotational inertia comes out right — see `DynamicMassModel.beamMidpoints`.

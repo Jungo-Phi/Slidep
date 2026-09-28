@@ -10,7 +10,7 @@ import {
 } from "../components/solver/nodes";
 
 /**
- * Map-shaped façade over the indexed constraint API, for the constraint tests and the measurement benches: they build small `Map` fixtures by hand and assert on them, which reads far better than slot arithmetic.
+ * Map-shaped facade over the indexed constraint API, for the constraint tests and the measurement benches: they build small `Map` fixtures by hand and assert on them, which reads far better than slot arithmetic.
  * Production calls the indexed functions directly.
  *
  * Each wrapper keeps the signature the constraint had before the index port, marshals into node storage, applies, and writes the results back into the caller's maps.
@@ -600,44 +600,6 @@ export function applyBeltPinConstraint(
       wraps,
       disconnected,
       closed,
-      stiffness,
-    ),
-  );
-}
-
-export function applyBeltFollowsTangentConstraint(
-  positions: Map<string, Point2>,
-  posMasses: Map<string, number>,
-  angles: Map<string, number>,
-  pivotKey: string,
-  drivenKey: string,
-  gearPosKeys: string[],
-  radii: number[],
-  directions: boolean[],
-  refIndex: number,
-  refAngleKey: string,
-  s0: number,
-  thetaRef0: number,
-  offset: number,
-  disconnected?: boolean[],
-  stiffness = 1.0,
-): number {
-  const s = open(positions, posMasses, angles);
-  return run(
-    s,
-    C.applyBeltFollowsTangentConstraint(
-      s.nodes,
-      slots(
-        [s.P(pivotKey), s.P(drivenKey), ...gearPosKeys.map((k) => s.P(k))],
-        [s.A(refAngleKey)],
-      ),
-      radii,
-      directions,
-      refIndex,
-      s0,
-      thetaRef0,
-      offset,
-      disconnected,
       stiffness,
     ),
   );

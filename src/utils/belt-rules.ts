@@ -4,7 +4,7 @@
  * Pure predicates over the element alone, so the hover rules, the validator and the repair pass all read the same rule without pulling each other in.
  */
 
-import type { BeltElement, ID } from "../types/element";
+import type { BeltElement, ID, MechanicalElement } from "../types/element";
 
 /**
  * Pulleys a closed belt must run over.
@@ -54,6 +54,22 @@ export function belt_terminal_pulley_id(
   const gears = belt.attachedGearsIDs;
   if (gears.length === 0) return undefined;
   return which === "start" ? gears[0].id : gears[gears.length - 1].id;
+}
+
+/**
+ * The junction of every closed belt, mapped to its belt.
+ * A junction holds its belt and nothing else: it only shows where the belt has travelled, so no other element may connect to it.
+ */
+export function belt_junctions(
+  elements: readonly MechanicalElement[],
+): Map<ID, ID> {
+  const junctions = new Map<ID, ID>();
+  for (const element of elements) {
+    if (element.type !== "belt" || !element.closed) continue;
+    const junction = belt_junction_id(element);
+    if (junction !== undefined) junctions.set(junction, element.id);
+  }
+  return junctions;
 }
 
 /** The node holding both terminals, when one node holds both. */

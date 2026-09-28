@@ -133,11 +133,6 @@ function held_shapes(link: Link): Held {
       return points(link.nodeKey, ...link.gearPosKeys);
     case "BeltPin":
       return points(link.nodeKey, ...link.gearPosKeys);
-    case "BeltFollowsTangent":
-      return {
-        segments: [[link.pivotKey, link.drivenKey]],
-        points: [...link.gearPosKeys],
-      };
     // One strand, so two pulleys — never the whole loop the link carries for geometry.
     case "BeltSegmentNoSlip":
       return points(link.posKeyA, link.posKeyB);

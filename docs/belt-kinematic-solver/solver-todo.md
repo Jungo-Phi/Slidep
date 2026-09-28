@@ -8,7 +8,7 @@
 
 - **Divergence de Core XY.** Non résolue. Après le passage des contraintes d'angle en projection PBD, les corrections partielles (un verrou d'angle par poutre ; cibles arrondies à 90°) laissent `BeltLength` comme pire lien → les courroies sont en cause en propre. Revalider après le portage.
 
-- **Retravailler les contraintes de courroie** (`BeltLength`, `BeltPin`, `BeltFollowsTangent`, `BeltPhaseGear`, `BeltJunction`). Déjà signalées instables. Écrire leurs tests de convergence une fois stabilisées (exclues à dessein de `constraint-convergence.test.ts`).
+- **Retravailler les contraintes de courroie** (`BeltLength`, `BeltPin`, `BeltPhaseGear`, `BeltJunction`). Déjà signalées instables. Écrire leurs tests de convergence une fois stabilisées (exclues à dessein de `constraint-convergence.test.ts`).
 
 ## Secondaire
 

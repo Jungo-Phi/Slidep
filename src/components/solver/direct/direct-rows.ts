@@ -2,6 +2,8 @@ import type { Link } from "../../../types";
 import type { SolveNodes } from "../nodes";
 import type { LinkSlots } from "../kinematics/link-slots";
 import { ResolvedDrive, arm_rotation, tangent } from "../dynamics/drive-constraint";
+import { beltViaCount, beltViaSlot, strandH } from "../experimental/belt-noslip-q";
+import { strand_limit } from "../kinematics/belt-validity";
 
 /**
  * The constraints the direct solve handles, each written as scalar rows `C(x) = 0` with their exact gradient.
@@ -19,7 +21,17 @@ export const DIRECT_LINK_TYPES: ReadonlySet<Link["type"]> = new Set<Link["type"]
   "BeamFollowsAngle",
   "GearMeshAngle",
   "CoaxialAngle",
+  "BeltSegmentNoSlip",
+  // A belt's length is the sum of its strands, so neither of these writes it again; see their cases below.
+  "BeltLength",
+  "BeltSubChainAggregate",
 ]);
+
+/**
+ * A link the direct solve leaves to the sweep without splitting the solve: it only places a node nothing else reads, so one pass after the system settles it.
+ * A closed belt's junction pin is the one kind (see `belt_pin_link`).
+ */
+export const direct_follower = (link: Link): boolean => link.type === "BeltPin" && link.passive === true;
 
 /**
  * The collision contacts the direct solve handles, as unilateral rows `C(x) ≥ 0` whose multiplier may only push.
@@ -34,8 +46,29 @@ export const DIRECT_CONTACT_TYPES: ReadonlySet<Link["type"]> = new Set<Link["typ
 /** Most unknowns one row touches: an `Angle` between two segments. `Rows` stores every row on this stride. */
 export const MAX_WIDTH = 8;
 
-/** Rows one link may produce, which also spaces the multipliers' slots. */
+/** Rows most links may produce. */
 export const ROWS_PER_LINK = 2;
+
+/** Rows `link` may produce: a belt's guards take one per pulley and one per free end. */
+const row_budget = (link: Link): number =>
+  link.type === "BeltLength" ? link.gearPosKeys.length + 2 : ROWS_PER_LINK;
+
+const SLOTS = new WeakMap<Link[], { first: Int32Array; total: number }>();
+
+/** Where each link's multipliers start, and how many there are in all. */
+export function row_slots(links: Link[]): { first: Int32Array; total: number } {
+  const known = SLOTS.get(links);
+  if (known && known.first.length === links.length) return known;
+  const first = new Int32Array(links.length);
+  let total = 0;
+  for (let k = 0; k < links.length; k++) {
+    first[k] = total;
+    total += row_budget(links[k]);
+  }
+  const out = { first, total };
+  SLOTS.set(links, out);
+  return out;
+}
 
 /**
  * Rows of every handled link at the current nodes, in flat typed arrays reused from one evaluation to the next.
@@ -52,11 +85,15 @@ export class Rows {
   alphaTilde = new Float64Array(0);
   /** What one unit of the row is worth in metres, for the tolerance and the diagnostics. */
   scale = new Float64Array(0);
-  /** The link the row belongs to, and its multiplier's slot (`link · ROWS_PER_LINK + sub`). */
+  /** The link the row belongs to, and its multiplier's slot (the link's first slot + `sub`, see `row_slots`). */
   link = new Int32Array(0);
   slot = new Int32Array(0);
   /** 1 for a contact's row: `C ≥ 0` is enough, and its multiplier stays positive. */
   unilateral = new Uint8Array(0);
+  /** 1 for a contact that stops without bouncing: a guard on the geometry rather than a collision. */
+  inelastic = new Uint8Array(0);
+  /** Each link's first multiplier slot, set by `evaluate_rows`. */
+  first: Int32Array = new Int32Array(0);
   /**
    * The sliders standing at an end stop: `stopRow[i]` is the first of the two rows holding one there, `stopX/Y[i]` the unit axis pointing out past the stop.
    * What a bounce off the stop reverses is the slider's speed along that axis.
@@ -74,6 +111,7 @@ export class Rows {
     this.stopX = new Float64Array(capacity);
     this.stopY = new Float64Array(capacity);
     this.unilateral = new Uint8Array(capacity);
+    this.inelastic = new Uint8Array(capacity);
     this.width = new Int32Array(capacity);
     this.vars = new Int32Array(capacity * MAX_WIDTH);
     this.grads = new Float64Array(capacity * MAX_WIDTH);
@@ -88,11 +126,12 @@ export class Rows {
     const r = this.count++;
     this.width[r] = 0;
     this.unilateral[r] = 0;
+    this.inelastic[r] = 0;
     this.value[r] = value;
     this.alphaTilde[r] = alphaTilde;
     this.scale[r] = scale;
     this.link[r] = link;
-    this.slot[r] = link * ROWS_PER_LINK + sub;
+    this.slot[r] = link >= 0 ? this.first[link] + sub : -1;
     return r;
   }
 
@@ -129,7 +168,9 @@ export function evaluate_rows(
   rows: Rows,
   reserve = 0,
 ): void {
-  rows.reset(links.length * ROWS_PER_LINK + reserve);
+  const budget = row_slots(links);
+  rows.reset(budget.total + reserve);
+  rows.first = budget.first;
   const P = (n: number) => 2 * n;
   const A = (a: number) => 2 * nodes.count + a;
   const x = nodes.x;
@@ -196,13 +237,14 @@ export function evaluate_rows(
   };
 
   /** `|b − a| − min ≥ 0`, a contact keeping two points apart; coincident points have no direction to part along, and are left to the other links. */
-  const apart_row = (k: number, a: number, b: number, min: number) => {
+  const apart_row = (k: number, a: number, b: number, min: number, sub = 0, inelastic = false) => {
     const dx = x[b] - x[a];
     const dy = y[b] - y[a];
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len === 0) return;
-    const r = rows.begin(k, 0, len - min, 0, 1);
+    const r = rows.begin(k, sub, len - min, 0, 1);
     rows.unilateral[r] = 1;
+    if (inelastic) rows.inelastic[r] = 1;
     rows.add(r, P(b), dx / len);
     rows.add(r, P(b) + 1, dy / len);
     rows.add(r, P(a), -dx / len);
@@ -344,6 +386,89 @@ export function evaluate_rows(
         const r = rows.begin(k, 0, nodes.angle[a1] - nodes.angle[a2] - link.offset, 0, 1);
         rows.add(r, A(a1), 1);
         rows.add(r, A(a2), -1);
+        break;
+      }
+      case "BeltSegmentNoSlip": {
+        // Reuses the sweep's own `strandH`: its dependence on every via but the strand's own two endpoints cancels exactly (checked numerically — see scratch/belt-strand-gradient.test.ts), so the row only ever needs those two.
+        const h = strandH(nodes, s, link, true);
+        if (h === null) break;
+        const iA = s.ang[0];
+        const iB = s.ang[1];
+        const thetaA = iA >= 0 ? nodes.angle[iA] : 0;
+        const thetaB = iB >= 0 ? nodes.angle[iB] : 0;
+        const qA = link.rEpsA * (thetaA - link.theta0A);
+        const qB = link.rEpsB * (thetaB - link.theta0B);
+        const r = rows.begin(k, 0, qA - qB - (h - link.h0), 0, 1);
+        if (iA >= 0 && Math.abs(link.rEpsA) > 1e-9) rows.add(r, A(iA), link.rEpsA);
+        if (iB >= 0 && Math.abs(link.rEpsB) > 1e-9) rows.add(r, A(iB), -link.rEpsB);
+        // The centres' own gradient is NOT the plain tangent tension: moving a pulley also turns its own arc's occupied angle, a term the sweep's PBD projection drops (fine under many soft iterations, wrong for Newton).
+        // Central-differenced on `strandH` itself, read-only (`track = false`), so the gradient matches the exact value above rather than a hand-reconstructed approximation of it.
+        const n = beltViaCount(link);
+        const slotA = beltViaSlot(s, 4, s.pos[2], s.pos[3], link, link.viaA);
+        const slotB = beltViaSlot(s, 4, s.pos[2], s.pos[3], link, (link.viaA + 1) % n);
+        if (slotA >= 0 && slotB >= 0) {
+          const scale = Math.hypot(x[slotB] - x[slotA], y[slotB] - y[slotA]) || 1;
+          const step = 1e-6 * scale;
+          const partial = (slot: number, arr: Float64Array) => {
+            const x0 = arr[slot];
+            arr[slot] = x0 + step;
+            const plus = strandH(nodes, s, link, false);
+            arr[slot] = x0 - step;
+            const minus = strandH(nodes, s, link, false);
+            arr[slot] = x0;
+            return plus === null || minus === null ? 0 : (plus - minus) / (2 * step);
+          };
+          rows.add(r, P(slotA), -partial(slotA, x));
+          rows.add(r, P(slotA) + 1, -partial(slotA, y));
+          rows.add(r, P(slotB), -partial(slotB, x));
+          rows.add(r, P(slotB) + 1, -partial(slotB, y));
+        }
+        break;
+      }
+      // Redundant with the strands between the same two angles: summing their laws gives it exactly.
+      case "BeltSubChainAggregate":
+        break;
+      case "BeltLength": {
+        // The strands already hold the length; what is left are the guards that keep the belt's geometry one the strands can be read on, as in `applyBeltLengthConstraint` and `applyBeltValidityContacts`.
+        if (link.radKeys) break;
+        const pulleys: number[] = [];
+        for (let i = 0; i < link.gearPosKeys.length; i++) {
+          if (link.disconnected?.[i]) continue;
+          if (s.pos[2 + i] < 0) break;
+          pulleys.push(i);
+        }
+        const start = s.pos[0];
+        const end = s.pos[1];
+        // An open belt left without a pulley is a straight segment of its full length.
+        if (!link.closed && pulleys.length === 0) {
+          if (start < 0 || end < 0) break;
+          const dx = x[end] - x[start];
+          const dy = y[end] - y[start];
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len === 0) break;
+          const r = rows.begin(k, 0, len - link.length, 0, 1);
+          rows.add(r, P(end), dx / len);
+          rows.add(r, P(end) + 1, dy / len);
+          rows.add(r, P(start), -dx / len);
+          rows.add(r, P(start) + 1, -dy / len);
+          break;
+        }
+        let sub = 0;
+        const at = (i: number) => s.pos[2 + pulleys[i]];
+        const n = pulleys.length;
+        // A free end rests on its pulley's rim at most, never inside it.
+        if (!link.closed && n > 0) {
+          if (start >= 0) apart_row(k, at(0), start, link.radii[pulleys[0]], sub++, true);
+          if (end >= 0) apart_row(k, at(n - 1), end, link.radii[pulleys[n - 1]], sub++, true);
+        }
+        // Two pulleys that follow each other along the belt keep the strand between them.
+        const pairs = link.closed && n > 2 ? n : n - 1;
+        for (let p = 0; p < pairs; p++) {
+          const a = pulleys[p];
+          const b = pulleys[(p + 1) % n];
+          const limit = strand_limit(link.radii[a], link.directions[a], link.radii[b], link.directions[b]);
+          if (limit > 0) apart_row(k, at(p), at((p + 1) % n), limit, sub++, true);
+        }
         break;
       }
       case "MinDistance": {

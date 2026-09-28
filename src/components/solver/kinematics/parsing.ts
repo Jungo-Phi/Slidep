@@ -17,16 +17,11 @@ import {
   SpringElement,
 } from "../../../types";
 import { measure_belt_length } from "../../../utils/belt-geom";
-import {
-  BeltVia,
-  belt_point_tangent,
-  belt_project,
-} from "../../../utils/belt-path";
+import { BeltVia, belt_project } from "../../../utils/belt-path";
 import { buildBeltSegmentNoSlipLinks } from "../experimental/belt-noslip-q";
 import {
   buildBeltAggregateLinks,
   buildBeltLoopClosureLink,
-  hasStakeholderBeyond,
 } from "../experimental/belt-aggregate";
 import { beam_axial_compliance } from "../../../utils/section-properties";
 
@@ -327,6 +322,7 @@ function belt_junction_link(
 /**
  * Belt pin (simulation): the junction node rides the closed belt and travels as it rotates.
  * `s0` = the junction's arc-length on the closed loop at sim start; the reference pulley is the first attached gear.
+ * Always passive: a junction carries nothing but its belt, so it only shows where the belt has travelled and never holds it.
  * Null for loose/empty belts.
  */
 function belt_pin_link(
@@ -360,6 +356,7 @@ function belt_pin_link(
     refAngleKey: belt.attachedGearsIDs[0].id,
     s0: belt_project(vias, belt.positionStart, true).s,
     thetaRef0: refGear.angle,
+    passive: true,
     owner: belt.id,
   };
 }
@@ -423,7 +420,7 @@ export function belt_body_grab_pin(
 /**
  * Every edge welded to a hub node, as {edgeId, drivenKey, dir}: the endpoint to drive angularly and the current hub→endpoint direction.
  * Covers an edge welded at either endpoint (drive the OTHER end) and a beam welded through its BODY (drive the farther end, for the lever arm).
- * Shared by the two places a hub imposes its rotation on connected edges: a node fixed on a gear perimeter, and a rigid node at a closed-belt junction.
+ * What a node fixed on a gear perimeter turns with the gear.
  */
 function welded_edge_spokes(
   nodeId: ID,
@@ -497,57 +494,6 @@ function motor_arm(
 }
 
 /**
- * Belt-follows-tangent links (simulation): every edge welded to a closed belt's junction node keeps its orientation aligned with the belt tangent there, so it rotates as the belt travels.
- * Only a RIGID hub (join/mass/slider — those with fixedEdgesIDs) drives its edges this way; a pivot/slidep junction is a free hinge (no orientation lock).
- * Empty for loose/empty belts or a free-hinge node.
- */
-function belt_follows_tangent_links(
-  belt: BeltElement,
-  byId: Map<ID, MechanicalElement>,
-  mechanicalElements: MechanicalElement[],
-): Link[] {
-  const nodeId = belt.fixedNodeStartID;
-  if (!belt.closed || belt.attachedGearsIDs.length === 0 || !nodeId) return [];
-  const node = byId.get(nodeId);
-  if (!node || !("position" in node) || !("fixedEdgesIDs" in node)) return [];
-  const vias: BeltVia[] = [];
-  const gearPosKeys: string[] = [];
-  const radii: number[] = [];
-  const directions: boolean[] = [];
-  for (const { id, clockwise } of belt.attachedGearsIDs) {
-    const g = gearById(id, byId);
-    if (!g) return [];
-    vias.push({ pos: g.position, radius: g.radius, clockwise });
-    gearPosKeys.push(id);
-    radii.push(g.radius);
-    directions.push(clockwise);
-  }
-  const s0 = belt_project(vias, belt.positionStart, true).s;
-  const tangentAngle = belt_point_tangent(vias, s0, true).tangent.angle();
-  const refGear = gearById(belt.attachedGearsIDs[0].id, byId)!;
-
-  return welded_edge_spokes(nodeId, node.position, mechanicalElements).map(
-    ({ edgeId, drivenKey, dir }) => ({
-      type: "BeltFollowsTangent",
-      ddl: 1,
-      beltID: belt.id,
-      pivotKey: nodeId,
-      drivenKey,
-      gearPosKeys,
-      gearAngleKeys: belt.attachedGearsIDs.map(({ id }) => id),
-      radii,
-      directions,
-      refIndex: 0,
-      refAngleKey: belt.attachedGearsIDs[0].id,
-      s0,
-      thetaRef0: refGear.angle,
-      offset: dir.angle() - tangentAngle,
-      owner: edgeId,
-    }),
-  );
-}
-
-/**
  * Inextensible-belt link — ONE per belt.
  * Radii baked, target `length` (defaults to the current measured length).
  * Null for a belt with no gear.
@@ -616,7 +562,7 @@ export function elements_by_id(
 /**
  * Belt no-slip links (simulation): one `BeltSegmentNoSlip` per tangent strand, plus one `BeltSubChainAggregate` per sub-chain between two angles somebody else has a say in.
  *
- * Emitted here rather than in `get_links_simulation` because both bake their rest state `h⁰` from the positions, and coincidence fusion moves a fused node to the midpoint of its parts — baking before it would bake a geometry that no longer exists.
+ * Emitted here rather than in `get_links_simulation` because both bake their rest state `h⁰` from the positions, and coincidence fusion moves a fused node to the midpoint of its parts — baking before it would bake a geometry the fused nodes have left.
  * The cut criterion needs the complete link list for the same reason it runs last: it asks whether anything OTHER than this belt has a say in each pulley's angle.
  */
 export function belt_q_links(nodes: KinNodes, links: Link[]): Link[] {
@@ -696,21 +642,6 @@ export function rebuild_belt_q_links(
     ...buildBeltLoopClosureLink(positions, angles, kept, spec),
   );
   return kept;
-}
-
-/**
- * Turn the closure pin of every closed belt nobody else has a say in into a passive follower (see `applyBeltPinConstraint`).
- * The question is the one the cut criterion asks of an angle, asked here of the junction node: a link naming it is a stakeholder, and so is the ground — an anchored junction speaks by holding the node still, without naming it anywhere.
- *
- * Runs where `belt_q_links` does, and for the same reason: the node key is only final once coincidence fusion has merged the junction with whatever sits on it.
- */
-export function mark_passive_belt_pins(nodes: KinNodes, links: Link[]): void {
-  for (const link of links) {
-    if (link.type !== "BeltPin" || link.closed === false) continue;
-    const anchored = (nodes.posMasses.get(link.nodeKey) ?? 1) === 0;
-    if (!anchored && !hasStakeholderBeyond(links, link.nodeKey, link.owner))
-      link.passive = true;
-  }
 }
 
 /*
@@ -1086,12 +1017,9 @@ export function get_links_simulation(
     const length = belt_length_link(element, byId, mechanicalElements);
     if (length) links.push(length);
     if (element.closed) {
-      // Closed belt: junction node rides the loop and travels as it rotates, carrying (and re-orienting) any beam welded to it.
+      // Closed belt: the junction node rides the loop and travels as it rotates.
       const pin = belt_pin_link(element, byId);
       if (pin) links.push(pin);
-      links.push(
-        ...belt_follows_tangent_links(element, byId, mechanicalElements),
-      );
     }
   });
 
@@ -1216,7 +1144,7 @@ function add_rigidity_links(
   const nodePos = "position" in node ? node.position : new Point2(0, 0);
   const anchor = (key: string) => nodes.posMasses.set(key, 0);
 
-  // A closed belt's junction join is governed by BeltPin (position) and BeltFollowsTangent (welded-beam orientation); skip the generic hub rigidity so they don't fight it.
+  // A closed belt's junction join carries nothing but its belt and is placed by its BeltPin; there is no hub to make rigid.
   const isBeltJunction = mechanicalElements.some(
     (e) =>
       e.type === "belt" &&

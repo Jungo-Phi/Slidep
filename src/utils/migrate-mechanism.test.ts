@@ -533,6 +533,58 @@ describe("migrate_document", () => {
     expect(materials.length).toBeGreaterThan(1);
   });
 
+  describe("a closed belt's junction", () => {
+    const belt = (node: string) => ({
+      type: "belt",
+      id: "belt",
+      closed: true,
+      fixedNodeStartID: node,
+      fixedNodeEndID: node,
+      attachedGearsIDs: [],
+    });
+    const at = { x: 1, y: 2 };
+    const v14 = (elements: unknown[], extra: Record<string, unknown> = {}) =>
+      migrate_document(doc({ formatVersion: 14, mechanicalElements: elements, ...extra }));
+    const find = (result: ReturnType<typeof migrate_document>, id: string) =>
+      result.mechanicalElements.find((e) => e.id === id) as unknown as Record<string, unknown>;
+
+    it("splits one that carried a beam: the node keeps the beam, the belt closes on a bare join at the same place", () => {
+      const result = v14([
+        belt("j"),
+        { type: "join", id: "j", fixedEdgesIDs: ["beam", "belt"], position: at, isGrounded: false },
+        { type: "beam", id: "beam", fixedNodeStartID: "j" },
+      ]);
+      expect(find(result, "j").fixedEdgesIDs).toEqual(["beam"]);
+      const junction = find(result, find(result, "belt").fixedNodeStartID as string);
+      expect(junction).toMatchObject({ type: "join", fixedEdgesIDs: ["belt"], position: at, isGrounded: false });
+      expect(find(result, "belt").fixedNodeEndID).toBe(junction.id);
+      expect(junction.id).not.toBe("j");
+      expect(result.history).toEqual([]);
+    });
+
+    it("splits one that was grounded, and leaves the ground on the node", () => {
+      const result = v14([belt("j"), { type: "join", id: "j", fixedEdgesIDs: ["belt"], position: at, isGrounded: true }]);
+      expect(find(result, "j").isGrounded).toBe(true);
+      expect(find(result, "belt").fixedNodeStartID).not.toBe("j");
+    });
+
+    it("turns one of another kind that carried nothing else into a join, under the same ID", () => {
+      const result = v14([
+        belt("p"),
+        { type: "pivot", id: "p", rotatingEdgesIDs: ["belt"], fixedGearsIDs: [], position: at, isGrounded: false, probes: [] },
+      ]);
+      expect(find(result, "p")).toMatchObject({ type: "join", fixedEdgesIDs: ["belt"], position: at });
+      expect(find(result, "belt").fixedNodeStartID).toBe("p");
+    });
+
+    it("leaves a bare join alone, undo history included", () => {
+      const elements = [belt("j"), { type: "join", id: "j", fixedEdgesIDs: ["belt"], position: at, isGrounded: false }];
+      const result = v14(elements);
+      expect(result.mechanicalElements).toEqual(elements);
+      expect(result.history).toEqual([["a"]]);
+    });
+  });
+
   it("refuses a document from a newer format", () => {
     expect(() =>
       migrate_document(doc({ formatVersion: CURRENT_FORMAT_VERSION + 1 })),

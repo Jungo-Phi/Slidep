@@ -13,7 +13,10 @@ import type { CanvasState } from "../../../types/canvas-state";
 import type { HoveredPart } from "../../../types/hovered-part";
 import { get_hovered_part } from "../picking/get-hover";
 import { handle_placing_element } from "./placing-element-actions";
-import { legality_for_state } from "../../mechanism/connection-rules";
+import {
+  BELT_CLOSE_ON_LOADED_NODE,
+  legality_for_state,
+} from "../../mechanism/connection-rules";
 import { DEFAULT_FLOOR, ViewportState } from "../../../types";
 import { bundle_geometry } from "../../mechanism/action-geometry";
 
@@ -105,7 +108,7 @@ describe("closing a belt while placing it", () => {
   });
 
   // The closure names no element, so `sim.holds` cannot vouch for it.
-  // It used to be dropped on that ground, and the belt was created open.
+  // Dropped on that ground, the belt would come out open.
   it("creates the junction and closes the loop", () => {
     const closure: HoveredPart = { type: "BeltClosure", position: START };
     const { actions } = handle_placing_element(
@@ -136,7 +139,7 @@ describe("closing a belt while placing it", () => {
     expect(bundle_geometry(actions).solve).toBe("after");
   });
 
-  // The route is attached after the belt is created, so the closure used to run on a belt with no pulleys yet: there was no loop to seat the junction on and it stayed under the cursor, letting the solver drag the pulleys to meet it.
+  // The route is attached after the belt is created: a closure run before it finds no loop to seat the junction on, leaves it under the cursor and lets the solver drag the pulleys to meet it.
   it("seats the junction on the loop, away from the closing cursor", () => {
     const far = P(0, -200); // start well above the gears, rims at y = -40
     const fromVoid: Extract<CanvasState, { type: "PlacingBeltEnd" }> = {
@@ -168,6 +171,35 @@ describe("closing a belt while placing it", () => {
       .element as BeltElement;
     expect(belt.positionStart.y).toBeCloseTo(-40);
     expect(belt.positionEnd.y).toBeCloseTo(-40);
+  });
+
+  // Begun on a node, the belt closes on it and makes it its junction.
+  it("refuses to close on the node it started from when that node carries something else", () => {
+    const from = P(0, -200);
+    const loaded: MechanicalElement = {
+      type: "join",
+      id: "loaded" as ID,
+      probes: [],
+      overlays: {},
+      position: from,
+      isGrounded: true,
+      fixedEdgesIDs: [],
+    };
+    const gesture: CanvasState = {
+      ...routing,
+      startHover: { type: "Node", id: loaded.id, position: from, deleting: false, beamBodyHover: false },
+    };
+    const hovered = get_hovered_part(
+      [...MECH, loaded],
+      [],
+      [],
+      new Map(),
+      from,
+      gesture,
+      VIEWPORT,
+      DEFAULT_FLOOR,
+    );
+    expect(hovered).toMatchObject({ type: "Void", rejected: BELT_CLOSE_ON_LOADED_NODE });
   });
 
   // Started in the void and over nothing, so the pick reaches the closure rule instead of being answered by whatever lies under the start.
@@ -214,7 +246,7 @@ describe("closing a belt while placing it", () => {
 });
 
 describe("the gear a belt is started on", () => {
-  // It enters the route only at finalisation, so it used to be caught solely by the click on a *second* gear: a belt started and ended on one pulley each came out attached to neither.
+  // It enters the route only at finalisation, not with the click on a *second* gear: a belt started and ended on one pulley each must still come out attached to both.
   const attached = (actions: Action[]) =>
     actions
       .filter((a) => a.type === "ConnectsAttachedGears")
@@ -363,6 +395,51 @@ describe("closing a belt by dragging its terminal node onto the other end", () =
       new Map(),
       START,
       moving,
+      VIEWPORT,
+      DEFAULT_FLOOR,
+    );
+    expect(hovered).toMatchObject({ type: "Edge", id: BELT, part: "start" });
+  });
+
+  // The node would become the junction, which holds nothing but its belt.
+  it("refuses to close on a node that carries something else", () => {
+    const mech = [...MECH, { ...node, isGrounded: true }, belt()];
+    const hovered = get_hovered_part(
+      mech,
+      [],
+      [],
+      new Map(),
+      END,
+      moving,
+      VIEWPORT,
+      DEFAULT_FLOOR,
+    );
+    expect(hovered).toMatchObject({ type: "Void", rejected: BELT_CLOSE_ON_LOADED_NODE });
+  });
+
+  it("refuses to bring the free end onto a node that carries something else", () => {
+    const mech = [...MECH, { ...node, isGrounded: true }, belt()];
+    const hovered = get_hovered_part(
+      mech,
+      [],
+      [],
+      new Map(),
+      START,
+      { type: "MovingEdgeEndPoint", elementID: BELT },
+      VIEWPORT,
+      DEFAULT_FLOOR,
+    );
+    expect(hovered).toMatchObject({ type: "Void", rejected: BELT_CLOSE_ON_LOADED_NODE });
+  });
+
+  it("brings the free end onto a join that holds nothing but the belt", () => {
+    const hovered = get_hovered_part(
+      [...MECH, node, belt()],
+      [],
+      [],
+      new Map(),
+      START,
+      { type: "MovingEdgeEndPoint", elementID: BELT },
       VIEWPORT,
       DEFAULT_FLOOR,
     );

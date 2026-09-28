@@ -183,8 +183,9 @@ export function loadBeltVia(
 /**
  * h = ℓ + u_a − v_b of one strand, solving only the two tangent pairs it rests on: its own (strand length, arrival on b) and the previous one (arrival on a, whose contact arc closes between the two).
  * The rest of the belt does not enter the answer, and this is the hot path — one instance per strand, three hundred sweeps a frame.
+ * Exported so the direct solve's row builder can read the same value: a strand's gradient wrt the pulley before `a` is exactly zero (the arc's arrival term cancels against its own departure term), so both solvers only ever need this call's endpoints.
  */
-function strandH(
+export function strandH(
   nodes: SimNodes,
   s: LinkSlots,
   link: Seg,

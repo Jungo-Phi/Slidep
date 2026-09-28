@@ -155,14 +155,6 @@ export function variable_keys_of(link: Link): string[] {
         ...link.gearAngleKeys,
         link.refAngleKey,
       ];
-    case "BeltFollowsTangent":
-      return [
-        link.pivotKey,
-        link.drivenKey,
-        ...link.gearPosKeys,
-        ...link.gearAngleKeys,
-        link.refAngleKey,
-      ];
     case "BeltSegmentNoSlip":
       return [
         link.posKeyA,

@@ -185,18 +185,6 @@ export function resolve_slots(links: Link[], nodes: Nodes): LinkSlots[] {
           rad: EMPTY,
         };
 
-      // pos: pivot, driven, then one per pulley. ang: the reference pulley's angle.
-      case "BeltFollowsTangent":
-        return {
-          pos: Int32Array.of(
-            P(link.pivotKey),
-            P(link.drivenKey),
-            ...link.gearPosKeys.map(P),
-          ),
-          ang: Int32Array.of(A(link.refAngleKey)),
-          rad: EMPTY,
-        };
-
       // pos: strand ends a and b, start, end, then one per pulley. ang: θ_a, θ_b.
       case "BeltSegmentNoSlip":
         return {

@@ -15,12 +15,14 @@ import type {
 } from "../../../types";
 import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
 import { is_node_element, world2screen } from "../../../utils";
+import { belt_junctions } from "../../../utils/belt-rules";
 
 /**
  * The nodes lying under the segment from `start` to `end`, its two ends excepted.
  *
  * Measured on screen, with the tolerance an edge answers to when hovered: what counts as « under the bar » should be what looks under it.
  * Both ends are left out by a node's worth of margin — they are connected by the gesture's own hovers, and a node claimed twice would be connected to the tip and to the body at once.
+ * A closed belt's junction is left out too: nothing but its belt may hold it.
  */
 export function nodes_under_segment(
   start: WorldPoint,
@@ -34,9 +36,10 @@ export function nodes_under_segment(
   if (length <= 2 * HIT_TOLERANCE.NODE) return [];
   const along = span.mul(1 / length);
 
+  const junctions = belt_junctions(mechanicalElements);
   const crossed: NodeElement[] = [];
   for (const element of mechanicalElements) {
-    if (!is_node_element(element)) continue;
+    if (!is_node_element(element) || junctions.has(element.id)) continue;
     const offset = world2screen(element.position, viewport).sub(from);
     const t = offset.dot(along);
     if (t < HIT_TOLERANCE.NODE || t > length - HIT_TOLERANCE.NODE) continue;

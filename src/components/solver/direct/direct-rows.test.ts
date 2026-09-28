@@ -28,6 +28,33 @@ const LINKS: Link[] = [
   { type: "MinDistanceToSegment", ddl: 0, key1: "A", key2: "B", key3: "C", offset: 0.05, side: -1 },
   { type: "MinDistanceToSegment", ddl: 0, key1: "A", key2: "B", key3: "D", offset: 0.05, side: 1 },
   { type: "MinDistanceToLine", ddl: 0, key1: "A", key3: "C", normal: new Point2(0.6, 0.8), offset: 0.05 },
+  {
+    // A→B→C as a 3-pulley chain: the strand under test (viaA=1) rests on an arc whose incoming side is A, so this also exercises the claim that A's position drops out of the gradient.
+    type: "BeltSegmentNoSlip", ddl: 1, angleKeyA: "g1", angleKeyB: "g2", posKeyA: "B", posKeyB: "C",
+    rEpsA: 0.05, rEpsB: 0.05, theta0A: 0.1, theta0B: -0.2, h0: 0.4,
+    gearPosKeys: ["A", "B", "C"], radii: [0.05, 0.05, 0.05], directions: [false, false, false],
+    closed: false, segIndex: 0, viaA: 1, writePositions: false,
+  },
+  // Open over two pulleys: both free ends against their pulley, and one strand between the pulleys.
+  {
+    type: "BeltLength", ddl: 1, startKey: "A", endKey: "D", gearPosKeys: ["B", "C"], gearAngleKeys: ["g1", "g2"],
+    radii: [0.05, 0.08], directions: [false, true], length: 2, closed: false,
+  },
+  // Closed over three pulleys: one strand guard per pair, the closure included.
+  {
+    type: "BeltLength", ddl: 1, startKey: "A", endKey: "A", gearPosKeys: ["B", "C", "D"], gearAngleKeys: ["g1", "g2", "g1"],
+    radii: [0.05, 0.02, 0.03], directions: [false, false, true], length: 2, closed: true,
+  },
+  // Every pulley gone: the belt is a straight segment of its full length.
+  {
+    type: "BeltLength", ddl: 1, startKey: "A", endKey: "C", gearPosKeys: ["B"], gearAngleKeys: ["g1"],
+    radii: [0.05], directions: [false], length: 0.5, closed: false, disconnected: [true],
+  },
+  {
+    type: "BeltSubChainAggregate", ddl: 1, angleKeyStart: "g1", angleKeyEnd: "g2", rEpsStart: 0.05, rEpsEnd: 0.05,
+    theta0Start: 0, theta0End: 0, h0Sum: 1, gearPosKeys: ["B", "C"], radii: [0.05, 0.05], directions: [false, false],
+    closed: false, segIndices: [0], viaIndices: [0],
+  },
 ];
 
 function nodes_at(seed: number) {

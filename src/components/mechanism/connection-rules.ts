@@ -9,6 +9,7 @@ import type {
 import { get_connection_types, get_connections } from "./connect-actions";
 import {
   belt_can_close,
+  belt_junctions,
   belt_placing_pulleys,
   MIN_PULLEYS_TO_CLOSE,
 } from "../../utils/belt-rules";
@@ -129,6 +130,59 @@ export const BELT_CANNOT_CLOSE: StringKey = "rule_belt_cannot_close";
 export const BELT_CANNOT_CLOSE_VARS = { count: MIN_PULLEYS_TO_CLOSE };
 export const BELT_GEARS_SAME_AXLE: StringKey = "rule_belt_gears_same_axle";
 export const BELTS_CANNOT_JOIN: StringKey = "rule_belts_cannot_join";
+export const JUNCTION_CARRIES_NOTHING: StringKey = "rule_junction_carries_nothing";
+export const BELT_CLOSE_ON_LOADED_NODE: StringKey = "rule_belt_close_on_loaded_node";
+const NODE_ONTO_JUNCTION: StringKey = "rule_node_onto_junction";
+
+/**
+ * The gestures that attach something to what they aim at: a node dropped or dragged onto it, an edge end or a beam body landing on it, a gear, the ground or a load placed on it.
+ * A dimension, a constraint, a probe or a measure only reads it, and may aim at a junction like at any node.
+ */
+const ATTACHING_STATES: ReadonlySet<CanvasState["type"]> = new Set<CanvasState["type"]>([
+  "MovingNode",
+  "MovingEdgeStartPoint",
+  "MovingEdgeEndPoint",
+  "MovingEdgeBody",
+  "PlacingBeamStart",
+  "PlacingBeamEnd",
+  "PlacingSpringStart",
+  "PlacingSpringEnd",
+  "PlacingDamperStart",
+  "PlacingDamperEnd",
+  "PlacingBeltStart",
+  "PlacingBeltEnd",
+  "PlacingMotor",
+  "PlacingPivot",
+  "PlacingSlider",
+  "PlacingJoin",
+  "PlacingMass",
+  "PlacingGearStart",
+  "PlacingGround",
+  "PlacingForceStart",
+  "PlacingMomentStart",
+  "MovingForce",
+  "MovingMoment",
+]);
+
+/**
+ * Whether `node` carries anything but `beltID`: another element, the ground, or a kind other than a join.
+ * A belt may only close on a node that carries nothing else, since that node becomes its junction.
+ * The closing gestures aim at the belt's own terminal rather than at an element, so `get-hover` asks this where it offers them.
+ */
+export function carries_other_than(
+  node: MechanicalElement,
+  beltID: ID | undefined,
+  mechanicalElements: MechanicalElement[],
+): boolean {
+  if (node.type !== "join" || node.isGrounded) return true;
+  for (const id of connected_ids(node)) if (id !== beltID) return true;
+  return mechanicalElements.some(
+    (element) =>
+      element.id !== beltID &&
+      element.id !== node.id &&
+      connected_ids(element).has(node.id),
+  );
+}
 
 /** The belts holding a terminal on `id`. */
 function belts_pinned_to(
@@ -278,11 +332,21 @@ export function legality_for_state(
   };
 
   const carried = carried_belts(state, draggedElement, mechanicalElements);
+  const junctions = belt_junctions(mechanicalElements);
+  const attaching = ATTACHING_STATES.has(state.type);
 
   return (candidate: UnionElement, part?: HoveredPart): Legality => {
     // Re-linking a pair changes nothing, and offering it would let a useless target sit in front of a useful one.
     if (alreadyLinked.has(candidate.id))
       return refuse("rule_already_connected");
+
+    // A junction holds its belt and nothing else, whichever way the two would meet.
+    if (attaching && draggedElement && junctions.has(draggedElement.id))
+      return block(JUNCTION_CARRIES_NOTHING);
+    if (attaching && junctions.has(candidate.id))
+      return block(
+        incoming_node_type(state, draggedElement) ? NODE_ONTO_JUNCTION : JUNCTION_CARRIES_NOTHING,
+      );
 
     const takeover = takeover_refusal(
       incoming_node_type(state, draggedElement),

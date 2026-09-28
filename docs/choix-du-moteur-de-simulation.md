@@ -353,6 +353,15 @@ investissement du même ordre de grandeur que 3/4, pas une retouche.
 
 ## Où en est le choix
 
+> **Tranché : un solveur direct global, dans l'esprit de l'option 4.** Newton sur les
+> multiplicateurs des contraintes, LDLᵀ creuse à ordre de degré minimal et structure mise en
+> cache, contacts en lignes unilatérales à ensemble actif, moteurs dans le système avec leur
+> saturation, rebond résolu par tout le système. Il remplace le sweep en dynamique dès qu'il couvre
+> tous les liens d'un mécanisme, ce qui est le cas de toute la galerie. Il s'est montré plus précis
+> que Gauss-Seidel à 200 sweeps et 3 à 30 fois plus rapide selon les mécanismes ; les objectifs de
+> temps réel (Pendulum clock, Jansen ×2) ne sont pas encore atteints. Ce qui suit est l'état de la
+> réflexion avant ce choix.
+
 L'expérience qui a produit ce document a déplacé plusieurs de ces options, sans en trancher une
 seule :
 

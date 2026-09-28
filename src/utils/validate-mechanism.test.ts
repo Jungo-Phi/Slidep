@@ -224,10 +224,17 @@ describe("validate_mechanism — fermeture des courroies", () => {
     expect(codes(mech)).toContain("BELT_CLOSURE_MISMATCH");
   });
 
-  // La contraposée : les deux bouts sur une même jonction FONT une boucle.
+  // The converse: both ends on one junction DO make a loop.
   it("BELT_CLOSURE_MISMATCH : boucle réelle mais drapeau ouvert", () => {
     const mech = closed_belt_mechanism({ closed: false });
     expect(codes(mech)).toContain("BELT_CLOSURE_MISMATCH");
+  });
+
+  it("LOADED_BELT_JUNCTION : la jonction est ancrée au sol", () => {
+    const mech = closed_belt_mechanism();
+    const join = mech.mechanicalElements.find((el) => el.id === id("j1"))!;
+    if ("isGrounded" in join) join.isGrounded = true;
+    expect(codes(mech)).toContain("LOADED_BELT_JUNCTION");
   });
 
   it("BELTS_JOINED : un nœud tient les extrémités de deux courroies", () => {

@@ -883,9 +883,10 @@ afficheraient des courbes plausibles sans rien dire qu'elles sont indicatives. A
 sa formulation : une poutre dont la référence matériau ou profilé pend a `EA = EI = 0`, sort de `F`,
 et hérite du même message alors qu'aucune courroie n'est en cause.
 
-**Il ne reste qu'un producteur de `foreign` dans toute la galerie** : `BeltFollowsTangent`, sur
-`Poutre sur joint de courroie`. Le mécanisme lui-même est à garder — c'est le repli honnête le jour
-où le contact unilatéral arrivera, lui que ce plan déclare non résoluble linéairement.
+**Il n'y a plus de producteur de `foreign` dans la galerie** : le dernier était `BeltFollowsTangent`,
+sur `Poutre sur joint de courroie`, et ce type de connexion n'est plus supporté — la jonction d'une
+courroie fermée ne porte que sa courroie. Le libellé reste pour une référence de matériau ou de
+profilé qui pend.
 
 ### L'engrenage comme corps · **fait**
 
@@ -962,10 +963,9 @@ tenu à jour sur le lien) ne touche rien : elle sort du chemin et le brin file d
 Le nombre de brins, lui, est purement structurel (`n` fermé, `n − 1` ouvert), donc la mise en page
 reste sans état — la colonne d'un brin sauté ne sert simplement pas.
 
-**`BeltFollowsTangent` reste dehors**, et c'est la seule exception : une poutre soudée au joint
-demande à un brin de reprendre un **couple**, ce qui exigerait une raideur de flexion que le modèle
-n'a pas. Sa courroie n'est donc pas portée, et `Poutre sur joint de courroie` reste rose. Ce type de
-connexion n'a pas d'usage réel et cesse d'être supporté ; la ligne partira avec lui.
+**Une poutre soudée à la jonction n'existe plus** : elle aurait demandé à un brin de reprendre un
+**couple**, ce qui exigerait une raideur de flexion que le modèle n'a pas. La jonction d'une courroie
+fermée ne porte que sa courroie, et `BeltFollowsTangent` a été supprimé.
 
 Vérifié : une corde sur une poulie à la main (`belt-tension.test.ts` — les deux charges ressortent à
 l'axe, le couple vaut `R × (T₁ − T₂)`, résidu machine).

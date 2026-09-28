@@ -4,6 +4,16 @@ Question tranchée et en production. Ce document garde le pourquoi, ce qui a ét
 coûte, et ce que la mesure a réfuté en chemin — pas le journal des cinq passes qui y ont mené.
 Le banc reste rejouable dans `scratch/ssor/` (README + patches).
 
+> **État actuel : la dynamique tourne sur un solveur direct** (`solver/direct/`, Newton sur les
+> multiplicateurs, factorisation LDLᵀ creuse), activé dès qu'il couvre tous les liens d'un
+> mécanisme — c'est le cas de toute la galerie, courroies comprises. La limite de Gauss-Seidel
+> décrite ci-dessous est inchangée, mais elle n'est plus sur le chemin : le sweep ne sert plus, en
+> dynamique, qu'aux liens d'une prise à la main, à côté du direct ; il reste le solveur de
+> l'édition et du cinématique. Les plafonds structurels relevés sur `CP`, `Puente` et `Core XY`
+> n'ont pas été remesurés en direct. `Core XY` y coince : ses rails ne sont pas parallèles
+> (0,07 px sur 1 100), et un portique rigide tenu par des courroies inextensibles doit coincer —
+> Gauss-Seidel, faute de converger, le laissait passer.
+
 Trois questions en sont sorties et vivent ailleurs :
 
 - **quel moteur de simulation** — `choix-du-moteur-de-simulation.md` ;

@@ -1,7 +1,7 @@
 import type { Link } from "../../../types";
 import type { SolveNodes } from "../nodes";
 import type { LinkSlots } from "../kinematics/link-slots";
-import { MAX_WIDTH, ROWS_PER_LINK, Rows, evaluate_drive_rows, evaluate_rows } from "./direct-rows";
+import { MAX_WIDTH, Rows, evaluate_drive_rows, evaluate_rows, row_slots } from "./direct-rows";
 import type { ResolvedDrive } from "../dynamics/drive-constraint";
 import { Analysis, analyse, factorise, solve } from "./sparse-ldl";
 
@@ -74,9 +74,9 @@ export function create_direct_state(nodes: SolveNodes, links: Link[], drives: Re
   return {
     rows: SHARED_ROWS,
     drives,
-    lambda: new Float64Array(links.length * ROWS_PER_LINK),
+    lambda: new Float64Array(row_slots(links).total),
     w,
-    released: new Uint8Array(links.length * ROWS_PER_LINK),
+    released: new Uint8Array(row_slots(links).total),
     system: new Int32Array(0),
     active: new Uint8Array(0),
     rhs: new Float64Array(0),
@@ -443,7 +443,7 @@ export function direct_bounce(
   // Each impact: its row or rows, the unit direction across them, the approach speed and the change of speed aimed at.
   const impacts: { rx: number; ry: number; ax: number; ay: number; closing: number; change: number }[] = [];
   for (let r = 0; r < rows.count; r++) {
-    if (!active[r] || !rows.unilateral[r] || lambda[rows.slot[r]] <= 0) continue;
+    if (!active[r] || !rows.unilateral[r] || rows.inelastic[r] || lambda[rows.slot[r]] <= 0) continue;
     const closing = -before(r);
     if (closing <= 0) continue;
     const change = restitution * closing - after(r);

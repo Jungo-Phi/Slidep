@@ -1,5 +1,16 @@
 # Les courroies en mode dynamique
 
+> **État actuel.** Les courroies passent par le solveur direct : un brin (`BeltSegmentNoSlip`) y
+> est une ligne, dont le gradient de position est dérivé numériquement sur `strandH` — celui que le
+> sweep utilise (tension pure le long du brin) n'est exact que pour les poulies voisines, pas pour
+> les deux centres du brin lui-même. La longueur (`BeltLength`) et les agrégats de sous-chaîne sont
+> la somme des brins : le direct ne les écrit pas, et ne garde de `BeltLength` que ses gardes, en
+> contacts sans rebond (extrémité libre hors de sa poulie, poulies voisines assez loin pour que leur
+> brin existe) et la longueur d'une courroie ouverte sans poulie. La jonction d'une courroie fermée
+> est un join nu qui ne porte que sa courroie : son `BeltPin` est passif, elle n'a ni masse ni
+> connexion, et `BeltFollowsTangent` n'existe plus (un fichier qui en avait un est corrigé à
+> l'ouverture, format v15). Ce qui suit est l'enquête qui a mené au modèle en brins.
+
 Trouvé en marge du chantier ratio-de-masse (voir `ratio-masse-convergence-dynamique.md`, dont
 ce document est un détachement), et sans rapport avec lui : le mode dynamique est récent, les
 courroies ne l'ont jamais été, et rien ne testait leur rencontre.
@@ -254,7 +265,7 @@ poulie active) que l'autre évite entièrement. Détails et chiffres dans la sec
 
 `step_dynamic_simulation` exécute maintenant le même bloc que `step_simulation` (dé-wrap
 `GearMeshAngle.alpha`, `update_belt_disconnects`, `rebake_belt_pin_refs`, partage
-`wraps`/`disconnected` vers `BeltPin`/`BeltFollowsTangent`, filtrage puis reconstruction des
+`wraps`/`disconnected` vers `BeltPin`, filtrage puis reconstruction des
 liens no-slip après un rewire) — plus le filtrage `BeltLoopClosure` du chantier précédent, déjà
 présent côté `step_simulation` et repris à l'identique côté dynamique.
 

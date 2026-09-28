@@ -33,6 +33,7 @@ export type ValidationErrorCode =
   | "GROUNDED_MASS"
   | "BELT_CLOSURE_MISMATCH"
   | "BELTS_JOINED"
+  | "LOADED_BELT_JUNCTION"
   | "SUPERPOSED_EDGES"
   | "DUPLICATE_CONSTRAINT"
   | "PARENT_BEAM_CONFLICT";
@@ -373,6 +374,30 @@ export function validate_mechanism(
         : t("validation_belt_open_with_loop", { name: name(junctionID!) }),
       elementID: el.id,
       relatedID: junctionID,
+    });
+  }
+
+  // ── A closed belt's junction holds its belt and nothing else ────────────────
+  // Dimensions and constraints only read where it is, so they may name it; anything else holding it would be carried by the belt.
+  for (const el of mels) {
+    if (el.type !== "belt" || !el.closed) continue;
+    const junctionID = belt_junction_id(el);
+    const junction = junctionID ? mechByID.get(junctionID) : undefined;
+    if (!junction) continue;
+    const holders = [...mels, ...loads].filter(
+      (other) =>
+        other.id !== el.id &&
+        other.id !== junction.id &&
+        element_ref_fields(other).some(({ ids }) => ids.includes(junction.id)),
+    );
+    const held = element_ref_fields(junction).some(({ ids }) => ids.some((id) => id !== el.id));
+    const kind = junction.type !== "join" || ("isGrounded" in junction && junction.isGrounded);
+    if (holders.length === 0 && !held && !kind) continue;
+    errors.push({
+      code: "LOADED_BELT_JUNCTION",
+      message: t("validation_loaded_belt_junction", { name: name(el.id) }),
+      elementID: junction.id,
+      relatedID: el.id,
     });
   }
 

@@ -118,11 +118,11 @@ describe("coût de la collecte de résidus", () => {
   }, 900_000);
 
   /**
-   * Which mechanisms carry the three belt links still on the boxed path — the other chantier 5 item.
+   * Which mechanisms carry the two belt links still on the boxed path — the other chantier 5 item.
    * A link absent from a mechanism cannot be optimised for it, so this table decides where the work would land before any of it is done.
    */
   it("recense les liens de courroie restés sur le chemin boxé", () => {
-    const BOXED = ["BeltPin", "BeltJunction", "BeltFollowsTangent"] as const;
+    const BOXED = ["BeltPin", "BeltJunction"] as const;
     console.log(
       `\n  | mécanisme | ${BOXED.join(" | ")} | liens | nœuds | angles | octets/snapshot |`,
     );

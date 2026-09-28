@@ -79,8 +79,6 @@ export function keys_of(link: Link): string[] {
       return [link.nodeKey, ...link.gearPosKeys];
     case "BeltPin":
       return [link.nodeKey, ...link.gearPosKeys];
-    case "BeltFollowsTangent":
-      return [link.pivotKey, link.drivenKey, ...link.gearPosKeys];
     case "BeltSegmentNoSlip":
       return [
         link.posKeyA,
@@ -113,7 +111,7 @@ export function sort_links(
   posMasses: Map<string, number>,
 ): Link[] {
   // 1.
-  // Construire l'index clé → liens qui la touchent
+  // Index each key to the links that touch it.
   const key_to_links = new Map<string, number[]>();
   links.forEach((link, i) => {
     keys_of(link).forEach((k) => {
@@ -123,12 +121,12 @@ export function sort_links(
   });
 
   // 2.
-  // BFS : priorité aux liens touchant une clé ancrée (masse = 0)
+  // Breadth-first, starting from the links that touch an anchored key (mass 0).
   const visited = new Array(links.length).fill(false);
   const result: Link[] = [];
   const queue: number[] = [];
 
-  // Amorcer avec les HandleGrab en dernier, ancres en premier
+  // Grabs go last, anchors first.
   const grab_indices: number[] = [];
   links.forEach((link, i) => {
     if (link.type === "HandleGrab") {
@@ -137,7 +135,7 @@ export function sort_links(
     }
   });
 
-  // Seed unique : le premier lien touchant une clé de masse 0
+  // A single seed: the first link touching a key of mass 0.
   const first_anchored = links.findIndex(
     (link, i) =>
       !visited[i] && keys_of(link).some((k) => posMasses.get(k) === 0),
@@ -146,7 +144,7 @@ export function sort_links(
     queue.push(first_anchored);
     visited[first_anchored] = true;
   }
-  // Si rien d'ancré, partir du premier lien non-visité
+  // Nothing anchored: start from the first unvisited link.
   if (queue.length === 0 && links.length > 0) {
     queue.push(0);
     visited[0] = true;
@@ -157,7 +155,7 @@ export function sort_links(
     result.length + grab_indices.length < links.length
   ) {
     if (queue.length === 0) {
-      // Composante isolée : trouver le prochain lien non-visité
+      // An isolated component: carry on from the next unvisited link.
       const next = links.findIndex((_, i) => !visited[i]);
       if (next === -1) break;
       queue.push(next);
@@ -165,7 +163,7 @@ export function sort_links(
     }
     const idx = queue.shift()!;
     result.push(links[idx]);
-    // Voisins : tous les liens partageant une clé
+    // Neighbours: every link sharing a key.
     keys_of(links[idx]).forEach((k) => {
       key_to_links.get(k)?.forEach((j) => {
         if (!visited[j]) {

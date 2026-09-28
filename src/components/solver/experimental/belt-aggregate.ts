@@ -40,7 +40,6 @@ const BELT_MACHINERY = new Set([
   "BeltSegmentNoSlip",
   "BeltSubChainAggregate",
   "BeltLoopClosure",
-  "BeltFollowsTangent",
 ]);
 
 /** Every position/angle key a link names. */

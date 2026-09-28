@@ -29,8 +29,10 @@ import {
 import {
   BELT_CANNOT_CLOSE,
   BELT_CANNOT_CLOSE_VARS,
+  BELT_CLOSE_ON_LOADED_NODE,
   belt_can_close,
   belt_placing_pulleys,
+  carries_other_than,
   legality_for_state,
 } from "../../mechanism/connection-rules";
 import {
@@ -1141,6 +1143,14 @@ export function get_hovered_part(
         rejected: BELT_CANNOT_CLOSE,
         rejectedVars: BELT_CANNOT_CLOSE_VARS,
       };
+    // Begun on a node, the belt closes on it and makes it its junction, which holds nothing but the belt.
+    const start = state.startHover;
+    const startNode =
+      start.type === "Node"
+        ? mechanicalElements.find((element) => element.id === start.id)
+        : undefined;
+    if (startNode && carries_other_than(startNode, undefined, mechanicalElements))
+      return { type: "Void", position, rejected: BELT_CLOSE_ON_LOADED_NODE };
     return { type: "BeltClosure", position: state.startHover.position };
   }
 
@@ -1298,6 +1308,13 @@ export function get_hovered_part(
   }
   if (past) return past.part;
 
+  /** Whether closing `belt` on the node `nodeID` would make a junction of a node that carries something else. */
+  const closes_on_loaded = (nodeID: ID | undefined, beltID: ID) => {
+    const node = nodeID ? mechanicalElements.find((element) => element.id === nodeID) : undefined;
+    return !!node && carries_other_than(node, beltID, mechanicalElements);
+  };
+  const LOADED: HoveredPart = { type: "Void", position, rejected: BELT_CLOSE_ON_LOADED_NODE };
+
   if (state.type === "MovingEdgeStartPoint") {
     const belt = get_mechanical_element_from_id(
       state.elementID,
@@ -1315,6 +1332,7 @@ export function get_hovered_part(
           rejected: BELT_CANNOT_CLOSE,
           rejectedVars: BELT_CANNOT_CLOSE_VARS,
         };
+      if (closes_on_loaded(belt.fixedNodeEndID, belt.id)) return LOADED;
       return {
         type: "Edge",
         position: belt.positionEnd,
@@ -1340,6 +1358,7 @@ export function get_hovered_part(
           rejected: BELT_CANNOT_CLOSE,
           rejectedVars: BELT_CANNOT_CLOSE_VARS,
         };
+      if (closes_on_loaded(belt.fixedNodeStartID, belt.id)) return LOADED;
       return {
         type: "Edge",
         position: belt.positionStart,
@@ -1369,6 +1388,11 @@ export function get_hovered_part(
           rejected: BELT_CANNOT_CLOSE,
           rejectedVars: BELT_CANNOT_CLOSE_VARS,
         };
+      if (
+        closes_on_loaded(state.elementID, belt.id) ||
+        closes_on_loaded(holdsStart ? belt.fixedNodeEndID : belt.fixedNodeStartID, belt.id)
+      )
+        return LOADED;
       return {
         type: "Edge",
         position: otherPos,
