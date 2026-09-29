@@ -16,6 +16,7 @@ import {
   SnapshotLayout,
   StressScaleCache,
 } from "../../../types/runtime-state";
+import { hermite_value, same_belt_topology } from "../dynamics/simulation-engine";
 
 export type ProbeCurveKey = "x" | "y" | "norm" | "value";
 
@@ -830,6 +831,41 @@ function trajectory_builds(elements: MechanicalElement[]): PointBuild[] {
   return builds;
 }
 
+/** Whether `s` carries a velocity to build a Hermite tangent from — `DynamicSnapshot` only, see its own doc for why `KinematicSnapshot` never does. */
+function is_dynamic_snapshot(s: SimulationSnapshot): s is DynamicSnapshot {
+  return "velocities" in s;
+}
+
+/**
+ * `TRAJECTORY_SAMPLING.HERMITE_SUBSAMPLES` extra points between `prev` and `snap`, on the SAME Hermite curve `dynamic_snapshot_at` draws the live point on — so a trajectory reads as curved across one recorded interval instead of as the straight chord a plain lerp would cut across a fast rotation.
+ * Guarded exactly like `dynamic_snapshot_at` itself (same layout, same belt topology): a topology change is not a curve to draw through, it is the earlier instant held — `advance` below just never receives the extra points, and falls back to the raw one-sample-per-snapshot path it always had.
+ */
+function sample_hermite_between(
+  builds: PointBuild[],
+  slots: number[],
+  prev: DynamicSnapshot,
+  snap: DynamicSnapshot,
+): void {
+  if (prev.layout !== snap.layout || !same_belt_topology(prev, snap)) return;
+  const span = snap.t - prev.t;
+  if (!(span > 0)) return;
+  const n = TRAJECTORY_SAMPLING.HERMITE_SUBSAMPLES;
+  for (let s = 1; s <= n; s++) {
+    const u = s / (n + 1);
+    for (let k = 0; k < builds.length; k++) {
+      const slot = slots[k];
+      if (slot < 0) continue;
+      const p0 = Float64Array.of(prev.positions[2 * slot], prev.positions[2 * slot + 1]);
+      const p1 = Float64Array.of(snap.positions[2 * slot], snap.positions[2 * slot + 1]);
+      if (Number.isNaN(p0[0]) || Number.isNaN(p1[0])) continue;
+      const v0 = Float64Array.of(prev.velocities[2 * slot], prev.velocities[2 * slot + 1]);
+      const v1 = Float64Array.of(snap.velocities[2 * slot], snap.velocities[2 * slot + 1]);
+      const point = hermite_value(p0, p1, v0, v1, span, u);
+      advance(builds[k], point[0], point[1], prev.t + u * span);
+    }
+  }
+}
+
 function sample_into(
   builds: PointBuild[],
   snapshots: SimulationSnapshot[],
@@ -843,6 +879,9 @@ function sample_into(
       layout = snap.layout;
       slots = builds.map((build) => layout!.index.get(build.key) ?? -1);
     }
+    const prev = i > 0 ? snapshots[i - 1] : undefined;
+    if (prev && is_dynamic_snapshot(prev) && is_dynamic_snapshot(snap))
+      sample_hermite_between(builds, slots, prev, snap);
     for (let k = 0; k < builds.length; k++) {
       const slot = slots[k];
       if (slot < 0) continue;

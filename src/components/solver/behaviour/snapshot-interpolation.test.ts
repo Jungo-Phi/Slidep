@@ -246,16 +246,32 @@ describe("réactions à travers l'interpolation dynamique", () => {
     reactions,
   });
 
-  it("un instant interpolé garde les réactions de l'instant enregistré le plus proche", () => {
-    // A frame drawn between two recorded ticks is most of what playback shows — if it drops `reactions`, every overlay arrow reads empty except at an exact tick or the very last frame (what a grab draws).
-    // Half-way, the two are equally near and the earlier one is kept.
+  it("un instant interpolé mélange une réaction stable en signe", () => {
+    // A frame drawn between two recorded ticks is most of what playback shows — if it dropped `reactions` there, every overlay arrow would read empty except at an exact tick or the very last frame (what a grab draws).
+    const a = dynSnap(0, [{ type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 1, fy: 2 }]);
+    const b = dynSnap(1, [{ type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 3, fy: 6 }]);
+    const mid = dynamic_snapshot_at([a, b], 0.5);
+    expect(mid?.reactions).toEqual([
+      { type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 2, fy: 4 },
+    ]);
+  });
+
+  it("une réaction qui change de signe tient l'instant le plus proche plutôt que de mélanger", () => {
+    const a = dynSnap(0, [{ type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 10, fy: 0 }]);
+    const b = dynSnap(1, [{ type: "Distance", key: "n", atAnchor: true, kind: "force", fx: -10, fy: 0 }]);
+    // Nearer a: a's own value.
+    expect(dynamic_snapshot_at([a, b], 0.25)?.reactions).toEqual(a.reactions);
+    // Nearer b: b's own value, never a blend that crosses zero.
+    expect(dynamic_snapshot_at([a, b], 0.75)?.reactions).toEqual(b.reactions);
+  });
+
+  it("une réaction absente d'un côté est exclue plutôt qu'inventée", () => {
     const reactions: LinkReaction[] = [
       { type: "Distance", key: "n", atAnchor: true, kind: "force", fx: 1, fy: 2 },
     ];
     const a = dynSnap(0, reactions);
     const b = dynSnap(1, []);
-    const mid = dynamic_snapshot_at([a, b], 0.5);
-    expect(mid?.reactions).toBe(reactions);
+    expect(dynamic_snapshot_at([a, b], 0.5)?.reactions).toEqual([]);
   });
 });
 
@@ -268,7 +284,8 @@ describe("efforts intérieurs à travers l'interpolation dynamique", () => {
       layout,
       positions: Float64Array.of(x, 0),
       angles: new Float64Array(0),
-      velocities: Float64Array.of(x, 0),
+      // Constant, consistent with `x` itself moving from 0 to 1 over this test's one-second span — the Hermite position curve below reduces exactly to that same straight line once its tangent already IS the line's own slope.
+      velocities: Float64Array.of(1, 0),
       accelerations: Float64Array.of(ax, 0),
       angleVelocities: new Float64Array(0),
       angleAccelerations: new Float64Array(0),
@@ -276,6 +293,9 @@ describe("efforts intérieurs à travers l'interpolation dynamique", () => {
       beamCohesion: [
         {
           beamID: "00000000-0000-0000-0000-00000000000b",
+          // Not a real beam endpoint pair ("n2" is not in `layout`): `beam_axis` cannot resolve, so this beam's torsor exercises the same nearest-instant fallback as a reaction that changes sign — nothing here models beam geometry.
+          k0: "n",
+          k1: "n2",
           start: { fx, fy: 0, m: 0 },
           end: { fx: -fx, fy: 0, m: 0 },
           attachedNodes: [],
@@ -289,16 +309,188 @@ describe("efforts intérieurs à travers l'interpolation dynamique", () => {
 
     for (const [t, nearest] of [[0.25, a], [0.5, a], [0.75, b]] as const) {
       const shown = dynamic_snapshot_at(snaps, t)!;
-      // The motion follows the cursor.
+      // The motion follows the cursor: a constant velocity of 1 m/s, so position at time `t` is `t` itself, and the Hermite curve's own tangent reads back that same constant.
       expect(shown.positions[0]).toBeCloseTo(t, 12);
-      expect(shown.velocities[0]).toBeCloseTo(t, 12);
-      // The efforts, and the accelerations they balance, jump from one instant to the next.
-      expect(shown.accelerations).toBe(nearest.accelerations);
-      expect(shown.reactions).toBe(nearest.reactions);
-      expect(shown.beamCohesion).toBe(nearest.beamCohesion);
+      expect(shown.velocities[0]).toBeCloseTo(1, 12);
+      // Accelerations are a derivative of velocity, not a solved equilibrium share: they blend unconditionally, whatever their sign does.
+      expect(shown.accelerations[0]).toBeCloseTo(-1000 + 1000 * t, 12);
+      // `fx` runs 50 → -5, crossing zero: the reaction and the beam torsor it comes from both hold the nearest instant's own value instead of blending through the crossing.
+      expect(shown.reactions).toEqual(nearest.reactions);
+      expect(shown.beamCohesion).toEqual(nearest.beamCohesion);
       // A reading that needs the pose as well gets the whole of that instant.
       expect(effort_snapshot_at(snaps, t)).toBe(nearest);
     }
+  });
+
+  it("le torseur d'une poutre qui tourne suit sa direction, pas le repère monde", () => {
+    // Two nodes at the beam's ends, rotating 90° between the two recorded instants — a world-frame lerp of `start.fx/fy` would point neither along the beam at u=0 nor at u=1, let alone in between.
+    const layout = make_snapshot_layout(["k0", "k1"], []);
+    const beam = (t: number, p0: Point2, p1: Point2, axialForce: number): DynamicSnapshot => ({
+      t,
+      layout,
+      positions: Float64Array.of(p0.x, p0.y, p1.x, p1.y),
+      angles: new Float64Array(0),
+      velocities: new Float64Array(4),
+      accelerations: new Float64Array(4),
+      angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
+      beamCohesion: [
+        {
+          beamID: "00000000-0000-0000-0000-00000000000c",
+          k0: "k0",
+          k1: "k1",
+          // Pure tension along the beam's own axis at each instant — no transverse component.
+          start: { fx: -axialForce * (p1.x - p0.x), fy: -axialForce * (p1.y - p0.y), m: 0 },
+          end: { fx: axialForce * (p1.x - p0.x), fy: axialForce * (p1.y - p0.y), m: 0 },
+          attachedNodes: [],
+          determinate: true,
+        },
+      ],
+    });
+    const a = beam(0, new Point2(0, 0), new Point2(1, 0), 10); // horizontal
+    const b = beam(1, new Point2(0, 0), new Point2(0, 1), 10); // vertical, rotated 90°
+    const shown = dynamic_snapshot_at([a, b], 0.5)!;
+    const cohesion = shown.beamCohesion![0];
+    // The beam sits at 45° half-way through the rotation: its end torsor should point along THAT axis, not blend the horizontal and vertical world vectors (which would average to a diagonal of a different length, and — for a beam turning further — could cancel out entirely).
+    const axis = new Point2(1, 1).normalize();
+    const f = new Point2(cohesion.end.fx, cohesion.end.fy);
+    expect(f.normalize().dot(axis)).toBeCloseTo(1, 6);
+  });
+
+  it("suit la direction même quand k0/k1 est une clé fusionnée (jointe par des virgules)", () => {
+    // A beam end coincident with something else (a join, a pin) is exactly `BeamCohesionSpec.k0`'s own doc case: the FUSED key, comma-joined, which `layout.index` never holds as one string — only its individual parts. This is the bug a real mechanism (any beam pinned to a join) hit and the synthetic "k0"/"k1" test above never could, since it never used a fused key.
+    const layout = make_snapshot_layout(["k0", "k1"], []);
+    const beam = (t: number, p0: Point2, p1: Point2, axialForce: number): DynamicSnapshot => ({
+      t,
+      layout,
+      positions: Float64Array.of(p0.x, p0.y, p1.x, p1.y),
+      angles: new Float64Array(0),
+      velocities: new Float64Array(4),
+      accelerations: new Float64Array(4),
+      angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
+      beamCohesion: [
+        {
+          beamID: "00000000-0000-0000-0000-00000000000e",
+          // "missing-join-id" resolves nowhere in `layout`; only the second, comma-joined part does — same shape as a real fused key where the beam's own natural key is not the one `layout.index` happens to carry.
+          k0: "missing-join-id,k0",
+          k1: "k1",
+          start: { fx: -axialForce * (p1.x - p0.x), fy: -axialForce * (p1.y - p0.y), m: 0 },
+          end: { fx: axialForce * (p1.x - p0.x), fy: axialForce * (p1.y - p0.y), m: 0 },
+          attachedNodes: [],
+          determinate: true,
+        },
+      ],
+    });
+    const a = beam(0, new Point2(0, 0), new Point2(1, 0), 10);
+    const b = beam(1, new Point2(0, 0), new Point2(0, 1), 10);
+    const shown = dynamic_snapshot_at([a, b], 0.5)!;
+    const cohesion = shown.beamCohesion![0];
+    const axis = new Point2(1, 1).normalize();
+    const f = new Point2(cohesion.end.fx, cohesion.end.fy);
+    expect(f.normalize().dot(axis)).toBeCloseTo(1, 6);
+  });
+
+  it("une poutre non déterminée tient son amplitude mais suit quand même sa direction", () => {
+    // `k1` swings on a quarter-circle around a fixed `k0`, with the matching tangent velocity — real motion, not a hand-placed jump — but `determinate: false` on both sides refuses to blend the torsor's magnitude.
+    const layout = make_snapshot_layout(["k0", "k1"], []);
+    const R = 1;
+    const omega = Math.PI / 2;
+    const axialForce = 10;
+    const beam = (t: number): DynamicSnapshot => {
+      const theta = omega * t;
+      const p1 = new Point2(R * Math.cos(theta), R * Math.sin(theta));
+      return {
+        t,
+        layout,
+        positions: Float64Array.of(0, 0, p1.x, p1.y),
+        angles: new Float64Array(0),
+        velocities: Float64Array.of(0, 0, -R * omega * Math.sin(theta), R * omega * Math.cos(theta)),
+        accelerations: new Float64Array(4),
+        angleVelocities: new Float64Array(0),
+        angleAccelerations: new Float64Array(0),
+        beamCohesion: [
+          {
+            beamID: "00000000-0000-0000-0000-00000000000d",
+            k0: "k0",
+            k1: "k1",
+            start: { fx: -axialForce * p1.x, fy: -axialForce * p1.y, m: 0 },
+            end: { fx: axialForce * p1.x, fy: axialForce * p1.y, m: 0 },
+            attachedNodes: [],
+            determinate: false,
+          },
+        ],
+      };
+    };
+    const a = beam(0);
+    const b = beam(1);
+    const shown = dynamic_snapshot_at([a, b], 0.25)!;
+    const cohesion = shown.beamCohesion![0];
+    // Nearer a (u = 0.25): the direction must track wherever the beam is ITSELF currently drawn (its own interpolated k0→k1, whatever curve that turns out to be) — not the 0° it was solved at. The magnitude holds at `a`'s own reading instead of blending toward `b`'s.
+    const k0 = new Point2(shown.positions[0], shown.positions[1]);
+    const k1 = new Point2(shown.positions[2], shown.positions[3]);
+    const axisU = k1.sub(k0).normalize();
+    const f = new Point2(cohesion.end.fx, cohesion.end.fy);
+    expect(f.normalize().dot(axisU)).toBeCloseTo(1, 6);
+    expect(f.length()).toBeCloseTo(axialForce, 6);
+    expect(cohesion.determinate).toBe(false);
+  });
+
+  it("la position suit la courbure entre deux instants, pas la corde", () => {
+    // A point on a circle turning a quarter-turn between the two recorded instants — enough of the period per interval that a straight chord visibly cuts the arc, the exact case a fast-oscillating pendulum shows under a plain lerp.
+    const layout = make_snapshot_layout(["p"], []);
+    const R = 10;
+    const omega = Math.PI / 2; // rad/s: a quarter turn over this one-second span
+    const at = (t: number): DynamicSnapshot => {
+      const theta = omega * t;
+      return {
+        t,
+        layout,
+        positions: Float64Array.of(R * Math.cos(theta), R * Math.sin(theta)),
+        angles: new Float64Array(0),
+        velocities: Float64Array.of(-R * omega * Math.sin(theta), R * omega * Math.cos(theta)),
+        accelerations: new Float64Array(2),
+        angleVelocities: new Float64Array(0),
+        angleAccelerations: new Float64Array(0),
+      };
+    };
+    const a = at(0);
+    const b = at(1);
+    const shown = dynamic_snapshot_at([a, b], 0.5)!;
+
+    const trueMid = new Point2(R * Math.cos(omega * 0.5), R * Math.sin(omega * 0.5));
+    const hermiteMid = new Point2(shown.positions[0], shown.positions[1]);
+    const chordMid = new Point2(a.positions[0], a.positions[1]).lerp(
+      new Point2(b.positions[0], b.positions[1]),
+      0.5,
+    );
+    // The Hermite curve, which also matches each end's own velocity, cuts the true arc's error by well over half; the straight chord has no such guarantee and only matches the two endpoints.
+    expect(hermiteMid.distance_to(trueMid)).toBeLessThan(chordMid.distance_to(trueMid) * 0.2);
+
+    // The interpolated velocity is the drawn curve's own tangent, not an independent lerp: at the exact midpoint of a symmetric quarter-turn, that tangent points exactly along the true instantaneous velocity's own direction.
+    const trueVelocityDir = new Point2(-Math.sin(omega * 0.5), Math.cos(omega * 0.5));
+    const shownVelocity = new Point2(shown.velocities[0], shown.velocities[1]);
+    expect(shownVelocity.normalize().dot(trueVelocityDir)).toBeCloseTo(1, 6);
+  });
+
+  it("entre deux images, une réaction stable en signe se mélange avec la position", () => {
+    // Same shape as above, but `fx` stays positive on both sides: nothing here should ever hold.
+    const layout = make_snapshot_layout(["n"], []);
+    const recorded = (t: number, x: number, fx: number): DynamicSnapshot => ({
+      t,
+      layout,
+      positions: Float64Array.of(x, 0),
+      angles: new Float64Array(0),
+      velocities: Float64Array.of(x, 0),
+      accelerations: Float64Array.of(0, 0),
+      angleVelocities: new Float64Array(0),
+      angleAccelerations: new Float64Array(0),
+      reactions: [{ type: "Distance", key: "n", atAnchor: true, kind: "force", fx, fy: 0 }],
+    });
+    const a = recorded(0, 0, 40);
+    const b = recorded(1, 1, 60);
+    const shown = dynamic_snapshot_at([a, b], 0.5)!;
+    expect((shown.reactions![0] as { fx: number }).fx).toBeCloseTo(50, 12);
   });
 
   it("entre deux images, le bilan du corps libre se referme encore", () => {

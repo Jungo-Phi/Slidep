@@ -27,6 +27,12 @@ export const TRAJECTORY_SAMPLING = {
   /** Fraction of its radius a gear's centre has to travel before its envelope takes a new direction from it.
    * Read off two consecutive samples, the direction of a slow centre is round-off; the disc's own size is the only scale the offset need be accurate against. */
   ENVELOPE_DIRECTION_RATIO: 0.02,
+  /**
+   * Extra points drawn between two recorded dynamic-mode instants, riding the same Hermite curve the live point glides on (`dynamic_snapshot_at`) rather than the straight chord a trajectory would otherwise cut across a fast rotation or oscillation — one recorded interval's worth of curvature, made visible on the path itself and not just on the point sliding along it.
+   * Kinematic mode has no recorded velocity to build that curve from and keeps the straight chord, same as ever.
+   * A product choice, not a measurement: high enough that a fast pendulum's arc reads as curved rather than faceted, low enough that a trajectory overlay left on for a long recording does not quietly balloon in point count.
+   */
+  HERMITE_SUBSAMPLES: 3,
 };
 
 /** The same ruler as `LOAD_SCALING`, on a moment's own range: torques are commonly tenths of

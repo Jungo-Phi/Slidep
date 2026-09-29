@@ -122,6 +122,9 @@ export interface BalanceSample {
  */
 export interface BeamCohesion {
   beamID: ID;
+  /** The beam's own two fused endpoint keys (`BeamCohesionSpec.k0`/`.k1`) — not recoverable from the mechanism once fused with whatever else is coincident there, so carried here for whoever needs the beam's OWN axis later (interpolation, redrawing a torsor against a pose other than the one it was solved at). */
+  k0: string;
+  k1: string;
   /**
    * What this beam applies onto whatever is coincident at its start — one sense at both ends and for all three components, NOT a "classical support reaction".
    * Not yet the cut torsor `R_coh`: reaching that negates the far end and leaves the near one as it is (see `cohesion-field.ts`'s `r_coh_start`/`r_coh_end`), an asymmetry inherent to the cut convention itself.

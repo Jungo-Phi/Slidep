@@ -62,6 +62,8 @@ export function beam_cohesion_from_statics(
 
     return {
       beamID: spec.beamID,
+      k0: spec.k0,
+      k1: spec.k1,
       start: start ? components(start) : NOTHING,
       end: end ? components(end) : NOTHING,
       attachedNodes,

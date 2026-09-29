@@ -12,7 +12,6 @@
 
 - 🔨 Passer la cinématique et édition en solver direct
 - 🤔 Clarifier le grab en dynamique (grab -> force ?)
-- 🤔 Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
 - 🆕 Ajouter un paramètre pour inclure/exclure des collisions par élément
 - 🆕 Ajouter un paramètre pour mettre des enroulements en édition
 - 🚨 Faire fonctionner les treuils "Treuil court.slidep"
@@ -95,8 +94,6 @@
 **Physique**
 
 - ❇️ Voir ce que fait "LinkReaction" exactement, et dessiner les forces de réaction de gears au point de contact.
-- 🤔 Afficher les loads (charges) en dynamique ?
-- Interpoler sub snapshot les overlays à l'affichage en x0.1 (notamment les forces de réaction)
 - 🆕 Ajouter ressort de couple
 - 🆕 Ajouter les constantes de frottement / rebond des collisions (CONTACT_EPS ?)
 

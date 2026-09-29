@@ -444,6 +444,8 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     // `start`/`end` hold what the BEAM applies onto its supports, the negative of their reactions (see cohesion-field.ts's `r_coh_start`).
     const cohesion: BeamCohesion = {
       beamID: BEAM,
+      k0: `${BEAM}:start`,
+      k1: `${BEAM}:end`,
       start: { fx: 0, fy: -P / 2, m: 0 },
       end: { fx: 0, fy: -P / 2, m: 0 },
       attachedNodes: [{ nodeID: MASS, s: 0.5, fx: 0, fy: -P, m: 0 }],
@@ -520,6 +522,8 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
     };
     const cohesion: BeamCohesion = {
       beamID: BEAM,
+      k0: `${BEAM}:start`,
+      k1: `${BEAM}:end`,
       start: { fx: 0, fy: -P / 2, m: 0 },
       end: { fx: 0, fy: 0, m: 0 },
       attachedNodes: [
@@ -590,6 +594,8 @@ describe("cohesion-field — le champ N/T/Mf par coupe (docs/plan-efforts-interi
 
     const cohesion: BeamCohesion = {
       beamID: BEAM,
+      k0: `${BEAM}:start`,
+      k1: `${BEAM}:end`,
       start: { fx: 0, fy: (-w * L) / 2, m: 0 },
       end: { fx: 0, fy: (-w * L) / 2, m: 0 },
       attachedNodes: [],

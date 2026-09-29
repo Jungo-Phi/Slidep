@@ -9,6 +9,9 @@ import {
   belt_wraps,
 } from "../../../utils/belt-path";
 import {
+  BalanceSample,
+  BeamCohesion,
+  BeltStrand,
   DynamicSnapshot,
   EnergySample,
   KinematicSnapshot,
@@ -1867,12 +1870,312 @@ export function snapshot_at(
 }
 
 /**
- * `snapshot_at`'s dynamic-mode counterpart: same interpolation of position/angle, plus velocity, and the same belt-topology guard, dynamic mode tracking belt contact too (see `same_belt_topology`).
+ * Numerical noise floor for `effort_sign` below — far under any real reaction, torsor or belt tension, whatever units it reads in (N or N·m). Same reasoning as `equilibrium-solve.ts`'s `COUPLING_EPSILON`, applied to a physical reading instead of a unit-vector component.
+ */
+const EFFORT_SIGN_EPSILON = 1e-6;
+
+/** -1/0/1: which side of noise a scalar effort reading sits on. Two readings on the same side blend into one that reads on it too; one on each side straddles a real event (a contact engaging, a member going slack or taut) that no blend represents — see the callers below. */
+function effort_sign(value: number): -1 | 0 | 1 {
+  if (value > EFFORT_SIGN_EPSILON) return 1;
+  if (value < -EFFORT_SIGN_EPSILON) return -1;
+  return 0;
+}
+
+function stable_sign(av: number, bv: number): boolean {
+  return effort_sign(av) === effort_sign(bv);
+}
+
+function lerp_num(av: number, bv: number, u: number): number {
+  return av + (bv - av) * u;
+}
+
+/**
+ * Blend two frames' `LinkReaction`s, matched by what a consumer already tells them apart by — `type`/`owner`/`key`/`kind`, see `LinkReaction`'s own doc — never by `linkIndex`, which only means something inside the frame that produced it.
+ * A reaction on one side only (a contact link the other frame's sweep never touched) is dropped rather than shown at one value across the whole span: the topology guard above already rules out the common cause of that (a belt/layout change), so what is left is rare enough that excluding it costs less than inventing where it came from.
+ * A force's `fx`/`fy` gate together, never split — same reasoning `use-simulation-playback.ts` already states for why a reaction's resultant and its couple draw as one reading. Wherever a reading does not blend, it holds whichever side `t` sits nearer to, matching every other "hold" in this file (`dynamic_snapshot_at`'s own `nearest`, `effort_snapshot_at`).
+ */
+function interpolate_reactions(
+  a: LinkReaction[] | undefined,
+  b: LinkReaction[] | undefined,
+  u: number,
+): LinkReaction[] | undefined {
+  if (!a || !b) return a ?? b;
+  const key = (r: LinkReaction) => `${r.type}\u0000${r.owner ?? ""}\u0000${r.key}\u0000${r.kind}`;
+  const byKeyB = new Map(b.map((r) => [key(r), r]));
+  const held = u <= 0.5;
+  const out: LinkReaction[] = [];
+  for (const ra of a) {
+    const rb = byKeyB.get(key(ra));
+    if (!rb || rb.kind !== ra.kind) continue;
+    if (ra.kind === "force" && rb.kind === "force") {
+      out.push(
+        stable_sign(ra.fx, rb.fx) && stable_sign(ra.fy, rb.fy)
+          ? { ...ra, fx: lerp_num(ra.fx, rb.fx, u), fy: lerp_num(ra.fy, rb.fy, u) }
+          : held
+            ? ra
+            : rb,
+      );
+    } else if (ra.kind === "torque" && rb.kind === "torque") {
+      out.push(
+        stable_sign(ra.torque, rb.torque)
+          ? { ...ra, torque: lerp_num(ra.torque, rb.torque, u) }
+          : held
+            ? ra
+            : rb,
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * The world position at `key`'s own slot, or `undefined` where the layout has no such key or the slot reads NaN (a grab bridge on a frame with no grab).
+ * `key` may be comma-joined (a `BeamCohesionSpec.k0`/`.k1` fused with whatever else is coincident there, same convention as `LinkReaction.key` — see its own doc): `layout.index` only ever holds the INDIVIDUAL keys a fusion joined, never the joined string itself, so every part is tried until one resolves.
+ */
+function point_at(positions: Float64Array, layout: SnapshotLayout, key: string): Point2 | undefined {
+  for (const part of key.split(",")) {
+    const slot = layout.index.get(part);
+    if (slot === undefined) continue;
+    const x = positions[2 * slot];
+    if (!Number.isNaN(x)) return new Point2(x, positions[2 * slot + 1]);
+  }
+  return undefined;
+}
+
+/** A beam's own unit axis (`k1 − k0`, normalised) at whichever instant `positions` belongs to — `undefined` where either endpoint is missing or the two have collapsed onto each other. */
+function beam_axis(positions: Float64Array, layout: SnapshotLayout, k0: string, k1: string): Point2 | undefined {
+  const p0 = point_at(positions, layout, k0);
+  const p1 = point_at(positions, layout, k1);
+  if (!p0 || !p1) return undefined;
+  const d = p1.sub(p0);
+  return d.length_squared() > 1e-18 ? d.normalize() : undefined;
+}
+
+/** A force's component along `axis`, and along `axis.perp()` — the beam-local axial/transverse split a torsor needs before it can be redrawn against a DIFFERENT axis than the one it was solved at. */
+function axial_transverse(f: { fx: number; fy: number }, axis: Point2): { n: number; t: number } {
+  const v = new Point2(f.fx, f.fy);
+  return { n: v.dot(axis), t: v.dot(axis.perp()) };
+}
+
+/**
+ * One end's, or one attached node's, force-and-couple torsor, blended in the beam's OWN local frame rather than in world `fx`/`fy` directly.
+ * A straight lerp (or an untouched hold) of a world vector does not stay aligned with a beam that turns between the two instants, because the beam itself is drawn at its OWN, separately-interpolated pose — the arrow visibly comes off the member it belongs to. `axisA`/`axisB` are the beam's unit direction at each recorded instant (what `at`/`bt` were actually solved against); `axisU` is its CURRENT, already-interpolated direction (what is actually drawn this frame).
+ * The axial/transverse split (`axial_transverse`) is taken at the instant each torsor belongs to — direction-free — so a blend or a hold of `n`/`t`/`m` is always rebuilt against `axisU` at the end, whichever one `allowBlend` and sign-stability land on. The arrow's direction therefore never disagrees with the beam under it, whether its magnitude is blending or holding — realigning a HELD value costs nothing extra: it is exactly the reading `effort_snapshot_at` would already show at that instant, only pointed at the pose actually on screen instead of the pose it was solved at.
+ * `allowBlend` is `false` wherever the caller has already decided blending is not safe (today: `BeamCohesion.determinate` false on either side) — `n`/`t`/`m` then always hold, same as a sign crossing would force on their own.
+ */
+function blend_torsor_aligned<T extends { fx: number; fy: number; m: number }>(
+  at: T,
+  bt: T,
+  axisA: Point2,
+  axisB: Point2,
+  axisU: Point2,
+  u: number,
+  allowBlend: boolean,
+): T {
+  const sa = axial_transverse(at, axisA);
+  const sb = axial_transverse(bt, axisB);
+  const held = u <= 0.5;
+  const stable =
+    allowBlend && stable_sign(sa.n, sb.n) && stable_sign(sa.t, sb.t) && stable_sign(at.m, bt.m);
+  const n = stable ? lerp_num(sa.n, sb.n, u) : held ? sa.n : sb.n;
+  const t = stable ? lerp_num(sa.t, sb.t, u) : held ? sa.t : sb.t;
+  const m = stable ? lerp_num(at.m, bt.m, u) : held ? at.m : bt.m;
+  const v = axisU.mul(n).add(axisU.perp().mul(t));
+  return { ...at, fx: v.x, fy: v.y, m };
+}
+
+/**
+ * Blend two frames' `BeamCohesion`s, one per beam — `beam_cohesion_from_statics` always emits one entry per spec, so the two arrays line up by position without a lookup.
+ * `determinate` (per whole beam — the aggregate the field along it is only as good as, see `BeamCohesion`'s own doc, nothing finer-grained survives past it) and the sign-stability inside `blend_torsor_aligned` both gate whether `n`/`t`/`m` BLEND — neither one ever turns off the axis realignment itself, which runs regardless: a torsor that only ever holds one instant's own reading still gets redrawn against the CURRENT beam pose, not the pose it happened to be solved at.
+ * `k0`/`k1` — the beam's own endpoints — resolve an axis at both recorded instants and at the instant actually drawn (`outPositions`, already interpolated by the caller).
+ * An attached node's own abscissa (`s`) blends too, unconditionally — it is a position along the beam, exactly like `positions` elsewhere on this snapshot, not a solved effort with a sign to protect.
+ */
+function interpolate_beam_cohesion(
+  a: BeamCohesion[] | undefined,
+  b: BeamCohesion[] | undefined,
+  u: number,
+  layout: SnapshotLayout,
+  aPositions: Float64Array,
+  bPositions: Float64Array,
+  outPositions: Float64Array,
+): BeamCohesion[] | undefined {
+  if (!a || !b || a.length !== b.length) return a ?? b;
+  const held = u <= 0.5;
+  return a.map((ca, i) => {
+    const cb = b[i];
+    if (cb.beamID !== ca.beamID) return held ? ca : cb;
+    const axisA = beam_axis(aPositions, layout, ca.k0, ca.k1);
+    const axisB = beam_axis(bPositions, layout, cb.k0, cb.k1);
+    const axisU = beam_axis(outPositions, layout, ca.k0, ca.k1);
+    if (!axisA || !axisB || !axisU) return held ? ca : cb;
+    const allowBlend = ca.determinate && cb.determinate;
+    const byNodeB = new Map(cb.attachedNodes.map((n) => [n.nodeID, n]));
+    return {
+      ...ca,
+      determinate: held ? ca.determinate : cb.determinate,
+      start: blend_torsor_aligned(ca.start, cb.start, axisA, axisB, axisU, u, allowBlend),
+      end: blend_torsor_aligned(ca.end, cb.end, axisA, axisB, axisU, u, allowBlend),
+      attachedNodes: ca.attachedNodes.flatMap((na) => {
+        const nb = byNodeB.get(na.nodeID);
+        if (!nb) return held ? [na] : [];
+        return [
+          {
+            ...blend_torsor_aligned(na, nb, axisA, axisB, axisU, u, allowBlend),
+            nodeID: na.nodeID,
+            s: lerp_num(na.s, nb.s, u),
+          },
+        ];
+      }),
+    };
+  });
+}
+
+/**
+ * Blend two frames' `BeltStrand`s, matched by which via pair each strand runs between (`beltID`+`fromGear`+`toGear` — stable while `same_belt_topology` holds, since that is exactly what fixes which vias are in contact).
+ * `determined` gates like `BeamCohesion.determinate`; `tension` also passes `stable_sign` — a belt tension never reads negative in this model, so this mostly guards the taut/slack edge itself, a member's tension arriving at (or leaving from) zero.
+ */
+function interpolate_belt_strands(
+  a: BeltStrand[] | undefined,
+  b: BeltStrand[] | undefined,
+  u: number,
+): BeltStrand[] | undefined {
+  if (!a || !b) return a ?? b;
+  const key = (s: BeltStrand) => `${s.beltID}\u0000${s.fromGear ?? ""}\u0000${s.toGear ?? ""}`;
+  const byKeyB = new Map(b.map((s) => [key(s), s]));
+  const held = u <= 0.5;
+  return a.flatMap((sa) => {
+    const sb = byKeyB.get(key(sa));
+    if (!sb) return held ? [sa] : [];
+    if (!sa.determined || !sb.determined || !stable_sign(sa.tension, sb.tension))
+      return [held ? sa : sb];
+    return [
+      {
+        ...sa,
+        fromX: lerp_num(sa.fromX, sb.fromX, u),
+        fromY: lerp_num(sa.fromY, sb.fromY, u),
+        toX: lerp_num(sa.toX, sb.toX, u),
+        toY: lerp_num(sa.toY, sb.toY, u),
+        tension: lerp_num(sa.tension, sb.tension, u),
+      },
+    ];
+  });
+}
+
+/**
+ * Blend two frames' `MotorSample`s, matched by `pivotID`. Reuses `saturated` as the discontinuity flag it already is (see `MotorSample`'s own doc) — a motor pinned at its torque ceiling on one side and free on the other has hit exactly the kind of event a blend would paper over, so it holds whichever side `t` sits nearer to instead.
+ */
+function interpolate_motor(
+  a: MotorSample[] | undefined,
+  b: MotorSample[] | undefined,
+  u: number,
+): MotorSample[] | undefined {
+  if (!a || !b) return a ?? b;
+  const byIdB = new Map(b.map((m) => [m.pivotID, m]));
+  const held = u <= 0.5;
+  return a.flatMap((ma) => {
+    const mb = byIdB.get(ma.pivotID);
+    if (!mb) return held ? [ma] : [];
+    if (ma.saturated || mb.saturated) return [held ? ma : mb];
+    return [{ ...ma, watts: lerp_num(ma.watts, mb.watts, u), nm: lerp_num(ma.nm, mb.nm, u), speed: lerp_num(ma.speed, mb.speed, u) }];
+  });
+}
+
+/** Blend two frames' whole-mechanism `BalanceSample`, term by term — an aggregate over every body, already covered by the layout/belt-topology guards above, with no per-term discontinuity of its own to gate on. */
+function interpolate_balance(
+  a: BalanceSample | undefined,
+  b: BalanceSample | undefined,
+  u: number,
+): BalanceSample | undefined {
+  if (!a || !b) return a ?? b;
+  return {
+    appliedX: lerp_num(a.appliedX, b.appliedX, u),
+    appliedY: lerp_num(a.appliedY, b.appliedY, u),
+    appliedM: lerp_num(a.appliedM, b.appliedM, u),
+    weightX: lerp_num(a.weightX, b.weightX, u),
+    weightY: lerp_num(a.weightY, b.weightY, u),
+    weightM: lerp_num(a.weightM, b.weightM, u),
+    inertiaX: lerp_num(a.inertiaX, b.inertiaX, u),
+    inertiaY: lerp_num(a.inertiaY, b.inertiaY, u),
+    inertiaM: lerp_num(a.inertiaM, b.inertiaM, u),
+  };
+}
+
+/**
+ * Cubic Hermite basis at `u ∈ [0,1]`, and that same basis differentiated once (`hermite_slope_weights`) — the two share every power of `u` they need, so one function computing both saves recomputing `u²`/`u³` for the pair of calls every interpolated frame makes.
+ * Weights the value at each end (`h00`, `h01`) and its tangent (`h10`, `h11`) — the tangent still scaled to the UNIT interval, which is what makes the two Hermite functions below divide/multiply by `span` where they do.
+ */
+function hermite_weights(u: number): {
+  h00: number;
+  h10: number;
+  h01: number;
+  h11: number;
+  d00: number;
+  d10: number;
+  d01: number;
+  d11: number;
+} {
+  const u2 = u * u;
+  const u3 = u2 * u;
+  return {
+    h00: 2 * u3 - 3 * u2 + 1,
+    h10: u3 - 2 * u2 + u,
+    h01: -2 * u3 + 3 * u2,
+    h11: u3 - u2,
+    d00: 6 * u2 - 6 * u,
+    d10: 3 * u2 - 4 * u + 1,
+    d01: -6 * u2 + 6 * u,
+    d11: 3 * u2 - 2 * u,
+  };
+}
+
+/**
+ * A cubic Hermite spline through `p0`→`p1` over one recorded interval, using each end's own rate of change (`v0`/`v1` — already known from the solve, not fitted) as its tangent there. Matches the TRUE curve's value AND slope at both recorded instants, unlike the straight chord a plain lerp draws between them, which only ever matches the value — the gap between the two is exactly the visible faceting a fast rotation/oscillation shows under a plain lerp, one recorded interval at a time.
+ * `v0`/`v1` are rates in `t`; a Hermite tangent is defined on the unit interval, so they are scaled by `span` going in (`h10`/`h11` weight `span·v`, not `v`) — the reverse of what `hermite_rate` undoes to read a rate back out.
+ * Operates on `p0.length` scalars in lockstep (interleaved x/y, or one gear angle per slot) — same shape `lerp` already assumes throughout this file.
+ */
+export function hermite_value(
+  p0: Float64Array,
+  p1: Float64Array,
+  v0: Float64Array,
+  v1: Float64Array,
+  span: number,
+  u: number,
+): Float64Array {
+  const { h00, h10, h01, h11 } = hermite_weights(u);
+  const out = new Float64Array(p0.length);
+  for (let i = 0; i < out.length; i++)
+    out[i] = h00 * p0[i] + h10 * span * v0[i] + h01 * p1[i] + h11 * span * v1[i];
+  return out;
+}
+
+/**
+ * The SAME curve `hermite_value` draws, differentiated — so a drawn "velocity" is what the drawn position curve is actually doing at `u`, rather than an independently-lerped value that can silently disagree with the tangent of the point moving on screen.
+ * `hermite_weights`' slope terms (`d00`…`d11`) are in `u`; dividing by `span` is the chain rule back to a rate in `t` (`u = (t − a.t)/span`), undoing the same scaling `hermite_value` applies to its own tangents.
+ */
+function hermite_rate(
+  p0: Float64Array,
+  p1: Float64Array,
+  v0: Float64Array,
+  v1: Float64Array,
+  span: number,
+  u: number,
+): Float64Array {
+  const { d00, d10, d01, d11 } = hermite_weights(u);
+  const out = new Float64Array(p0.length);
+  for (let i = 0; i < out.length; i++)
+    out[i] = (d00 * p0[i] + d10 * span * v0[i] + d01 * p1[i] + d11 * span * v1[i]) / span;
+  return out;
+}
+
+/**
+ * `snapshot_at`'s dynamic-mode counterpart: same belt-topology guard, but a Hermite curve rather than a straight lerp for position/angle/velocity — `KinematicSnapshot` has no velocity to build a tangent from (motors drive position directly there, see `DynamicSnapshot`'s own doc), which is exactly why `snapshot_at` stays a plain lerp and this does not.
  * Kept separate rather than folded into one generic function: the two snapshot kinds differ in exactly the extra fields this interpolates, and forcing them through a shared body would cost more in indirection than the duplicated lines below are worth.
  * `snapshot_index_at` is the part that IS shared, being purely a search over `.t`.
  *
- * Only the motion is interpolated.
- * Everything the forces are read from — accelerations, reactions, torsors, balance, belt tensions, motors — is the recorded instant nearest `t` (see `effort_snapshot_at`): a blend of two instants is no state the mechanism was in, and on one that turns between them it balances only to a few percent.
+ * The gear-angle prefix of `angles` (`layout.wrapBase` entries, matching `angleVelocities`' own length) rides the same Hermite curve as position; the belt wrap/detach/arrival block AFTER it has no velocity counterpart at all and stays a plain lerp, same as ever.
+ * `accelerations`/`angleAccelerations` stay a plain lerp too, deliberately NOT the Hermite curve's own second derivative: that second derivative is only linear in `u` and kinks at every recorded instant, no better a model of the true curve than the solver's own measured `(v_after − v_before)/subDt` already lerped here — and unlike position/velocity, nothing downstream needs it to be the FIRST curve's exact derivative. Their own sign turns over in perfectly ordinary motion, so — same reasoning as before — neither is gated the way an effort is gated below.
+ * Everything downstream of an equilibrium solve — reactions, beam torsors, belt tensions, motor samples — blends too, but only where nothing marks the two instants as different states: see `interpolate_reactions`/`interpolate_beam_cohesion`/`interpolate_belt_strands`/`interpolate_motor` for what each reads as that marker (a `determined`/`determinate`/`saturated` flag already computed by the statics pass, or a reading crossing sign between the two instants). Wherever a reading does not blend, it holds whichever recorded instant `t` sits nearer to, same as `effort_snapshot_at`.
+ * This still does not close the gap the guard cannot see: even where nothing crosses sign, a blend of two solved equilibria is no state the mechanism was actually in, and on one that turns between the two instants its own balance closes only approximately — accepted, not fixed, by this function.
  */
 export function dynamic_snapshot_at(
   snapshots: DynamicSnapshot[],
@@ -1895,30 +2198,58 @@ export function dynamic_snapshot_at(
     for (let i = 0; i < out.length; i++) out[i] = from[i] + (to[i] - from[i]) * u;
     return out;
   };
+  const positions = hermite_value(a.positions, b.positions, a.velocities, b.velocities, span, u);
+  const wrapBase = a.layout.wrapBase;
+  const gearAngles = hermite_value(
+    a.angles.subarray(0, wrapBase),
+    b.angles.subarray(0, wrapBase),
+    a.angleVelocities,
+    b.angleVelocities,
+    span,
+    u,
+  );
+  const angles = new Float64Array(a.angles.length);
+  angles.set(gearAngles, 0);
+  angles.set(lerp(a.angles.subarray(wrapBase), b.angles.subarray(wrapBase)), wrapBase);
   const nearest = u <= 0.5 ? a : b;
   return {
     t,
     layout: a.layout,
-    positions: lerp(a.positions, b.positions),
-    angles: lerp(a.angles, b.angles),
-    velocities: lerp(a.velocities, b.velocities),
-    angleVelocities: lerp(a.angleVelocities, b.angleVelocities),
-    accelerations: nearest.accelerations,
-    angleAccelerations: nearest.angleAccelerations,
+    positions,
+    angles,
+    velocities: hermite_rate(a.positions, b.positions, a.velocities, b.velocities, span, u),
+    angleVelocities: hermite_rate(
+      a.angles.subarray(0, wrapBase),
+      b.angles.subarray(0, wrapBase),
+      a.angleVelocities,
+      b.angleVelocities,
+      span,
+      u,
+    ),
+    accelerations: lerp(a.accelerations, b.accelerations),
+    angleAccelerations: lerp(a.angleAccelerations, b.angleAccelerations),
     unsatisfied: nearest.unsatisfied,
     stalledMotors: nearest.stalledMotors,
-    reactions: nearest.reactions,
-    motor: nearest.motor,
+    reactions: interpolate_reactions(a.reactions, b.reactions, u),
+    motor: interpolate_motor(a.motor, b.motor, u),
     energy: nearest.energy,
-    beamCohesion: nearest.beamCohesion,
-    balance: nearest.balance,
-    beltStrands: nearest.beltStrands,
+    beamCohesion: interpolate_beam_cohesion(
+      a.beamCohesion,
+      b.beamCohesion,
+      u,
+      a.layout,
+      a.positions,
+      b.positions,
+      positions,
+    ),
+    balance: interpolate_balance(a.balance, b.balance, u),
+    beltStrands: interpolate_belt_strands(a.beltStrands, b.beltStrands, u),
   };
 }
 
 /**
- * The recorded instant whose efforts are shown at `t`: the nearest one, the earlier of two equally near, and the one `dynamic_snapshot_at` holds wherever it does not interpolate.
- * A reading that also needs the pose — the field along a beam, a moment balance — is read on this snapshot whole, so every term of it belongs to one instant.
+ * The recorded instant a beam's own N/T/Mf field is read whole from at `t`: the nearest one, the earlier of two equally near.
+ * Unlike `dynamic_snapshot_at`'s own (guarded) blending of individual readings, this never blends anything: marching a beam's field needs its boundary torsor and its pose to belong to the SAME solved instant, or the march does not close either — a per-reading guard is not enough here, the pose itself would already be a blend `dynamic_snapshot_at` produces for entirely different, motion-only reasons.
  */
 export function effort_snapshot_at(
   snapshots: DynamicSnapshot[],
@@ -1998,7 +2329,7 @@ export function parameter_snapshot_at(
  * Same pulleys detached on both sides.
  * Only sound on one layout, where the flags of a given pulley are the same slot on both sides.
  * Generic over `SimulationSnapshot`: both concrete subtypes carry the same detach block (see `SnapshotLayout`). */
-function same_belt_topology<S extends SimulationSnapshot>(a: S, b: S): boolean {
+export function same_belt_topology<S extends SimulationSnapshot>(a: S, b: S): boolean {
   // The flag block alone.
   // The arrival angles that follow it are continuous like the wraps, so comparing them would find every pair of instants different and never interpolate.
   for (let i = a.layout.detachBase; i < a.layout.arrivalBase; i++)

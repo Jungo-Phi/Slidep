@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { MechanicalElement } from "../../../types/element";
-import { KinematicSnapshot, SnapshotLayout } from "../../../types/runtime-state";
+import { DynamicSnapshot, KinematicSnapshot, SnapshotLayout } from "../../../types/runtime-state";
+import { Point2 } from "../../../types/point2";
 import { make_snapshot_layout } from "../snapshot";
 import {
   EMPTY_TRAJECTORY_CACHE,
@@ -46,6 +47,37 @@ function snapshot(
     positions[2 * i + 1] = y;
   }
   return { t, layout, positions, angles: new Float64Array(layout.angleKeys.length) };
+}
+
+/** `snapshot`'s dynamic-mode counterpart, velocity included — what lets `sample_into` build a Hermite curve between two of these instead of a straight chord. */
+function dynamicSnapshot(
+  layout: SnapshotLayout,
+  t: number,
+  at: Record<string, [number, number]>,
+  v: Record<string, [number, number]>,
+): DynamicSnapshot {
+  const positions = new Float64Array(layout.keys.length * 2).fill(NaN);
+  const velocities = new Float64Array(layout.keys.length * 2);
+  for (const [key, [x, y]] of Object.entries(at)) {
+    const i = layout.index.get(key)!;
+    positions[2 * i] = x;
+    positions[2 * i + 1] = y;
+  }
+  for (const [key, [vx, vy]] of Object.entries(v)) {
+    const i = layout.index.get(key)!;
+    velocities[2 * i] = vx;
+    velocities[2 * i + 1] = vy;
+  }
+  return {
+    t,
+    layout,
+    positions,
+    angles: new Float64Array(layout.angleKeys.length),
+    velocities,
+    accelerations: new Float64Array(layout.keys.length * 2),
+    angleVelocities: new Float64Array(layout.angleKeys.length),
+    angleAccelerations: new Float64Array(layout.angleKeys.length),
+  };
 }
 
 /** Every strand drawn for `elements` over `snapshots`, read past the end of the recording so each one is whole. */
@@ -169,5 +201,37 @@ describe("brins de trajectoire", () => {
     const snaps = [0, 1, 2].map((t) => snapshot(layout, t, { A: [0, 0], G: [0, 0] }));
     const drawn = strands([axle("A", ["G"]), gear("G", 0.1, "A")], snaps);
     expect(drawn.every((s) => s.points.length === 0)).toBe(true);
+  });
+
+  it("en mode dynamique, la trajectoire suit la courbe de Hermite entre deux instants, pas la corde", () => {
+    // A point on a quarter-circle, same shape as the live-position test in snapshot-interpolation.test.ts — enough curvature over one recorded interval that a straight chord visibly cuts the arc.
+    const layout = make_snapshot_layout(["P"], []);
+    const R = 1;
+    const omega = Math.PI / 2;
+    const at = (t: number) => {
+      const theta = omega * t;
+      return dynamicSnapshot(
+        layout,
+        t,
+        { P: [R * Math.cos(theta), R * Math.sin(theta)] },
+        { P: [-R * omega * Math.sin(theta), R * omega * Math.cos(theta)] },
+      );
+    };
+    const cache = extend_probe_trajectories(EMPTY_TRAJECTORY_CACHE, [pivot("P")], [at(0), at(1)]);
+    const [traj] = trajectories_at(cache, Infinity);
+
+    // Two raw instants alone would draw two points; the Hermite subsamples add more without moving either endpoint.
+    expect(traj.points.length).toBeGreaterThan(2);
+    expect(traj.points[0].x).toBeCloseTo(1, 12);
+    expect(traj.points[0].y).toBeCloseTo(0, 12);
+    const lastPoint = traj.points[traj.points.length - 1];
+    expect(lastPoint.x).toBeCloseTo(0, 12);
+    expect(lastPoint.y).toBeCloseTo(1, 12);
+
+    // An interior point sits close to the true arc, well off the straight chord between the two recorded instants.
+    const mid = traj.points[Math.floor(traj.points.length / 2)];
+    const trueArc = new Point2(R * Math.cos(Math.PI / 4), R * Math.sin(Math.PI / 4));
+    const chordMid = new Point2(1, 0).lerp(new Point2(0, 1), 0.5);
+    expect(mid.distance_to(trueArc)).toBeLessThan(mid.distance_to(chordMid) * 0.1);
   });
 });
