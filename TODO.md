@@ -8,14 +8,23 @@
 
 ---
 
-**Priorités sur le plan général**
+**Terminer la physique**
 
 - 🔨 Passer la cinématique et édition en solver direct
 - 🤔 Clarifier le grab en dynamique (grab -> force ?)
 - 🤔 Clarifier "qu'est-ce qui est simulé ?" pour **dt**. On affiche des positions interpolées, mais pas les forces, les overlays, ni les valeurs dans le panneau latéral.
 - 🆕 Ajouter un paramètre pour inclure/exclure des collisions par élément
 - 🆕 Ajouter un paramètre pour mettre des enroulements en édition
-- 🚨 Faire fonctionner les treuils
+- 🚨 Faire fonctionner les treuils "Treuil court.slidep"
+
+- 🚨 Régler le blocage/déblocage sur Poulie bloqueuse en dynamique
+- 🚨 Les forces de réaction et efforts internes disparaissent après un grab dans "Hoist.slidep"
+- 🚨 On manque d'un moment de réaction d'appuis sur le slider de "Puente"
+- 🚨 Comment est-ce qu'on peut avoir des réactions d'appuis "moment" sur un pivot, wtf !?
+- 🤔 Pas plus fins près des points morts (ex. vilbrequin) ?
+- 🤔 Donner une élasticité aux courroies ?
+
+**Priorités sur le plan général**
 
 - 🔨 Améliorer les performances en édition
 - 🔨 Améliorer les performances en simulation
@@ -29,22 +38,12 @@
 - 🤔 Comment connecter ou non des engrenages sur le même axe ?
 - 🤔 Revenir sur l'idée de pouvoir modifier le mécanisme en cours de simulation (ex. déconnecter 2 éléments) ?
 
-**Rendre la physique exacte (cas faux)**
-
-- 🚨 On manque d'un moment de réaction d'appuis sur le slider de "Puente"
-- 🚨 Comment est-ce qu'on peut avoir des réactions d'appuis "moment" sur un pivot, wtf !?
-- 🤔 Pas plus fins près des points morts (ex. vilbrequin) ?
-- 🤔 Donner une élasticité aux courroies ?
-
----
-
-- 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
-- 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
-
 ### À faire rapidement
 
 **Very qwick fix**
 
+- 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
+- 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 - 🚨 Le point sur la timeline n'est pas attrapable quand il est sur un marqueur
 - 🚨 Clicker sur le canvas après avoir sélectionné un élément ne doit pas afficher la sélection multiple (ou seulement après avoir commencé le drag).
 - 🔨 Hover le bilan des moments ne doit pas faire apparitre le cg, seulement à la sélection. Et n'afficher la croix que si on n'affiche pas de moment à sa position

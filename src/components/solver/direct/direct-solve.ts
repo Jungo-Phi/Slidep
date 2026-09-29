@@ -323,7 +323,7 @@ export function direct_iterate(
     solve(s.analysis, rhs.length === m ? rhs : rhs.subarray(0, m));
 
     // A motor asked for more than its torque saturates, a contact asked to pull lets go, and this step is not taken: the others' share was solved for rows that give what they cannot, and taking it would carry the mechanism along as if they had.
-    // Only the limited rows' impulse, cut at their limit, is applied; the next iteration solves the rest with them out of the system.
+    // Only the limited rows' impulse, cut at their limit, is applied, none for a kinematic motor, which stalls; the next iteration solves the rest with them out of the system.
     let limited = false;
     for (let r = 0; r < rows.count; r++) {
       if (!active[r]) continue;
@@ -345,6 +345,10 @@ export function direct_iterate(
         const d = drives[-1 - link];
         const next = Math.max(-d.bound, Math.min(d.bound, d.lambda + dl));
         if (limited && next === d.lambda + dl) continue;
+        if (d.lock && next !== d.lambda + dl) {
+          d.bound = Math.abs(d.lambda);
+          continue;
+        }
         dl = next - d.lambda;
         d.lambda = next;
       } else if (rows.unilateral[r]) {

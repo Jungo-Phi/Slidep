@@ -1,0 +1,730 @@
+{
+  "formatVersion": 15,
+  "metadata": {
+    "name": "Treuil court",
+    "description": "",
+    "author": "",
+    "createdAt": 1790600391280,
+    "modifiedAt": 1790600690208,
+    "tags": [],
+    "lastSimulationMode": "dynamic"
+  },
+  "viewport": {
+    "pan": {
+      "x": 615.5522303449666,
+      "y": 255.1315526070362
+    },
+    "scale": 543.3199999999996
+  },
+  "simulation": {
+    "gravity": true,
+    "collisions": false,
+    "floor": {
+      "enabled": false,
+      "height": 0,
+      "angle": 0
+    },
+    "beamStressLens": "none",
+    "supportReactions": false
+  },
+  "mechanicalElements": [
+    {
+      "type": "pivot",
+      "id": "0d7d687d-6208-416a-89fe-66dc684c5d75",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "isGrounded": true,
+      "rotatingEdgesIDs": [],
+      "fixedGearsIDs": [
+        "bc67f832-be08-4170-9894-1c51411ecd43"
+      ],
+      "motor": {
+        "speed": -1.0471975511965976,
+        "torque": 5
+      },
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "gear",
+      "id": "bc67f832-be08-4170-9894-1c51411ecd43",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "angle": 0,
+      "radius": 0.15000000000000008,
+      "parentAxleID": "0d7d687d-6208-416a-89fe-66dc684c5d75",
+      "fixedNodesBodyIDs": [
+        "d0c9bf26-3193-4008-9a69-f9ec1e012843"
+      ],
+      "meshedGearsIDs": [],
+      "attachedBeltID": "99311081-903f-4965-886d-670cffc0b07e",
+      "surfaceMass": 10
+    },
+    {
+      "type": "belt",
+      "id": "99311081-903f-4965-886d-670cffc0b07e",
+      "probes": [],
+      "overlays": {},
+      "positionStart": {
+        "x": -0.10036959095382882,
+        "y": 0.11147172382160916
+      },
+      "positionEnd": {
+        "x": 0.15,
+        "y": -0.1375
+      },
+      "fixedNodeStartID": "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+      "fixedNodeEndID": "2941dc95-7f42-45d9-b8ff-9b4a686e81d3",
+      "attachedGearsIDs": [
+        {
+          "id": "bc67f832-be08-4170-9894-1c51411ecd43",
+          "clockwise": true
+        }
+      ],
+      "closed": false
+    },
+    {
+      "type": "join",
+      "id": "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+      "probes": [],
+      "overlays": {},
+      "fixedEdgesIDs": [
+        "bc67f832-be08-4170-9894-1c51411ecd43",
+        "99311081-903f-4965-886d-670cffc0b07e"
+      ],
+      "position": {
+        "x": -0.10036959095382882,
+        "y": 0.11147172382160916
+      },
+      "isGrounded": false
+    },
+    {
+      "type": "mass",
+      "id": "2941dc95-7f42-45d9-b8ff-9b4a686e81d3",
+      "probes": [],
+      "overlays": {},
+      "position": {
+        "x": 0.15,
+        "y": -0.1375
+      },
+      "isGrounded": false,
+      "fixedEdgesIDs": [
+        "99311081-903f-4965-886d-670cffc0b07e"
+      ],
+      "mass": 1
+    }
+  ],
+  "constraintElements": [],
+  "loads": [],
+  "materials": [
+    {
+      "id": "c8817146-f704-4686-957d-b4f35e3393fd",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850
+    },
+    {
+      "id": "e01448a7-54f3-48a6-be3c-0ae5dd6044d8",
+      "name": "Aluminium",
+      "E": 70000000000,
+      "Re": 195000000,
+      "rho": 2700
+    },
+    {
+      "id": "a5ffeb43-a800-47e2-877d-735d0ff4389c",
+      "name": "Inox",
+      "E": 200000000000,
+      "Re": 215000000,
+      "rho": 8000
+    },
+    {
+      "id": "4d89bb2d-f47d-47d6-b7d9-17b81b596728",
+      "name": "Bois",
+      "E": 11000000000,
+      "Re": 24000000,
+      "rho": 450
+    }
+  ],
+  "profiles": [
+    {
+      "id": "6dc2851d-2136-4ee1-907d-809fc3c3e64c",
+      "name": "Profilé 1",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
+  "history": [
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "0d7d687d-6208-416a-89fe-66dc684c5d75",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "isGrounded": true,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [],
+          "motor": {
+            "speed": 1.0471975511965976,
+            "torque": 1
+          },
+          "rotationalFriction": 0.001
+        }
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              0
+            ]
+          ],
+          "radMasses": []
+        },
+        "oldNodes": {
+          "positions": [],
+          "radii": [],
+          "posMasses": [],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "gear",
+          "id": "bc67f832-be08-4170-9894-1c51411ecd43",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "angle": 0,
+          "radius": 0.15000000000000005,
+          "parentAxleID": "0d7d687d-6208-416a-89fe-66dc684c5d75",
+          "fixedNodesBodyIDs": [],
+          "meshedGearsIDs": [],
+          "surfaceMass": 10
+        }
+      },
+      {
+        "type": "ConnectsFixedGears",
+        "disconnect": false,
+        "elementID": "0d7d687d-6208-416a-89fe-66dc684c5d75",
+        "connectID": "bc67f832-be08-4170-9894-1c51411ecd43",
+        "index": 0
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              0.15000000000000005
+            ]
+          ],
+          "posMasses": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75,bc67f832-be08-4170-9894-1c51411ecd43",
+              0
+            ]
+          ],
+          "radMasses": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              1
+            ]
+          ]
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [],
+          "posMasses": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              0
+            ]
+          ],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "belt",
+          "id": "99311081-903f-4965-886d-670cffc0b07e",
+          "probes": [],
+          "overlays": {},
+          "positionStart": {
+            "x": -0.10036959095382882,
+            "y": 0.11147172382160916
+          },
+          "positionEnd": {
+            "x": 0.15,
+            "y": -0.1375
+          },
+          "attachedGearsIDs": [],
+          "closed": false
+        }
+      },
+      {
+        "type": "ConnectsAttachedGears",
+        "disconnect": false,
+        "elementID": "99311081-903f-4965-886d-670cffc0b07e",
+        "connectID": "bc67f832-be08-4170-9894-1c51411ecd43",
+        "index": 0,
+        "clockwise": true
+      },
+      {
+        "type": "ConnectsAttachedBelt",
+        "disconnect": false,
+        "elementID": "bc67f832-be08-4170-9894-1c51411ecd43",
+        "connectID": "99311081-903f-4965-886d-670cffc0b07e"
+      },
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "join",
+          "id": "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+          "probes": [],
+          "overlays": {},
+          "fixedEdgesIDs": [],
+          "position": {
+            "x": -0.10036959095382882,
+            "y": 0.11147172382160916
+          },
+          "isGrounded": false
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+        "connectID": "99311081-903f-4965-886d-670cffc0b07e",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeStart",
+        "disconnect": false,
+        "elementID": "99311081-903f-4965-886d-670cffc0b07e",
+        "connectID": "d0c9bf26-3193-4008-9a69-f9ec1e012843"
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+        "connectID": "bc67f832-be08-4170-9894-1c51411ecd43",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodesBody",
+        "disconnect": false,
+        "elementID": "bc67f832-be08-4170-9894-1c51411ecd43",
+        "connectID": "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+        "index": 0
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:end",
+              {
+                "x": 0.15,
+                "y": -0.1375
+              }
+            ],
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              {
+                "x": -0.1003695909538288,
+                "y": 0.11147172382160915
+              }
+            ],
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:start",
+              {
+                "x": -0.1003695909538288,
+                "y": 0.11147172382160915
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              0.15000000000000008
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              0
+            ]
+          ],
+          "posMasses": [
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:end",
+              1
+            ],
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75,bc67f832-be08-4170-9894-1c51411ecd43",
+              0
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843,99311081-903f-4965-886d-670cffc0b07e:start",
+              1
+            ]
+          ],
+          "radMasses": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              1
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              0
+            ]
+          ]
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              0.15000000000000005
+            ]
+          ],
+          "posMasses": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              0
+            ],
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              1
+            ]
+          ],
+          "radMasses": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              1
+            ]
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "mass",
+          "id": "2941dc95-7f42-45d9-b8ff-9b4a686e81d3",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": 0.15,
+            "y": -0.1375
+          },
+          "isGrounded": false,
+          "fixedEdgesIDs": [],
+          "mass": 1
+        }
+      },
+      {
+        "type": "ConnectsFixedEdges",
+        "disconnect": false,
+        "elementID": "2941dc95-7f42-45d9-b8ff-9b4a686e81d3",
+        "connectID": "99311081-903f-4965-886d-670cffc0b07e",
+        "index": 0
+      },
+      {
+        "type": "ConnectsFixedNodeEnd",
+        "disconnect": false,
+        "elementID": "99311081-903f-4965-886d-670cffc0b07e",
+        "connectID": "2941dc95-7f42-45d9-b8ff-9b4a686e81d3"
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              {
+                "x": -0.10036959095382882,
+                "y": 0.11147172382160916
+              }
+            ],
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:start",
+              {
+                "x": -0.10036959095382882,
+                "y": 0.11147172382160916
+              }
+            ],
+            [
+              "2941dc95-7f42-45d9-b8ff-9b4a686e81d3",
+              {
+                "x": 0.15,
+                "y": -0.1375
+              }
+            ],
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:end",
+              {
+                "x": 0.15,
+                "y": -0.1375
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              0.15000000000000008
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              0
+            ]
+          ],
+          "posMasses": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75,bc67f832-be08-4170-9894-1c51411ecd43",
+              0
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843,99311081-903f-4965-886d-670cffc0b07e:start",
+              1
+            ],
+            [
+              "2941dc95-7f42-45d9-b8ff-9b4a686e81d3,99311081-903f-4965-886d-670cffc0b07e:end",
+              1
+            ]
+          ],
+          "radMasses": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              1
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              0
+            ]
+          ]
+        },
+        "oldNodes": {
+          "positions": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              {
+                "x": 0,
+                "y": 0
+              }
+            ],
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:start",
+              {
+                "x": -0.1003695909538288,
+                "y": 0.11147172382160915
+              }
+            ],
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:end",
+              {
+                "x": 0.15,
+                "y": -0.1375
+              }
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              {
+                "x": -0.1003695909538288,
+                "y": 0.11147172382160915
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              0.15000000000000008
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              0
+            ]
+          ],
+          "posMasses": [
+            [
+              "0d7d687d-6208-416a-89fe-66dc684c5d75",
+              0
+            ],
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              1
+            ],
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:start",
+              1
+            ],
+            [
+              "99311081-903f-4965-886d-670cffc0b07e:end",
+              1
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              1
+            ]
+          ],
+          "radMasses": [
+            [
+              "bc67f832-be08-4170-9894-1c51411ecd43",
+              1
+            ],
+            [
+              "d0c9bf26-3193-4008-9a69-f9ec1e012843",
+              0
+            ]
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetMotorConfig",
+        "id": "0d7d687d-6208-416a-89fe-66dc684c5d75",
+        "newConfig": {
+          "speed": -1.0471975511965976,
+          "torque": 1
+        },
+        "oldConfig": {
+          "speed": 1.0471975511965976,
+          "torque": 1
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetMotorConfig",
+        "id": "0d7d687d-6208-416a-89fe-66dc684c5d75",
+        "newConfig": {
+          "speed": -1.0471975511965976,
+          "torque": 5
+        },
+        "oldConfig": {
+          "speed": -1.0471975511965976,
+          "torque": 1
+        }
+      },
+      {
+        "type": "Blank"
+      }
+    ]
+  ],
+  "future": []
+}

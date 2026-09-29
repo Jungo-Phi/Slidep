@@ -219,6 +219,8 @@ export type SimulationModel = {
    * Compiled on when the direct solver covers every link the dynamics solves, the grab aside; see `covered_by_direct_solve`.
    */
   directSolve?: boolean;
+  /** The same for the kinematic simulation, whose links are the model's own, motors included; see `covered_by_kinematic_direct_solve`. */
+  kinematicDirectSolve?: boolean;
   /** Initial positions/angles + frozen masses (fused keys for coincident points). */
   nodes: KinNodes;
   /** Links: already fused (Coincidence), FixedOnSegment, and sorted. */
@@ -645,6 +647,16 @@ function covered_by_direct_solve(links: Link[]): boolean {
   );
 }
 
+/**
+ * Whether the direct solver takes every link the kinematic simulation solves, its motors as drives (see `resolve_kinematic_motors`).
+ * The grab is left out of the question, as in `covered_by_direct_solve`.
+ */
+function covered_by_kinematic_direct_solve(links: Link[]): boolean {
+  return links.every(
+    (link) => link.type === "MotorBeam" || link.type === "MotorAngle" || DIRECT_LINK_TYPES.has(link.type) || direct_follower(link),
+  );
+}
+
 export function compile_simulation_model(
   mechanism: Mechanism,
   dynamicRigidity: boolean = false,
@@ -802,6 +814,7 @@ export function compile_simulation_model(
     },
     beamCohesionSpecs,
     directSolve: covered_by_direct_solve(links),
+    kinematicDirectSolve: covered_by_kinematic_direct_solve(links),
     staticsSystem: build_statics_system(
       beamCohesionSpecs,
       mechanism.mechanicalElements.flatMap((e) =>
@@ -1137,6 +1150,9 @@ export function step_simulation(
     0,
     undefined,
     model.extent,
+    // The direct solve would leave the collision contacts to the sweep, and alternating the two costs more than the sweep alone.
+    // A grab, likewise: the sweep's own grab imposes the cursor's position outright, ignoring mass, and lets the rest of the mechanism follow by relaxation, a feel a direct solve's least-squares correction does not reproduce (see `applyHandleGrabConstraint`).
+    model.kinematicDirectSolve === true && !collisionsOn && !floorOn && !grab,
   );
 
   // ── Belt topology changed this frame → rebuild its no-slip links, AFTER the solve ──

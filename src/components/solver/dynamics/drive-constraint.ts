@@ -1,3 +1,4 @@
+import type { Link } from "../../../types";
 import { SimNodes } from "../nodes";
 
 /**
@@ -51,10 +52,12 @@ export interface ResolvedDrive {
   angle0: number;
   anchor: Arm | undefined;
   lambda: number;
-  /** `torqueLimit · dt²`, the bound on `lambda`. */
+  /** The bound on `lambda`: `torqueLimit · dt²`, or a kinematic motor's lock (see `resolve_kinematic_motors`). */
   bound: number;
   /** Commanded rotation over the substep. */
   step: number;
+  /** A kinematic motor: past its bound it stalls where it stands, since its bound is a threshold and not a torque it could still apply. */
+  lock?: boolean;
   /** What a radian of gap is worth in metres: the driven arm's length.
    * 1 for a gear, whose radius lives in its links rather than in the solve's nodes. */
   lever: number;
@@ -116,6 +119,44 @@ export function resolve_drives(nodes: SimNodes, drives: Drive[], dt: number): Re
   }
   return resolved;
 }
+
+/**
+ * How much harder than its bare arm a kinematic motor may find the mechanism to turn before it is taken as blocked: past this many times what turning the arm alone would take, it stalls.
+ * Only a dead point drives the ratio to infinity, where the motor's row becomes a combination of the others; any finite load of links stays far below it.
+ */
+const MOTOR_LOCK_RATIO = 1e4;
+
+/**
+ * The kinematic motors among `links`, as drives the direct solve holds to their commanded rotation.
+ * A kinematic motor has no torque: its bound is `MOTOR_LOCK_RATIO`, so at a dead point it stops where it is and leaves the geometry exact, rather than tearing it.
+ * Call before the solve moves anything: the rotation is measured from there.
+ */
+export function resolve_kinematic_motors(nodes: SimNodes, links: Link[]): ResolvedDrive[] {
+  const resolved: ResolvedDrive[] = [];
+  for (const link of links) {
+    if (link.type === "MotorBeam") {
+      const driven = resolve_arm(nodes, link.pivotKey, link.drivenKey);
+      if (!driven) continue;
+      const l2 = driven.x0 * driven.x0 + driven.y0 * driven.y0;
+      const bare = (nodes.w[driven.tip] + nodes.w[driven.pivot]) / l2;
+      if (bare === 0) continue;
+      let step = link.targetAngle - Math.atan2(driven.y0, driven.x0);
+      step -= 2 * Math.PI * Math.round(step / (2 * Math.PI));
+      const drive: Drive = { kind: "beam", pivotKey: link.pivotKey, drivenKey: link.drivenKey, omega: 0, torqueLimit: 0, torque: 0, saturated: false };
+      resolved.push({ drive, driven, angle: ABSENT, angle0: 0, anchor: undefined, lambda: 0, bound: lock_bound(step, bare), step, lock: true, lever: Math.sqrt(l2) });
+    } else if (link.type === "MotorAngle") {
+      const angle = nodes.angleIndex.get(link.angleKey) ?? ABSENT;
+      if (angle === ABSENT || nodes.wAngle[angle] === 0) continue;
+      const step = link.targetAngle - nodes.angle[angle];
+      const drive: Drive = { kind: "angle", angleKey: link.angleKey, omega: 0, torqueLimit: 0, torque: 0, saturated: false };
+      resolved.push({ drive, driven: undefined, angle, angle0: nodes.angle[angle], anchor: undefined, lambda: 0, bound: lock_bound(step, nodes.wAngle[angle]), step, lock: true, lever: 1 });
+    }
+  }
+  return resolved;
+}
+
+/** A motor asked to hold still is never blocked: there is nothing to refuse it. */
+const lock_bound = (step: number, bare: number): number => (step === 0 ? Infinity : (MOTOR_LOCK_RATIO * Math.abs(step)) / bare);
 
 /** Move one slot by `scale` along a gradient, weighted by its inverse mass. */
 function push_tangent(nodes: SimNodes, slot: number, tx: number, ty: number, scale: number): void {

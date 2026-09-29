@@ -45,7 +45,7 @@ import {
 } from "../nodes";
 import { LinkSlots, resolve_slots } from "./link-slots";
 import { applyBeltValidityContacts } from "./belt-validity";
-import { Drive, apply_drives, finish_drives, resolve_drives } from "../dynamics/drive-constraint";
+import { Drive, apply_drives, finish_drives, resolve_drives, resolve_kinematic_motors } from "../dynamics/drive-constraint";
 import { reversed_sweep_order } from "./sweep-order";
 import { ContactSet, segment_side } from "../dynamics/collision-detection";
 import { CONTACT_SLACK_RATIO } from "../dynamics/collision-restitution";
@@ -238,6 +238,12 @@ const DIRECT_TOLERANCE_RATIO = 1e-5;
  */
 const DIRECT_SETTLE_RATIO = 1e-6;
 
+/**
+ * What the direct solve leaves of a row in a kinematic solve, as a fraction of the mechanism's extent.
+ * A thousand times under `REMAINING_RATIO`: a Newton iteration costs the same whatever it has left to close.
+ */
+const KINEMATIC_DIRECT_TOLERANCE_RATIO = 1e-9;
+
 /** Newton iterations the direct solve may run per sweep; it usually needs one or two. */
 const DIRECT_ITERATIONS = 8;
 
@@ -365,6 +371,9 @@ function contact_near(link: Link, slot: LinkSlots, nodes: SolveNodes, margin: nu
   }
 }
 
+/** A link only a kinematic direct solve takes over, beyond `DIRECT_LINK_TYPES`: a motor (see `resolve_kinematic_motors`). */
+const kinematic_direct_link = (link: Link): boolean => link.type === "MotorBeam" || link.type === "MotorAngle";
+
 /**
  * How the solver decides it has done enough; a dynamics step must in addition meet `DYNAMIC_EXIT_SPEED_RATIO`.
  *
@@ -437,6 +446,8 @@ export function PBD_kinematic_solver(
   dynamics?: DynamicsInput,
   /** The scale every tolerance is a fraction of — see `PBD_solve`. Omitted, the nodes' own extent this solve. */
   referenceExtent?: number,
+  /** Solve a kinematic solve's links directly — see `PBD_solve`. */
+  direct?: boolean,
 ): SolverMaps {
   const nodes = solveNodesFromMaps(
     positions,
@@ -471,6 +482,7 @@ export function PBD_kinematic_solver(
       restitution: dynamics.restitution,
     },
     referenceExtent,
+    direct,
   );
   writePositionsBack(nodes, positions);
   writeScalarsBack(nodes.angleIndex, nodes.angle, angles);
@@ -493,8 +505,7 @@ export function PBD_solve(
   epsilon: number = 0.000_001,
   collectDiagnostics: boolean = false,
   exitOn: ExitCriterion = "motion",
-  /** Present only for a dynamics step — see `DynamicsInput`. Everything else (edition,
-   * kinematic simulation) leaves this out and gets the plain PBD sweep unchanged. */
+  /** Present only for a dynamics step — see `DynamicsInput`; edition and the kinematic simulation leave it out. */
   dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom" | "contacts" | "direct" | "settle" | "restitution">,
   /**
    * The scale every tolerance below is a fraction of.
@@ -502,6 +513,11 @@ export function PBD_solve(
    * Omitted, the nodes' own extent as this solve starts.
    */
   referenceExtent?: number,
+  /**
+   * Solve a kinematic solve's links all at once, motors included, rather than one at a time in the sweep; a dynamics step asks through `dynamics.direct` instead.
+   * Worth it only when every link but the grab is one the direct solve handles (see `DIRECT_LINK_TYPES`), and without collision contacts, which it would leave to the sweep.
+   */
+  solveDirect?: boolean,
 ): ConstraintResidual[] | undefined {
   const slots = slots_of(links, nodes, dynamics?.contactsFrom, dynamics?.contacts);
 
@@ -540,6 +556,7 @@ export function PBD_solve(
   // A frame with no grab owes it nothing — and there, the floor is not needed either, since `remaining_motion` returns Infinity until the decay window has filled.
   // Every link from `contactsFrom` on is a collision contact.
   const contactsFrom = dynamics?.contactsFrom ?? links.length;
+  const kinematicDirect = !dynamics && solveDirect === true;
   let grabbed = false;
   for (let k = 0; k < contactsFrom && !grabbed; k++) grabbed = links[k].type === "HandleGrab";
   const minSweepsBeforeExit = grabbed ? nbGrabIterations + GRAB_RELEASE_SWEEPS : 0;
@@ -608,7 +625,11 @@ export function PBD_solve(
   let frameStartA: Float64Array | null = null;
   // Bound before the predict step: a drive's commanded rotation is measured from where the substep starts.
   const drives =
-    dynamics?.drives && dynamics.dt > 0 ? resolve_drives(nodes, dynamics.drives, dynamics.dt) : [];
+    dynamics?.drives && dynamics.dt > 0
+      ? resolve_drives(nodes, dynamics.drives, dynamics.dt)
+      : kinematicDirect
+        ? resolve_kinematic_motors(nodes, links)
+        : [];
   // The velocities the substep starts from: what the direct solve's bounce reads each impact's approach off.
   const startVX = dynamics?.direct ? nodes.vx.slice() : null;
   const startVY = dynamics?.direct ? nodes.vy.slice() : null;
@@ -717,11 +738,12 @@ export function PBD_solve(
 
   // ── The links the direct solve takes over, if asked ──
   // The collision contacts join it as they are judged able to engage, the others stay out of both.
-  if (dynamics?.direct && dynamics.dt > 0) {
+  // A kinematic motor joins it as a drive (see `resolve_kinematic_motors`); the grab, when it is present, keeps `kinematicDirect` off (see `step_simulation`) and stays with the sweep.
+  if ((dynamics?.direct && dynamics.dt > 0) || kinematicDirect) {
     const handled = new Uint8Array(links.length);
     let any = culling;
     for (let k = 0; k < contactsFrom; k++)
-      if (DIRECT_LINK_TYPES.has(links[k].type)) {
+      if (DIRECT_LINK_TYPES.has(links[k].type) || (kinematicDirect && kinematic_direct_link(links[k]))) {
         handled[k] = 1;
         any = true;
       }
@@ -730,7 +752,7 @@ export function PBD_solve(
   // The motors join the direct solve with the links: left to the sweep, each would turn its crank as if alone, and the two would take turns undoing each other.
   const direct = directHandled ? create_direct_state(nodes, links, drives) : null;
   const directTolerance = !dynamics
-    ? 0
+    ? KINEMATIC_DIRECT_TOLERANCE_RATIO * extent
     : dynamics.settle
       ? DIRECT_SETTLE_RATIO * extent * dynamics.dt * dynamics.dt
       : DIRECT_TOLERANCE_RATIO * extent * dynamics.dt;
@@ -1120,7 +1142,7 @@ export function PBD_solve(
       }
     }
     if (direct && directHandled) {
-      const left = direct_iterate(direct, nodes, links, slots, directHandled, invDtSq, directTolerance, DIRECT_ITERATIONS);
+      const left = direct_iterate(direct, nodes, links, slots, directHandled!, invDtSq, directTolerance, DIRECT_ITERATIONS);
       if (left > maxError) maxError = left;
       if (exitGap !== undefined && left > worstGap) worstGap = left;
     }
