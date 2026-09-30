@@ -228,6 +228,8 @@ interface MechanicalCanvasProps {
   librarySection?: "materials" | "profiles";
   /** The row hovered there, if any — accentuates its beams and fades the rest. */
   hoveredLibraryEntryID?: ID | null;
+  /** Whether the mechanisms gallery is open — keyboard shortcuts are disabled when it is, except Escape. */
+  galleryOpen: boolean;
 }
 
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
@@ -305,6 +307,7 @@ const MechanicalCanvasView = forwardRef<
       hoveredLibraryEntryID,
       onSelectOverlay,
       focusedOverlay,
+      galleryOpen,
     },
     ref,
   ) => {
@@ -1396,6 +1399,7 @@ const MechanicalCanvasView = forwardRef<
     useEffect(() => {
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
+        if (galleryOpen && event.key !== "Escape") return;
         const shortcut = is_canvas_shortcut(event.key, event.ctrlKey);
         // The entry an undo or redo is about to replay: popups showing only what it edits stay open to show the result.
         const { history, future } = restingRef.current;
@@ -1431,7 +1435,7 @@ const MechanicalCanvasView = forwardRef<
       };
       document.addEventListener("keydown", handleGlobalKeyDown);
       return () => document.removeEventListener("keydown", handleGlobalKeyDown);
-    }, [handleEvent, closeProbeMetricsPopover]);
+    }, [handleEvent, closeProbeMetricsPopover, galleryOpen]);
 
     useEffect(() => {
       const canvas = canvasRef.current;

@@ -1084,6 +1084,7 @@ const App: React.FC = () => {
                     : undefined
                 }
                 hoveredLibraryEntryID={hoveredLibraryEntryID}
+                galleryOpen={galleryOpen}
               />
             </Box>
 
