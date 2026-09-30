@@ -32,7 +32,7 @@ export const TRAJECTORY_SAMPLING = {
    * Kinematic mode has no recorded velocity to build that curve from and keeps the straight chord, same as ever.
    * A product choice, not a measurement: high enough that a fast pendulum's arc reads as curved rather than faceted, low enough that a trajectory overlay left on for a long recording does not quietly balloon in point count.
    */
-  HERMITE_SUBSAMPLES: 3,
+  HERMITE_SUBSAMPLES: 5,
 };
 
 /** The same ruler as `LOAD_SCALING`, on a moment's own range: torques are commonly tenths of

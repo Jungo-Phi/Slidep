@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, useTheme } from "@mui/material";
 import { Mechanism, SerializedMechanism } from "../../types";
 import { load_mechanism } from "../../utils";
@@ -6,6 +6,7 @@ import { draw_thumbnail, thumbnail_bounds } from "../canvas/drawing/render-thumb
 import { animate_mode } from "../solver/analysis/mode-animation";
 import { THUMBNAIL_MARGIN, THUMBNAIL_MODE_ANIMATION } from "../../constants/interaction-specs";
 import { thumbnail_mode } from "./thumbnail-mode";
+import { schedule_idle, cancel_idle } from "../../utils/idle-schedule";
 
 /** Render resolution, square as the card is. Well above the display size, to stay
  * sharp on a high-density screen. */
@@ -13,13 +14,17 @@ const RENDER_WIDTH = 512;
 const RENDER_HEIGHT = 512;
 
 /** `load_mechanism(record).mechanism`, cached by `createdAt`/`modifiedAt` rather than by object identity.
- * The gallery hands out a fresh record object on every open and every search keystroke, but content keyed on those two fields survives across all of them, so the migration/repair work only reruns for a record actually edited since it was last loaded. */
+ * The gallery hands out a fresh record object on every open and every search keystroke, but content keyed on those two fields survives across all of them, so the migration/repair work only reruns for a record actually edited since it was last loaded.
+ * `history`/`future` are stripped before migrating: a thumbnail never reads them, but every migration step still walks them, and a mechanism edited over a long session can carry an undo stack far bigger than its current state. */
 const mechanismCache = new Map<number, { modifiedAt: number; mechanism: Mechanism }>();
-const load_mechanism_cached = (record: SerializedMechanism): Mechanism => {
+const cached_mechanism = (record: SerializedMechanism): Mechanism | undefined => {
   const { createdAt, modifiedAt } = record.metadata;
   const cached = mechanismCache.get(createdAt);
-  if (cached && cached.modifiedAt === modifiedAt) return cached.mechanism;
-  const mechanism = load_mechanism(record).mechanism;
+  return cached && cached.modifiedAt === modifiedAt ? cached.mechanism : undefined;
+};
+const load_mechanism_cached = (record: SerializedMechanism): Mechanism => {
+  const { createdAt, modifiedAt } = record.metadata;
+  const mechanism = load_mechanism({ ...record, history: [], future: [] }).mechanism;
   mechanismCache.set(createdAt, { modifiedAt, mechanism });
   return mechanism;
 };
@@ -41,14 +46,34 @@ export const MechanismThumbnail: React.FC<MechanismThumbnailProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Redraw when the theme changes: the drawing's colours depend on it.
   const theme = useTheme();
+  // A cache hit resolves synchronously; a miss — migrating, repairing, computing the chain — is
+  // deferred to idle time instead of blocking the card's mount, so a freshly revealed batch scrolls
+  // as soon as it appears and fills in with its drawings a moment later.
   // Repairs silently: a card is no place to report damage, but a broken record must not take the gallery down with it.
-  const mechanism = useMemo(() => load_mechanism_cached(record), [record]);
+  const [mechanism, setMechanism] = useState<Mechanism | undefined>(() =>
+    cached_mechanism(record),
+  );
+  useEffect(() => {
+    const fromCache = cached_mechanism(record);
+    if (fromCache) {
+      setMechanism(fromCache);
+      return;
+    }
+    setMechanism(undefined);
+    const handle = schedule_idle(() => setMechanism(load_mechanism_cached(record)));
+    return () => cancel_idle(handle);
+  }, [record]);
   // Framed on the resting pose once and for all: a swinging pose refit frame by frame would carry the framing along with it, and the card would read as breathing rather than as a mechanism moving.
-  const bounds = useMemo(() => thumbnail_bounds(mechanism), [mechanism]);
+  const bounds = useMemo(
+    () => (mechanism ? thumbnail_bounds(mechanism) : undefined),
+    [mechanism],
+  );
   // Survives across hover toggles (each one restarts the effect below) so the zoom eases onward from wherever it is instead of snapping back to `REST` between two hovers.
   const zoomRef = useRef(0);
 
   useEffect(() => {
+    // Nothing to draw yet — the card shows as blank until its idle-scheduled load resolves.
+    if (!mechanism || !bounds) return;
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
 

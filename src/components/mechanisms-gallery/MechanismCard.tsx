@@ -13,6 +13,7 @@ import { t } from "../../i18n";
 import MechanismThumbnail from "./MechanismThumbnail";
 import TagChipsEditor from "./TagChipsEditor";
 import { INLINE_INPUT_SX } from "./inline-input-sx";
+import { schedule_idle, cancel_idle } from "../../utils/idle-schedule";
 
 interface MechanismCardProps {
   mechanismRecord: SerializedMechanism;
@@ -43,6 +44,15 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
 }) => {
   const [hovered, setHovered] = useState(false);
   const description = mechanismRecord.metadata.description;
+
+  // The duplicate/export/delete buttons stay collapsed to zero width until hovered — mounting them
+  // is invisible either way, so it's deferred like a thumbnail's drawing, off of the batch that
+  // mounts every other card in the gallery at once.
+  const [actionsReady, setActionsReady] = useState(false);
+  useEffect(() => {
+    const handle = schedule_idle(() => setActionsReady(true));
+    return () => cancel_idle(handle);
+  }, []);
 
   const [editingName, setEditingName] = useState(!!startInNameEdit);
   const [nameDraft, setNameDraft] = useState(mechanismRecord.metadata.name);
@@ -205,42 +215,46 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                   transition: "width 0.15s, opacity 0.15s, margin-left 0.15s",
                 }}
               >
-                <Tooltip title={t("duplicate")}>
-                  <IconButton
-                    size="small"
-                    color="inherit"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDuplicate(mechanismRecord.metadata.createdAt);
-                    }}
-                  >
-                    <AddToPhotos fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t("export")}>
-                  <IconButton
-                    size="small"
-                    color="inherit"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onExport(mechanismRecord);
-                    }}
-                  >
-                    <Download fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t("delete")}>
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(mechanismRecord.metadata.createdAt);
-                    }}
-                  >
-                    <Delete fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                {actionsReady && (
+                  <>
+                    <Tooltip title={t("duplicate")}>
+                      <IconButton
+                        size="small"
+                        color="inherit"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDuplicate(mechanismRecord.metadata.createdAt);
+                        }}
+                      >
+                        <AddToPhotos fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t("export")}>
+                      <IconButton
+                        size="small"
+                        color="inherit"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onExport(mechanismRecord);
+                        }}
+                      >
+                        <Download fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t("delete")}>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(mechanismRecord.metadata.createdAt);
+                        }}
+                      >
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </>
+                )}
               </Box>
             </>
           )}

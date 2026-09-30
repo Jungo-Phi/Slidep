@@ -52,27 +52,36 @@ const DEBOUNCE_AUTOSAVE_TIME_MILLIS = 1500;
 /** The mechanism library. Keyed by `metadata.createdAt`, so two records sharing one are the same entry.
  * `EXAMPLE_MECHANISMS` is seeded once, tied to the version bump rather than a separate flag: any library — empty or not — gets them added the first time it is opened past this version.
  * Deleting one afterwards is final; see `handleRestoreExamples` for the user-facing way back. */
-const openMechanismsDB = () =>
-  openDB<SlidepDB>("SlidepDB", DB_VERSION, {
-    async upgrade(db, oldVersion, _newVersion, transaction) {
-      if (!db.objectStoreNames.contains("mechanisms")) {
-        const store = db.createObjectStore("mechanisms", {
-          keyPath: "metadata.createdAt",
-        });
-        store.createIndex("by-date", "metadata.modifiedAt");
-      }
-      if (oldVersion < 4) {
-        // A user who built these examples in the app before they shipped already owns entries under the same createdAt — `add()` on an existing key aborts the whole transaction, so only what's genuinely missing gets seeded.
-        const store = transaction.objectStore("mechanisms");
-        const existingIds = new Set(await store.getAllKeys());
-        await Promise.all(
-          EXAMPLE_MECHANISMS.filter(
-            (example) => !existingIds.has(example.metadata.createdAt),
-          ).map((example) => store.add(example)),
-        );
-      }
-    },
-  });
+let dbPromise: Promise<IDBPDatabase<SlidepDB>> | null = null;
+const openMechanismsDB = (): Promise<IDBPDatabase<SlidepDB>> => {
+  if (!dbPromise) {
+    dbPromise = openDB<SlidepDB>("SlidepDB", DB_VERSION, {
+      async upgrade(db, oldVersion, _newVersion, transaction) {
+        if (!db.objectStoreNames.contains("mechanisms")) {
+          const store = db.createObjectStore("mechanisms", {
+            keyPath: "metadata.createdAt",
+          });
+          store.createIndex("by-date", "metadata.modifiedAt");
+        }
+        if (oldVersion < 4) {
+          // A user who built these examples in the app before they shipped already owns entries under the same createdAt — `add()` on an existing key aborts the whole transaction, so only what's genuinely missing gets seeded.
+          const store = transaction.objectStore("mechanisms");
+          const existingIds = new Set(await store.getAllKeys());
+          await Promise.all(
+            EXAMPLE_MECHANISMS.filter(
+              (example) => !existingIds.has(example.metadata.createdAt),
+            ).map((example) => store.add(example)),
+          );
+        }
+      },
+      // A blocked or failed open must not wedge every later call behind the same broken promise.
+    }).catch((error) => {
+      dbPromise = null;
+      throw error;
+    });
+  }
+  return dbPromise;
+};
 
 /** Every stored mechanism, raised to the current file format. The only way to read the library. */
 const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
@@ -194,13 +203,15 @@ export function useMechanismLibrary({
     })();
   }, []);
 
-  const handleOpenGallery = useCallback(async () => {
-    const db = await openMechanismsDB();
-    const records = await read_all_records(db);
-    startTransition(() => {
-      setSavedMechanisms(records);
-      setGalleryOpen(true);
-    });
+  // Opens on whatever `savedMechanisms` already holds — however stale — rather than waiting on a fresh read, so the click feels as instant as any other menu action.
+  // The read still happens, just after: a card lands on outdated data only when something changed the record while the gallery was closed, and even then only until this resolves and replaces the list a moment later.
+  const handleOpenGallery = useCallback(() => {
+    setGalleryOpen(true);
+    void (async () => {
+      const db = await openMechanismsDB();
+      const records = await read_all_records(db);
+      startTransition(() => setSavedMechanisms(records));
+    })();
   }, []);
 
   const closeGallery = useCallback(() => setGalleryOpen(false), []);
@@ -293,7 +304,7 @@ export function useMechanismLibrary({
     async (createdAtId: number) => {
       if (!window.confirm(t("mechanism_delete_confirm"))) return;
 
-      const db = await openDB<SlidepDB>("SlidepDB", DB_VERSION);
+      const db = await openMechanismsDB();
       await db.delete("mechanisms", createdAtId);
 
       setSavedMechanisms((prev) =>

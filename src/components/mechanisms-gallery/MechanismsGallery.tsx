@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useDeferredValue, useMemo, useRef, useState } from "react";
 import { useAmbient } from "../common/use-ambient";
 import {
   Dialog,
@@ -74,8 +74,11 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
 }) => {
   useAmbient();
   const [search, setSearch] = useState("");
+  // The typed value keeps the field itself responsive; filtering, sorting and the resulting card shuffle across columns run on this one instead, a beat behind, so a fast typist never waits on a render of the whole grid between keystrokes.
+  const deferredSearch = useDeferredValue(search);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const searching = search.trim().length > 0;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const searching = deferredSearch.trim().length > 0;
 
   // Cleared on every fresh opening rather than on close, which covers every way the dialog closes (button, backdrop, Escape, loading a mechanism) from a single spot.
   // Adjusted during render rather than in an effect, so the dialog's first paint already shows the cleared search instead of a filtered list that then jumps to the full one.
@@ -121,7 +124,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   const sortedMechanismRecords = [...mechanismRecords]
     .sort((a, b) => b.metadata.modifiedAt - a.metadata.modifiedAt)
     .filter((record) => {
-      const needle = fold(search.trim());
+      const needle = fold(deferredSearch.trim());
       if (!needle) return true;
       return (
         fold(record.metadata.name).includes(needle) ||
@@ -211,8 +214,14 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
       fullWidth
       maxWidth={false}
       // Focus once the enter transition is done, after the modal's focus trap has taken its own initial focus.
+      // The scroll position is reset here too: MUI keeps the Paper mounted through a quick close/reopen (the exit transition hasn't finished unmounting it yet), so the grid can otherwise reappear mid-scroll.
       slotProps={{
-        transition: { onEntered: () => searchInputRef.current?.focus() },
+        transition: {
+          onEntered: () => {
+            searchInputRef.current?.focus();
+            if (contentRef.current) contentRef.current.scrollTop = 0;
+          },
+        },
       }}
       PaperProps={{
         sx: {
@@ -351,7 +360,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: 2 }}>
+      <DialogContent dividers sx={{ p: 2 }} ref={contentRef}>
         {searching && sortedMechanismRecords.length === 0 ? (
           <Box
             sx={{

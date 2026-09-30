@@ -48,7 +48,6 @@
 - 🔨 Hover le bilan des moments ne doit pas faire apparitre le cg, seulement à la sélection. Et n'afficher la croix que si on n'affiche pas de moment à sa position
 - 🔨 Bords tags en thème blueprint
 - 🔨 Afficher les contraintes d'un élément sélectionné
-- 🔨 Ne plus accepter les raccourcis quand la gallerie est ouverte
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Afficher les trajectoires anciennes de plus en plus transparentes
 - 🚨 Les trais indicatifs des valeurs max dans les diagrammes des efforts (vu dans Mf) s'accumulent
@@ -68,6 +67,8 @@
 - 🔨 Afficher I avec les profilés
 - 🔨 Afficher les graphiques à frame=0 (pas "en attente de données...")
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
+- 🔨 Faire apparaitre les contraintes à l'écran même si on est zoomé
+- 🔨 Ne pas arrondir les petites valeurs de dimension
 
 **Qwick fixes :**
 
