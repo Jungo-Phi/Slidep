@@ -24,7 +24,7 @@ import type {
 } from "../types";
 import { UP } from "../types";
 import { DIM, TEXT_SPECS } from "../constants/rendering-specs";
-import { HIT_TOLERANCE } from "../constants/interaction-specs";
+import { hit_tolerance } from "./pointer-kind";
 import {
   FORCE,
   LOAD_INTENSITY,
@@ -90,10 +90,10 @@ export function arrow_hit(
   base: ScreenPoint,
   tip: ScreenPoint,
 ): boolean {
-  if (mouseScreen.distance_to(base) <= HIT_TOLERANCE.NODE) return false;
+  if (mouseScreen.distance_to(base) <= hit_tolerance().NODE) return false;
   return (
-    mouseScreen.distance_to(tip) <= HIT_TOLERANCE.NODE ||
-    mouseScreen.distance2segment(base, tip) <= HIT_TOLERANCE.EDGE
+    mouseScreen.distance_to(tip) <= hit_tolerance().NODE ||
+    mouseScreen.distance2segment(base, tip) <= hit_tolerance().EDGE
   );
 }
 

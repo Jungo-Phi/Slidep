@@ -5,7 +5,7 @@
 import type { HoveredPart } from "../../../types/hovered-part";
 import type { MechanicalElement, ViewportState, WorldPoint } from "../../../types";
 import type { MaterialDef, ProfileDef } from "../../../types/material";
-import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
+import { hit_tolerance } from "../../../utils/pointer-kind";
 import { world2screen } from "../../../utils";
 import {
   MomentBalanceReference,
@@ -37,7 +37,7 @@ export function moment_balance_hover(
     centerOfMass &&
     world2screen(centerOfMass, viewport).distance_to(
       world2screen(cursor, viewport),
-    ) <= HIT_TOLERANCE.NODE
+    ) <= hit_tolerance().NODE
   )
     return { reference: { kind: "center-of-mass" }, point: centerOfMass };
   if (hoveredPart.type === "Node")

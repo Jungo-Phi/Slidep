@@ -535,10 +535,8 @@ export type CanvasDrawing = {
   visibleConstraints?: Map<ID, number>;
   /** Among those, the ones an undo is about to bring back. */
   ghostConstraintIDs?: Set<ID>;
-  /** Whether the cursor is over the canvas: what a tool previews follows it, so
-   * it is not drawn for a hover designated from a panel. */
-  cursorOnCanvas?: boolean;
-  hideConstraints?: boolean;
+  /** Whether the cursor is over the canvas: what a tool previews follows it, so it is not drawn for a hover designated from a panel. */
+  cursorOnCanvas?: boolean;  hideConstraints?: boolean;
   hideLoads?: boolean;
   hideProbes?: boolean;
   /** The dimension the gesture is placing or dragging has its stand-off on a rung. Its own

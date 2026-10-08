@@ -3,6 +3,7 @@ import { Point2 } from "../types/point2";
 import {
   clamp_pan,
   clamp_scale,
+  pinch_step,
   screen2world,
   zoom_on_point,
   WORLD_FRAME_HALF_EXTENT,
@@ -94,5 +95,43 @@ describe("zoom_on_point", () => {
     const reclamped = clamp_pan(after.pan, after.scale, 1000, 800);
     expect(reclamped.x).toBe(after.pan.x);
     expect(reclamped.y).toBe(after.pan.y);
+  });
+});
+
+describe("pinch_step", () => {
+  const start = { pan: screen(500, 400), scale: 100 };
+
+  /** The viewport after `step`, applied the way the canvas applies it: pan, then zoom. */
+  const applied = (step: ReturnType<typeof pinch_step>) =>
+    zoom_on_point(
+      step.deltaY,
+      step.center,
+      { pan: clamp_pan(start.pan.add(step.pan), start.scale, 1000, 800), scale: start.scale },
+      1000,
+      800,
+    );
+
+  it("keeps the world point between the fingers between them as they spread and drift", () => {
+    const before = [screen(300, 300), screen(500, 300)] as const;
+    const after = [screen(220, 380), screen(620, 440)] as const;
+    const held = screen2world(screen(400, 300), start);
+    const end = applied(pinch_step(before, after));
+    const now = screen2world(screen(420, 410), end);
+    expect(now.x).toBeCloseTo(held.x, 9);
+    expect(now.y).toBeCloseTo(held.y, 9);
+  });
+
+  it("scales the view by how much the fingers spread", () => {
+    const before = [screen(300, 300), screen(400, 300)] as const;
+    const after = [screen(250, 300), screen(450, 300)] as const;
+    expect(applied(pinch_step(before, after)).scale).toBeCloseTo(2 * start.scale, 9);
+  });
+
+  it("only pans when the fingers start on the same pixel", () => {
+    const before = [screen(300, 300), screen(300, 300)] as const;
+    const after = [screen(310, 320), screen(350, 320)] as const;
+    const step = pinch_step(before, after);
+    expect(step.deltaY).toBe(0);
+    expect(applied(step).scale).toBe(start.scale);
   });
 });

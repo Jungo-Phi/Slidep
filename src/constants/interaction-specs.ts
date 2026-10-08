@@ -1,15 +1,37 @@
 /** How the canvas and the panels respond to the pointer: hit tolerances, feedback opacities, and the animations that illustrate a result. */
 
-export const HIT_TOLERANCE = {
+/** How far from a target (screen px) the pointer still reaches it. */
+export interface HitTolerance {
+  readonly EDGE: number;
+  readonly NODE: number;
+  readonly CONSTRAINT: number;
+  /** How far a snap pulls a point already aimed: it reaches no target, so it is the same for every pointer and may be read straight off `HIT_TOLERANCE`. */
+  readonly SNAP: number;
+  readonly PROBE: number;
+  /** How far the pointer must travel from the press for a click to turn into a drag: under it, a click; over it, a drag.
+   * A distance rather than a delay keeps the two apart whatever the framerate and the pointer's speed. */
+  readonly DRAG_START: number;
+}
+
+/** For a mouse or a pen. Read it through `hit_tolerance()`, which picks the table of the pointer in use. */
+export const HIT_TOLERANCE: HitTolerance = {
   EDGE: 10,
   NODE: 14,
   CONSTRAINT: 20,
   SNAP: 8,
   PROBE: 10,
-  // How far (screen px) the pointer must travel from the mouseDown for a click to turn into a drag: under it, a click; over it, a drag.
-  // A distance rather than a delay keeps the two apart whatever the framerate and the pointer's speed.
   DRAG_START: 4,
-} as const;
+};
+
+/** For a finger: wider than what it touches, and shaking when it lands. */
+export const TOUCH_HIT_TOLERANCE: HitTolerance = {
+  EDGE: 18,
+  NODE: 24,
+  CONSTRAINT: 28,
+  SNAP: HIT_TOLERANCE.SNAP,
+  PROBE: 18,
+  DRAG_START: 10,
+};
 
 export const INTERACTION_SPECS = {
   SELECTION_HALO_SIZE: 10,

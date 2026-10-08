@@ -26,6 +26,13 @@ import {
   WorldPoint,
 } from "../../types";
 import { world2screen, screen2world } from "../../utils";
+import { pinch_step } from "../../utils/viewport";
+import {
+  hit_tolerance,
+  pointer_kind,
+  set_pointer_kind,
+} from "../../utils/pointer-kind";
+import { aims_until_lift } from "./tools/touch-press";
 import { COLORS } from "../../theme/canvas-theme";
 import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION } from "../../constants/interaction-specs";
 import { Box, Tooltip } from "@mui/material";
@@ -334,6 +341,21 @@ const MechanicalCanvasView = forwardRef<
       center: ScreenPoint;
     } | null>(null);
     const mouseButtonDownRef = useRef<"none" | "left" | "right">("none");
+    // The fingers on the canvas, by pointer id, in insertion order: the first two are the ones a pinch follows.
+    const touchesRef = useRef<Map<number, ScreenPoint>>(new Map());
+    // Set from the second finger until the last one lifts: meanwhile the fingers only move the view.
+    const pinchingRef = useRef(false);
+    // A finger whose press is played when it lifts (see `aims_until_lift`).
+    const heldPressRef = useRef(false);
+    // Where the left press landed, and whether the pointer has since travelled past the drag threshold — once past, a press stays a drag even if it comes back.
+    const pressOriginRef = useRef<ScreenPoint>(ZERO);
+    const pressDraggedRef = useRef(false);
+    // What a one-finger gesture started from, for a second finger landing to take it back.
+    const gestureStartRef = useRef<{
+      canvasState: CanvasState;
+      historyLength: number;
+      lastEntry: Action[] | undefined;
+    } | null>(null);
     // The hovered part is shared with the panels, which designate an element by hovering its card.
     // Only a hover pointed at on the canvas carries a cursor for a tool to preview under.
     const cursorOnCanvasRef = useRef(false);
@@ -420,6 +442,15 @@ const MechanicalCanvasView = forwardRef<
       modePreviewRef.current ?? liveFrameRef.current?.mechanism ?? mechanism;
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
+
+    // The next event can arrive before React renders this one — a release under a busy simulation, or a finger's press and release played together — and must read the state this one left.
+    const setCanvasStateNow = useCallback(
+      (next: CanvasState) => {
+        canvasStateRef.current = next;
+        setCanvasState(next);
+      },
+      [setCanvasState],
+    );
 
     /**
      * Re-reads the container geometry.
@@ -997,35 +1028,167 @@ const MechanicalCanvasView = forwardRef<
     // The shared "button released" logic: called by pointerup/pointercancel and by the reducer, an undo/redo forcing a release.
     // Leaves the pointer capture alone: it belongs to the pointer handlers, which hold the event.
     //
-    // Idempotent out of necessity: some browsers fire pointercancel right behind a pointerup handled for that same release (around releasePointerCapture in particular), both within one tick — sooner than canvasStateRef can refresh on the next render.
-    // Without this guard, the second call replays the sealing of the gesture on a state still "MovingXXX", and doubles an action in the history.
+    // Idempotent out of necessity: some browsers fire pointercancel right behind a pointerup handled for that same release (around releasePointerCapture in particular).
+    // Without this guard, the second call is read as the release of another press: it seals the gesture twice, or puts down the second step of a placement a second time.
     const onMouseUpHandler = useCallback(() => {
       if (mouseButtonDownRef.current === "none") return;
       handleEventRef.current({
         type: "MouseButtonUp",
+        dragged: pressDraggedRef.current,
       });
       mouseButtonDownRef.current = "none";
     }, []);
 
+    // Opens a left press at the pointer's current position: its release will tell how far it travelled.
+    const startPress = () => {
+      pressOriginRef.current = mousePositionRef.current;
+      pressDraggedRef.current = false;
+      mouseButtonDownRef.current = "left";
+    };
+
+    /** Where `event` lands on the canvas, in canvas px. */
+    const canvasPointOf = (
+      event: React.PointerEvent<HTMLCanvasElement>,
+    ): ScreenPoint | null => {
+      const canvas = canvasRef.current;
+      const rect = canvasRectRef.current ?? measureCanvas();
+      if (!canvas || !rect) return null;
+      return new Point2<"screen">(
+        (event.clientX - rect.left) * (canvas.width / rect.width),
+        (event.clientY - rect.top) * (canvas.height / rect.height),
+      );
+    };
+
+    // A lifted finger leaves no cursor behind: nothing stays lit where it was.
+    const clearTouchHover = () => {
+      cursorOnCanvasRef.current = false;
+      snapFeedbackRef.current = NO_FEEDBACK;
+      setHoveredPart({
+        type: "Void",
+        position: screen2world(
+          mousePositionRef.current,
+          mechanismRef.current.viewport,
+        ),
+      });
+    };
+
+    // Takes back what one finger was doing when a second one lands: its edits, and the state it started from.
+    const cancelOneFingerGesture = () => {
+      if (heldPressRef.current) {
+        heldPressRef.current = false;
+        return;
+      }
+      if (mouseButtonDownRef.current !== "left") return;
+      mouseButtonDownRef.current = "none";
+      if (canvasStateRef.current.type === "SimulationDragging")
+        onSimulationGrabEndRef.current();
+      const start = gestureStartRef.current;
+      if (!start) return;
+      const { history } = restingRef.current;
+      // A gesture writes into a history entry of its own, open until its release: a single undo takes all of it back.
+      if (
+        history.length !== start.historyLength ||
+        history[history.length - 1] !== start.lastEntry
+      )
+        undoMechanism();
+      setCanvasStateNow(start.canvasState);
+    };
+
+    /** A finger landing: whether it is handled here in full, rather than pressed like a mouse button. */
+    const onTouchDown = (
+      event: React.PointerEvent<HTMLCanvasElement>,
+    ): boolean => {
+      const point = canvasPointOf(event);
+      if (!point) return true;
+      const touches = touchesRef.current;
+      touches.set(event.pointerId, point);
+      if (pinchingRef.current || touches.size > 2) return true;
+      if (touches.size === 2) {
+        cancelOneFingerGesture();
+        pinchingRef.current = true;
+        clearTouchHover();
+        return true;
+      }
+      const { history } = restingRef.current;
+      gestureStartRef.current = {
+        canvasState: canvasStateRef.current,
+        historyLength: history.length,
+        lastEntry: history[history.length - 1],
+      };
+      cursorOnCanvasRef.current = true;
+      mousePositionRef.current = point;
+      if (!aims_until_lift(canvasStateRef.current, computeHover().hoveredPart))
+        return false;
+      heldPressRef.current = true;
+      // Shows the aim, which the finger may now slide to correct.
+      handleEvent({ type: "MouseMove", mouseDelta: ZERO });
+      return true;
+    };
+
+    /** Moves the view with the first two fingers, so that what lies between them stays between them. */
+    const onPinchMove = (pointerId: number, point: ScreenPoint) => {
+      const touches = touchesRef.current;
+      const [idA, idB] = [...touches.keys()];
+      const a = touches.get(idA);
+      const b = idB === undefined ? undefined : touches.get(idB);
+      if (a && b && (pointerId === idA || pointerId === idB)) {
+        const step = pinch_step(
+          [a, b],
+          [pointerId === idA ? point : a, pointerId === idB ? point : b],
+        );
+        pendingPanRef.current = pendingPanRef.current.add(step.pan);
+        pendingZoomRef.current = {
+          deltaY: (pendingZoomRef.current?.deltaY ?? 0) + step.deltaY,
+          center: step.center,
+        };
+      }
+      touches.set(pointerId, point);
+    };
+
+    /** A finger leaving the canvas: `lifted` when it was raised, rather than taken away by the browser. */
+    const onTouchUp = (pointerId: number, lifted: boolean) => {
+      const touches = touchesRef.current;
+      // A pointercancel can follow the pointerup of the same finger.
+      if (!touches.delete(pointerId)) return;
+      if (pinchingRef.current) {
+        if (touches.size === 0) pinchingRef.current = false;
+        return;
+      }
+      if (heldPressRef.current) {
+        heldPressRef.current = false;
+        if (lifted) {
+          startPress();
+          handleEvent({ type: "MouseLeftButtonDown", shiftKey: false });
+        }
+      }
+      onMouseUpHandler();
+      gestureStartRef.current = null;
+      clearTouchHover();
+    };
+
     const onPointerDownHandler = (
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
+      set_pointer_kind(event.pointerType);
       window.getSelection()?.removeAllRanges();
-      cursorOnCanvasRef.current = true;
       // A gesture is rare enough to pay for one measurement, and it catches the case the observer cannot see: a canvas moved without being resized.
       measureCanvas();
       // Captures the pointer: once the button is down, pointermove and pointerup keep reaching the canvas even when the cursor leaves it.
       event.currentTarget.setPointerCapture(event.pointerId);
+      if (event.pointerType === "touch" && onTouchDown(event)) return;
+      cursorOnCanvasRef.current = true;
       mousePositionRef.current = new Point2<"screen">(
         event.clientX,
         event.clientY,
       ).sub(canvasOffsetRef.current);
       if (event.button === 0) {
+        // A finger has no hover before it lands: what it lands on is only known now.
+        const hovered =
+          event.pointerType === "touch"
+            ? computeHover().hoveredPart
+            : hoveredPartRef.current;
         // A plain click landing on a physics-overlay arrow or moment names it, ahead of the ordinary reducer: a selection of its own, drawn on the reading itself rather than on `canvasState`, which this never touches — see `App`'s own `focusedOverlay`.
-        const target =
-          hoveredPartRef.current.type === "Overlay"
-            ? hoveredPartRef.current.reading
-            : null;
+        const target = hovered.type === "Overlay" ? hovered.reading : null;
         // The grab's arrow only answers a hover: there is nothing of it to select once the cursor has let go.
         if (
           target &&
@@ -1038,7 +1201,7 @@ const MechanicalCanvasView = forwardRef<
           onSelectOverlayRef.current(target);
           return;
         }
-        mouseButtonDownRef.current = "left";
+        startPress();
         handleEvent({
           type: "MouseLeftButtonDown",
           shiftKey: event.shiftKey,
@@ -1054,19 +1217,32 @@ const MechanicalCanvasView = forwardRef<
     const onPointerMoveHandler = (
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
+      set_pointer_kind(event.pointerType);
+      const point = canvasPointOf(event);
+      if (!point) return;
+      let mouseDelta: ScreenPoint = new Point2(event.movementX, event.movementY);
+      if (event.pointerType === "touch") {
+        const previous = touchesRef.current.get(event.pointerId);
+        if (!previous) return;
+        if (pinchingRef.current) {
+          onPinchMove(event.pointerId, point);
+          return;
+        }
+        touchesRef.current.set(event.pointerId, point);
+        // Browsers disagree on `movementX/Y` for a finger.
+        mouseDelta = point.sub(previous);
+      }
       cursorOnCanvasRef.current = true;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvasRectRef.current ?? measureCanvas();
-      if (!rect) return;
-
-      const x = (event.clientX - rect.left) * (canvas.width / rect.width);
-      const y = (event.clientY - rect.top) * (canvas.height / rect.height);
-      mousePositionRef.current = new Point2(x, y);
+      mousePositionRef.current = point;
+      if (
+        mouseButtonDownRef.current === "left" &&
+        point.distance_to(pressOriginRef.current) >= hit_tolerance().DRAG_START
+      )
+        pressDraggedRef.current = true;
 
       handleEvent({
         type: "MouseMove",
-        mouseDelta: new Point2(event.movementX, event.movementY),
+        mouseDelta,
       });
     };
 
@@ -1075,7 +1251,18 @@ const MechanicalCanvasView = forwardRef<
     ) => {
       if (event.currentTarget.hasPointerCapture(event.pointerId))
         event.currentTarget.releasePointerCapture(event.pointerId);
-      onMouseUpHandler();
+      if (event.pointerType === "touch") onTouchUp(event.pointerId, true);
+      else onMouseUpHandler();
+    };
+
+    // A finger taken away by the browser never aimed anything: its held press is dropped, not played.
+    const onPointerCancelHandler = (
+      event: React.PointerEvent<HTMLCanvasElement>,
+    ) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      if (event.pointerType === "touch") onTouchUp(event.pointerId, false);
+      else onMouseUpHandler();
     };
 
     // A gesture in progress keeps the canvas: the pointer is captured, and what it draws (a selection rectangle, an element being placed) must survive the cursor straying outside.
@@ -1282,7 +1469,7 @@ const MechanicalCanvasView = forwardRef<
         ) {
           // Reset the running simulation, or exit to edition — decided in App.
           onEscapeKeyRef.current();
-          setCanvasState({ type: "Selecting" });
+          setCanvasStateNow({ type: "Selecting" });
           return;
         }
         const currMech = mechanismRef.current;
@@ -1309,7 +1496,7 @@ const MechanicalCanvasView = forwardRef<
           currMech.materials,
           currMech.profiles,
           currMech.viewport,
-          setCanvasState,
+          setCanvasStateNow,
           applyActions,
           undoMechanism,
           redoMechanism,
@@ -1330,7 +1517,7 @@ const MechanicalCanvasView = forwardRef<
         applyActions,
         undoMechanism,
         redoMechanism,
-        setCanvasState,
+        setCanvasStateNow,
         setHoveredPart,
         computeHover,
         refreshRevealFromHover,
@@ -1344,6 +1531,8 @@ const MechanicalCanvasView = forwardRef<
     // The hover answers the armed tool, so it goes stale when the tool changes under a still cursor — a click that ends a placement, a shortcut, Escape.
     // Recomputed without the reducer: this is a refresh, not a gesture.
     useEffect(() => {
+      // A lifted finger leaves no cursor to aim from.
+      if (pointer_kind() === "touch" && touchesRef.current.size === 0) return;
       const { hoveredPart: refreshed, snapFeedback } = computeHover();
       refreshRevealFromHover(refreshed);
       snapFeedbackRef.current = snapFeedback;
@@ -1674,7 +1863,7 @@ const MechanicalCanvasView = forwardRef<
           onPointerDown={onPointerDownHandler}
           onPointerMove={onPointerMoveHandler}
           onPointerUp={onPointerUpHandler}
-          onPointerCancel={onPointerUpHandler}
+          onPointerCancel={onPointerCancelHandler}
           onPointerLeave={onPointerLeaveHandler}
           onContextMenu={onContextMenuHandler}
           tabIndex={0}

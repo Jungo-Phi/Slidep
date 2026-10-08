@@ -19,7 +19,8 @@ import {
   ViewportState,
   WorldPoint,
 } from "../../../types";
-import { HIT_TOLERANCE, INTERACTION_SPECS } from "../../../constants/interaction-specs";
+import { INTERACTION_SPECS } from "../../../constants/interaction-specs";
+import { hit_tolerance } from "../../../utils/pointer-kind";
 import { DIM, HOVER_ORDER } from "../../../constants/rendering-specs";
 import {
   get_constraint_element_from_id,
@@ -394,7 +395,7 @@ function probe_node(
   // A moment aimed at an axle lands on the gear it carries: reaching for the centre of a gear is a natural way to designate that gear, and the axle itself takes no moment.
   // Without this, only the rim is a target — the whole middle of the gear is a dead zone.
   if (mode === "carried-gear") {
-    if (distance > HIT_TOLERANCE.NODE) return null;
+    if (distance > hit_tolerance().NODE) return null;
     if (!("fixedGearsIDs" in node) || node.fixedGearsIDs.length === 0)
       return null;
     // An axle can carry several gears; the first is the one the moment goes to.
@@ -412,7 +413,7 @@ function probe_node(
   }
 
   const hitRadius =
-    HIT_TOLERANCE.NODE * (node.type === "pivot" && node.motor ? 1.5 : 1);
+    hit_tolerance().NODE * (node.type === "pivot" && node.motor ? 1.5 : 1);
   if (distance <= hitRadius)
     return {
       type: "Node",
@@ -425,8 +426,8 @@ function probe_node(
   if (mode !== "centre+past" || !drawnPastBase) return null;
   const base = world2screen(drawnPastBase, viewport);
   if (
-    center.distance2segment(base, mouseScreen) > HIT_TOLERANCE.EDGE ||
-    mouseScreen.distance2line(base, center) > HIT_TOLERANCE.EDGE
+    center.distance2segment(base, mouseScreen) > hit_tolerance().EDGE ||
+    mouseScreen.distance2line(base, center) > hit_tolerance().EDGE
   )
     return null;
   return {
@@ -451,8 +452,8 @@ function probe_gear(
   const radius = world2screen_length(gear.radius, viewport);
   const distance = mouseScreen.distance_to(center);
   if (
-    distance > radius + HIT_TOLERANCE.NODE / 2 ||
-    distance < radius - HIT_TOLERANCE.NODE / 2
+    distance > radius + hit_tolerance().NODE / 2 ||
+    distance < radius - hit_tolerance().NODE / 2
   )
     return null;
 
@@ -501,7 +502,7 @@ function probe_edge(
   // The terminals answer on their nodes, where they are drawn and where the gesture grabs them; only the body follows the offset.
   const { start, end } = offset_ends(nodeStart, nodeEnd, lateralOffset);
   if (mode !== "body" && mode !== "body-centre") {
-    if (mouseScreen.distance_to(nodeStart) <= HIT_TOLERANCE.NODE)
+    if (mouseScreen.distance_to(nodeStart) <= hit_tolerance().NODE)
       return {
         type: "Edge",
         position: edge.positionStart.clone(),
@@ -509,7 +510,7 @@ function probe_edge(
         deleting,
         part: "start",
       };
-    if (mouseScreen.distance_to(nodeEnd) <= HIT_TOLERANCE.NODE)
+    if (mouseScreen.distance_to(nodeEnd) <= hit_tolerance().NODE)
       return {
         type: "Edge",
         position: edge.positionEnd.clone(),
@@ -522,7 +523,7 @@ function probe_edge(
   }
 
   // Aimed at where the body is drawn, but answering on the axis: the offset is a way of showing two elements at once, not a second place for one to be.
-  if (mouseScreen.distance2segment(start, end) > HIT_TOLERANCE.EDGE)
+  if (mouseScreen.distance2segment(start, end) > hit_tolerance().EDGE)
     return null;
   return {
     type: "Edge",
@@ -551,7 +552,7 @@ function probe_belt(
   if (mode === "ends" || mode === "full") {
     if (
       mousePos.distance_to(belt.positionStart) <=
-      HIT_TOLERANCE.NODE / viewport.scale
+      hit_tolerance().NODE / viewport.scale
     )
       return {
         type: "Edge",
@@ -562,7 +563,7 @@ function probe_belt(
       };
     if (
       mousePos.distance_to(belt.positionEnd) <=
-      HIT_TOLERANCE.NODE / viewport.scale
+      hit_tolerance().NODE / viewport.scale
     )
       return {
         type: "Edge",
@@ -585,7 +586,7 @@ function probe_belt(
       if (piece.kind !== "arc") continue;
       // Clamped to the swept sector, so the arc keeps its extent across the ±π seam and never answers on the pulley's free side.
       const onArc = nearest_point_on_piece(mousePos, piece);
-      if (mousePos.distance_to(onArc) > HIT_TOLERANCE.NODE / viewport.scale / 2)
+      if (mousePos.distance_to(onArc) > hit_tolerance().NODE / viewport.scale / 2)
         continue;
       return {
         type: "BeltBody",
@@ -603,7 +604,7 @@ function probe_belt(
     const { from, to } = piece;
     if (
       mousePos.distance2segment(from, to) >
-      HIT_TOLERANCE.EDGE / viewport.scale
+      hit_tolerance().EDGE / viewport.scale
     )
       continue;
 
@@ -727,7 +728,7 @@ function get_hovered_part_of_element(
     case "gear-ratio":
       if (
         mouseScreen.distance_to(world2screen(element.position, viewport)) >
-        HIT_TOLERANCE.CONSTRAINT
+        hit_tolerance().CONSTRAINT
       )
         break;
       return {
@@ -752,7 +753,7 @@ function get_hovered_part_of_element(
           deleting: state.type === "Erasing",
         };
       // Value
-      if (mouseScreen.distance_to(label) <= HIT_TOLERANCE.CONSTRAINT)
+      if (mouseScreen.distance_to(label) <= hit_tolerance().CONSTRAINT)
         return {
           type: "Force",
           position: screen2world(label, viewport),
@@ -771,8 +772,8 @@ function get_hovered_part_of_element(
       );
       const dist = mouseScreen.distance_to(center);
       if (
-        dist <= radius + HIT_TOLERANCE.EDGE &&
-        dist >= radius - HIT_TOLERANCE.EDGE
+        dist <= radius + hit_tolerance().EDGE &&
+        dist >= radius - hit_tolerance().EDGE
       ) {
         return {
           type: "Moment",
@@ -783,7 +784,7 @@ function get_hovered_part_of_element(
         };
       }
       // Value
-      if (mouseScreen.distance_to(label) <= HIT_TOLERANCE.CONSTRAINT)
+      if (mouseScreen.distance_to(label) <= hit_tolerance().CONSTRAINT)
         return {
           type: "Moment",
           position: screen2world(label, viewport),
@@ -833,8 +834,8 @@ function get_hovered_part_of_element(
           vectorStart,
           vectorEnd,
         ) &&
-          mouseScreen.distance2segment(start, end) > HIT_TOLERANCE.EDGE) ||
-        mouseScreen.distance2segment(tipStart, tipEnd) <= HIT_TOLERANCE.EDGE
+          mouseScreen.distance2segment(start, end) > hit_tolerance().EDGE) ||
+        mouseScreen.distance2segment(tipStart, tipEnd) <= hit_tolerance().EDGE
       ) {
         return {
           type: "DistributedForce",
@@ -852,7 +853,7 @@ function get_hovered_part_of_element(
       }
       if (
         !is_zero_load(element.magnitudeStart) &&
-        mouseScreen.distance_to(labelStart) <= HIT_TOLERANCE.CONSTRAINT
+        mouseScreen.distance_to(labelStart) <= hit_tolerance().CONSTRAINT
       )
         return {
           type: "DistributedForce",
@@ -863,7 +864,7 @@ function get_hovered_part_of_element(
         };
       if (
         !is_zero_load(element.magnitudeEnd) &&
-        mouseScreen.distance_to(labelEnd) <= HIT_TOLERANCE.CONSTRAINT
+        mouseScreen.distance_to(labelEnd) <= hit_tolerance().CONSTRAINT
       )
         return {
           type: "DistributedForce",
@@ -900,7 +901,7 @@ function pushed_out_of(
   if (!worldCentre) return screen2world(mouseScreen, viewport);
   const centre = world2screen(worldCentre, viewport);
   const radius =
-    HIT_TOLERANCE.NODE * (element.type === "pivot" && element.motor ? 1.5 : 1);
+    hit_tolerance().NODE * (element.type === "pivot" && element.motor ? 1.5 : 1);
   const distance = mouseScreen.distance_to(centre);
   if (distance >= radius) return screen2world(mouseScreen, viewport);
   // Dead centre carries no direction to push along; any one will do.
@@ -926,7 +927,7 @@ function hovered_probe_badge(
     if (has_dangling_ref(element, present)) continue;
     if (!element.probes || element.probes.length === 0) continue;
     const badge = probe_badge_position(element, viewport);
-    if (mouseScreen.distance_to(badge) > HIT_TOLERANCE.PROBE) continue;
+    if (mouseScreen.distance_to(badge) > hit_tolerance().PROBE) continue;
     return {
       type: "Probe",
       position: screen2world(badge, viewport),
@@ -963,7 +964,7 @@ function hovered_geometric_badge(
       constraintElements,
       viewport,
     )) {
-      if (mouseScreen.distance_to(position) > HIT_TOLERANCE.CONSTRAINT)
+      if (mouseScreen.distance_to(position) > hit_tolerance().CONSTRAINT)
         continue;
       if (!visibleConstraints.has(constraintId)) continue;
       if (excluded_elements.includes(constraintId)) continue;
@@ -1021,11 +1022,11 @@ function hovered_motor_arrow(
     const radialDistance = Math.abs(
       mouseScreen.distance_to(centre) - DIM.MOTOR_ARROW_RADIUS,
     );
-    if (radialDistance > HIT_TOLERANCE.PROBE) continue;
+    if (radialDistance > hit_tolerance().PROBE) continue;
     const { startAngle, endAngle, anticlockwise } = motor_arrow_geometry(
       element.motor.speed >= 0,
     );
-    const angularMargin = HIT_TOLERANCE.PROBE / DIM.MOTOR_ARROW_RADIUS;
+    const angularMargin = hit_tolerance().PROBE / DIM.MOTOR_ARROW_RADIUS;
     const angle = mouseScreen.sub(centre).angle();
     if (
       !angle_on_arc(angle, startAngle, endAngle, anticlockwise, angularMargin)
@@ -1125,7 +1126,7 @@ export function get_hovered_part(
     state.type === "PlacingBeltEnd" &&
     mouseScreen.distance_to(
       world2screen(state.startHover.position, viewport),
-    ) <= HIT_TOLERANCE.NODE
+    ) <= hit_tolerance().NODE
   ) {
     if (
       !belt_can_close(
@@ -1169,7 +1170,7 @@ export function get_hovered_part(
       granted &&
       world2screen(granted, viewport).distance_to(
         world2screen(askedPosition, viewport),
-      ) > HIT_TOLERANCE.NODE
+      ) > hit_tolerance().NODE
     )
       return { type: "Void", position };
   }
@@ -1323,7 +1324,7 @@ export function get_hovered_part(
     if (
       belt.type === "belt" &&
       mouseScreen.distance_to(world2screen(belt.positionEnd, viewport)) <=
-        HIT_TOLERANCE.NODE
+        hit_tolerance().NODE
     ) {
       if (!belt_can_close(belt.attachedGearsIDs.length))
         return {
@@ -1349,7 +1350,7 @@ export function get_hovered_part(
     if (
       belt.type === "belt" &&
       mouseScreen.distance_to(world2screen(belt.positionStart, viewport)) <=
-        HIT_TOLERANCE.NODE
+        hit_tolerance().NODE
     ) {
       if (!belt_can_close(belt.attachedGearsIDs.length))
         return {
@@ -1378,7 +1379,7 @@ export function get_hovered_part(
       const otherPos = holdsStart ? belt.positionEnd : belt.positionStart;
       if (
         mouseScreen.distance_to(world2screen(otherPos, viewport)) >
-        HIT_TOLERANCE.NODE
+        hit_tolerance().NODE
       )
         continue;
       if (!belt_can_close(belt.attachedGearsIDs.length))
@@ -1410,21 +1411,21 @@ export function get_hovered_part(
       viewport,
       floor,
     );
-    if (mouseScreen.distance_to(angleHandle) <= HIT_TOLERANCE.NODE)
+    if (mouseScreen.distance_to(angleHandle) <= hit_tolerance().NODE)
       return { type: "FloorAngle", position: screen2world(angleHandle, viewport) };
     // The label reads as a click target only where it's actually drawn — see the same threshold `draw_floor` hides it behind at exactly flat.
     // A separate hover from the handle above: one drags the angle, the other opens its value to type, the same split a load's body and its value label have.
     const angleLabelShown = Math.abs(floor_acute_angle(floor.angle)) > 1e-6;
     if (
       angleLabelShown &&
-      mouseScreen.distance_to(angleLabel) <= HIT_TOLERANCE.CONSTRAINT
+      mouseScreen.distance_to(angleLabel) <= hit_tolerance().CONSTRAINT
     )
       return {
         type: "FloorAngleValue",
         position: screen2world(angleLabel, viewport),
       };
     const foot = mouseScreen.project_on_line(anchor, anchor.add(direction));
-    if (mouseScreen.distance_to(foot) <= HIT_TOLERANCE.EDGE)
+    if (mouseScreen.distance_to(foot) <= hit_tolerance().EDGE)
       return { type: "FloorHeight", position: screen2world(foot, viewport) };
   }
 

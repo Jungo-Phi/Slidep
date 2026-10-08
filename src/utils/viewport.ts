@@ -122,6 +122,27 @@ export function zoom_on_point(
   return { pan: clamp_pan(pan, scale, width, height), scale };
 }
 
+/**
+ * What two fingers moving from `before` to `after` ask of the viewport: the world point held between them stays between them.
+ * Apply `pan` first, then zoom by `deltaY` on `center` — the order `zoom_on_point` keeps that point fixed in.
+ */
+export function pinch_step(
+  before: readonly [ScreenPoint, ScreenPoint],
+  after: readonly [ScreenPoint, ScreenPoint],
+): { pan: ScreenPoint; deltaY: number; center: ScreenPoint } {
+  const centerBefore = before[0].lerp(before[1], 0.5);
+  const center = after[0].lerp(after[1], 0.5);
+  const spanBefore = before[0].distance_to(before[1]);
+  const spanAfter = after[0].distance_to(after[1]);
+  return {
+    pan: center.sub(centerBefore),
+    // Two fingers on the same pixel have no spread to compare: the step only pans.
+    deltaY:
+      spanBefore > 0 && spanAfter > 0 ? zoom_delta_to(spanBefore, spanAfter) : 0,
+    center,
+  };
+}
+
 export interface FitViewportOptions {
   ratioMarginX: number;
   ratioMarginY: number;

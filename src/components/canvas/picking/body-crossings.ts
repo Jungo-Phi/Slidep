@@ -13,7 +13,7 @@ import type {
   ViewportState,
   WorldPoint,
 } from "../../../types";
-import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
+import { hit_tolerance } from "../../../utils/pointer-kind";
 import { is_node_element, world2screen } from "../../../utils";
 import { belt_junctions } from "../../../utils/belt-rules";
 
@@ -33,7 +33,7 @@ export function nodes_under_segment(
   const from = world2screen(start, viewport);
   const span = world2screen(end, viewport).sub(from);
   const length = span.length();
-  if (length <= 2 * HIT_TOLERANCE.NODE) return [];
+  if (length <= 2 * hit_tolerance().NODE) return [];
   const along = span.mul(1 / length);
 
   const junctions = belt_junctions(mechanicalElements);
@@ -42,8 +42,8 @@ export function nodes_under_segment(
     if (!is_node_element(element) || junctions.has(element.id)) continue;
     const offset = world2screen(element.position, viewport).sub(from);
     const t = offset.dot(along);
-    if (t < HIT_TOLERANCE.NODE || t > length - HIT_TOLERANCE.NODE) continue;
-    if (Math.abs(offset.cross(along)) > HIT_TOLERANCE.EDGE) continue;
+    if (t < hit_tolerance().NODE || t > length - hit_tolerance().NODE) continue;
+    if (Math.abs(offset.cross(along)) > hit_tolerance().EDGE) continue;
     crossed.push(element);
   }
   return crossed;

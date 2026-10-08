@@ -14,7 +14,11 @@ import { ScreenPoint, WorldPoint } from "./mechanism";
 /** Events captured on the canvas */
 export type CanvasEvent =
   | { type: "MouseLeftButtonDown"; shiftKey: boolean }
-  | { type: "MouseButtonUp" }
+  | {
+      type: "MouseButtonUp";
+      /** Whether the pointer travelled past the drag threshold since its press, measured on the pointer itself: the hovered point is bounded and snapped, and a placement holds it a minimum length away from where it started. */
+      dragged: boolean;
+    }
   | { type: "MouseMove"; mouseDelta: ScreenPoint }
   | { type: "MouseRightButtonDown" }
   | { type: "KeyDown"; key: string; ctrlKey: boolean };

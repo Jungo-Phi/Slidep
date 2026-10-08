@@ -46,6 +46,8 @@ import {
   get_mechanical_element_from_id,
 } from "../../mechanism/connect-actions";
 import { TOOL_STATE_BY_KEY } from "../../../constants/shortcuts";
+import { hit_tolerance, pointer_kind } from "../../../utils/pointer-kind";
+import { tap_second_step } from "./touch-press";
 import { SIMULATION_TOOLS } from "../../../constants/canvas-state-sim-effect";
 import { armed_tool_state } from "./arm-tool";
 import {
@@ -169,6 +171,95 @@ function load_drag_state(hoveredPart: HoveredPart): CanvasState | undefined {
           };
     default:
       return undefined;
+  }
+}
+
+/** `next` marked as held by the press that just opened it, when that press put down the first step of a two-step placement. */
+function held_by_press(previous: CanvasState, next: CanvasState): CanvasState {
+  // A second step entered from itself is a belt taking one more pulley: that press placed no first step.
+  if (!("startHover" in next) || next.type === previous.type) return next;
+  return { ...next, pressHeld: true };
+}
+
+/**
+ * The state after a click put down the end of a beam: with a mouse, the next beam of a series starting on that end, welded to it.
+ * A series ends on a beam put down onto an existing element — closing on its own first beam included; Escape and the right click end it too (see `step_back`).
+ * A finger draws each beam in one gesture instead, where a series would only be one more thing to end.
+ */
+function beam_series_next(
+  state: CanvasState,
+  hoveredPart: HoveredPart,
+  actions: Action[],
+): CanvasState | undefined {
+  if (state.type !== "PlacingBeamEnd" || pointer_kind() !== "mouse")
+    return undefined;
+  const [beam] = actions.flatMap((a) =>
+    a.type === "CreateElement" && a.element.type === "beam" ? [a.element] : [],
+  );
+  if (!beam) return undefined;
+  if (names_element(hoveredPart)) return { type: "PlacingBeamStart" };
+  return {
+    type: "PlacingBeamEnd",
+    startHover: {
+      type: "Edge",
+      id: beam.id,
+      position: beam.positionEnd,
+      deleting: false,
+      part: "end",
+    },
+    inSeries: true,
+  };
+}
+
+/** `state` with the start of a series' next beam read off the mechanism the last beam was put into, which may have moved its end. */
+function series_start_resolved<S extends CanvasState>(
+  state: S,
+  mechanicalElements: MechanicalElement[],
+): S {
+  if (
+    state.type !== "PlacingBeamEnd" ||
+    !state.inSeries ||
+    state.startHover.type !== "Edge"
+  )
+    return state;
+  const previousID = state.startHover.id;
+  const previous = mechanicalElements.find(
+    (e): e is BeamElement => e.type === "beam" && e.id === previousID,
+  );
+  // Undone in between: the series has nothing left to start from but the point itself.
+  if (!previous)
+    return {
+      ...state,
+      startHover: { type: "Void", position: state.startHover.position },
+    };
+  return {
+    ...state,
+    startHover: { ...state.startHover, position: previous.positionEnd },
+  };
+}
+
+/** Where Escape and the right click lead: one step of the ruler or of a placement back, or the tool put away. */
+function step_back(state: CanvasState): CanvasState {
+  const ruler = ruler_step_back(state);
+  if (ruler) return ruler;
+  switch (state.type) {
+    case "PlacingBeamEnd":
+      return { type: "PlacingBeamStart" };
+    case "PlacingSpringEnd":
+      return { type: "PlacingSpringStart" };
+    case "PlacingDamperEnd":
+      return { type: "PlacingDamperStart" };
+    case "PlacingBeltEnd":
+      return { type: "PlacingBeltStart" };
+    case "PlacingGearRadius":
+      return { type: "PlacingGearStart" };
+    case "PlacingForceEnd":
+    case "PlacingDistributedForce":
+      return { type: "PlacingForceStart" };
+    case "PlacingMomentEnd":
+      return { type: "PlacingMomentStart" };
+    default:
+      return { type: "Selecting" };
   }
 }
 
@@ -475,8 +566,9 @@ export function canvasStateReducer(
         case "PlacingMomentStart":
         case "PlacingMomentEnd":
         case "PlacingProbe": {
+          const placing = series_start_resolved(state, mechanicalElements);
           const r = handle_placing_element(
-            state,
+            placing,
             hoveredPart,
             mechanicalElements,
             constraintElements,
@@ -485,7 +577,11 @@ export function canvasStateReducer(
             profiles,
             viewport,
           );
-          if (r.newCanvasState) setCanvasState(r.newCanvasState);
+          if (r.newCanvasState)
+            setCanvasState(
+              beam_series_next(placing, hoveredPart, r.actions) ??
+                held_by_press(state, r.newCanvasState),
+            );
           actions.push(...r.actions);
           break;
         }
@@ -593,7 +689,7 @@ export function canvasStateReducer(
             !hit ||
             !state.downPos ||
             worldMousePos.distance_to(state.downPos) * viewport.scale <
-              HIT_TOLERANCE.DRAG_START
+              hit_tolerance().DRAG_START
           )
             break;
           if (isSimulating) {
@@ -975,7 +1071,7 @@ export function canvasStateReducer(
           // Below the threshold: still a candidate click (see `MouseButtonUp`), so the floor must not have moved yet when it turns out to be one.
           if (
             worldMousePos.distance_to(state.downPos) * viewport.scale <
-            HIT_TOLERANCE.DRAG_START
+            hit_tolerance().DRAG_START
           )
             break;
           // The line keeps its angle: only its offset along its own normal changes, so dragging reads as sliding the floor perpendicular to itself.
@@ -1001,7 +1097,7 @@ export function canvasStateReducer(
         case "DraggingFloorAngle": {
           if (
             worldMousePos.distance_to(state.downPos) * viewport.scale <
-            HIT_TOLERANCE.DRAG_START
+            hit_tolerance().DRAG_START
           )
             break;
           // Rotates the line to keep pointing at the cursor from its own anchor — the angle handle drawn `FLOOR.ANGLE_HANDLE_PX` along it is what is grabbed.
@@ -1076,7 +1172,7 @@ export function canvasStateReducer(
           break;
         case "MovingConstraint": {
           if (hoveredPart.position.equals(oldPosition)) break;
-          // The constraint's own position, not `oldPosition`: that one tracks the last hover, which only snaps to the anchor within `HIT_TOLERANCE.CONSTRAINT` — a drag started fast enough leaves it reporting raw cursor positions instead, and since `MoveConstraint` never solves, nothing downstream corrects a wrong value baked in here.
+          // The constraint's own position, not `oldPosition`: that one tracks the last hover, which only snaps to the anchor within `hit_tolerance().CONSTRAINT` — a drag started fast enough leaves it reporting raw cursor positions instead, and since `MoveConstraint` never solves, nothing downstream corrects a wrong value baked in here.
           // `ChangeForce`/`ChangeDistributedForce`/`ChangeMoment` below already read their `old*` from the live element for the same reason.
           const constraint = get_constraint_element_from_id(
             state.elementID,
@@ -1112,6 +1208,52 @@ export function canvasStateReducer(
         case "PickingMomentBalanceNode":
           setCanvasState({ type: "Selecting" });
           break;
+        case "PlacingBeamEnd":
+        case "PlacingSpringEnd":
+        case "PlacingDamperEnd":
+        case "PlacingBeltEnd":
+        case "PlacingGearRadius":
+        case "PlacingForceEnd":
+        case "PlacingDistributedForce":
+        case "PlacingMomentEnd": {
+          if (!state.pressHeld) break;
+          const waiting = { ...state, pressHeld: undefined };
+          // A mouse click leaves the second step waiting for a click of its own; a finger never leaves a placement waiting, and drops what it does not put down now.
+          const touch = pointer_kind() === "touch";
+          const unplaced = touch ? step_back(waiting) : waiting;
+          let target: HoveredPart | undefined;
+          if (!event.dragged)
+            target = touch
+              ? tap_second_step(waiting, mechanicalElements, viewport)
+              : undefined;
+          else if (hoveredPart.type === "Void" && hoveredPart.rejected)
+            target = undefined;
+          // A finger draws a belt as one straight run, its pulleys added afterwards by dragging the run onto them: a gear it ends on takes no wrap.
+          else if (
+            touch &&
+            waiting.type === "PlacingBeltEnd" &&
+            hoveredPart.type === "GearTooth"
+          )
+            target = { type: "Void", position: hoveredPart.position };
+          else target = hoveredPart;
+          if (!target) {
+            setCanvasState(unplaced);
+            break;
+          }
+          const r = handle_placing_element(
+            waiting,
+            target,
+            mechanicalElements,
+            constraintElements,
+            loadElements,
+            materials,
+            profiles,
+            viewport,
+          );
+          setCanvasState(r.newCanvasState ?? unplaced);
+          actions.push(...r.actions);
+          break;
+        }
         case "Selecting":
           // Handled on button down, as an immediate toggle: the click must not also select the carrying pivot on release.
           if (hoveredPart.type === "MotorArrow") break;
@@ -1295,7 +1437,7 @@ export function canvasStateReducer(
           // The angle handle has no such fallback: its value has its own click-to-edit target, the displayed text (`FloorAngleValue`, handled at `MouseLeftButtonDown` above).
           if (
             worldMousePos.distance_to(state.downPos) * viewport.scale <
-            HIT_TOLERANCE.DRAG_START
+            hit_tolerance().DRAG_START
           )
             setCanvasState({
               type: "EditingFloorValue",
@@ -1311,7 +1453,7 @@ export function canvasStateReducer(
           // Same threshold the drag itself answers to: below it nothing was pushed, so there is no entry to seal.
           if (
             worldMousePos.distance_to(state.downPos) * viewport.scale >=
-            HIT_TOLERANCE.DRAG_START
+            hit_tolerance().DRAG_START
           )
             actions.push({ type: "Blank" });
           setCanvasState({ type: "Selecting" });
@@ -1387,21 +1529,15 @@ export function canvasStateReducer(
       break;
 
     case "MouseRightButtonDown":
-      setCanvasState(ruler_step_back(state) ?? { type: "Selecting" });
+      setCanvasState(step_back(state));
       break;
 
     case "KeyDown":
       switch (event.key) {
-        // Before the shortcut table below, which would read Escape as "arm the selection tool" and put the ruler away in one press.
-        case "Escape": {
-          const stepBack = ruler_step_back(state);
-          if (stepBack) {
-            setCanvasState(stepBack);
-            break;
-          }
-          setCanvasState({ type: "Selecting" });
+        // Before the shortcut table below, which would read Escape as "arm the selection tool" and put the ruler or a placement away in one press.
+        case "Escape":
+          setCanvasState(step_back(state));
           break;
-        }
         case "Delete":
           switch (state.type) {
             case "SelectedElement":

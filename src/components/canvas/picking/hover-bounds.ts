@@ -7,7 +7,7 @@ import type {
   Point2,
   ViewportState,
 } from "../../../types";
-import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
+import { hit_tolerance } from "../../../utils/pointer-kind";
 import { DIM } from "../../../constants/rendering-specs";
 import { belt_can_close, belt_terminal_pulley_id } from "../../../utils/belt-rules";
 import { screen2world_length } from "../../../utils";
@@ -143,7 +143,9 @@ export function out_of_sizing_reach(
  * How close the two ends of a belt that cannot close may come, in screen px.
  * Strictly inside the tolerance that triggers the refusal, never on it: held exactly on the threshold, the `<=` deciding whether the refusal shows flips with rounding on every mouse move, and the cursor and its message blink.
  */
-const UNCLOSABLE_BELT_GAP = HIT_TOLERANCE.NODE - 1;
+function unclosable_belt_gap(): number {
+  return hit_tolerance().NODE - 1;
+}
 
 /** Where one terminal of `edge` may go: clear of the opposite end, and outside the pulley it wraps. */
 function clamp_edge_terminal(
@@ -163,7 +165,7 @@ function clamp_edge_terminal(
         ? DIM.MIN_EDGE_LENGTH
         : belt_can_close((edge as BeltElement).attachedGearsIDs.length)
           ? 0
-          : UNCLOSABLE_BELT_GAP,
+          : unclosable_belt_gap(),
       viewport,
     ),
     // Never longer than the edge already is: dragging one end of a bar that measures ten pixels must not stretch it to thirty.

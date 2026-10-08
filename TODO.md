@@ -8,9 +8,20 @@
 
 ---
 
+**Mobile mode**
+
+- 🆕 Suivre le plan _plan-mobile.md_ pour téléphone
+- 🤔 Faire un nouveau plan pour tablette
+- 🆕 Ajouter la feature dans les points clés de "A propos"
+
+
+- Supprimer les *console.log()*
+- 🆕 Placer join à la jonction des Beams
+- 🆕 Ajouter un paramètre pour mettre des enroulements en édition
+- 🆕 Placer une courroie en traçant un chemin
+
 **Terminer la physique**
 
-- 🆕 Ajouter un paramètre pour mettre des enroulements en édition
 - 🚨 Faire fonctionner les treuils "Treuil court.slidep"
 
 - 🚨 Régler le blocage/déblocage sur Poulie bloqueuse en dynamique
@@ -23,6 +34,8 @@
 - 🔨 Passer la cinématique et édition en solver direct
 - 🔨 Rendre le grab plus stable (cinématique et dynamique)
 
+
+
 **Priorités sur le plan général**
 
 - 🔨 Améliorer les performances en édition
@@ -30,7 +43,6 @@
 - 🔨 Régler problèmes DDL
 - 🔨 Clean les graphiques
 - 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
-- 🆕 Mobile mode
 - 🆕 Copié-collé
 - 🆕 Ajouter contraintes de distance parallèle
 - 🆕 Ajouter contraintes de coincidence (point - ligne)
@@ -45,6 +57,7 @@
 - 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
 - 🚨 Le point sur la timeline n'est pas attrapable quand il est sur un marqueur
 - 🚨 Clicker sur le canvas après avoir sélectionné un élément ne doit pas afficher la sélection multiple (ou seulement après avoir commencé le drag).
+- 🔨 Transférer les propriétées de mesures et overlays au remplacement d'un node / edge
 - 🔨 Hover le bilan des moments ne doit pas faire apparitre le cg, seulement à la sélection. Et n'afficher la croix que si on n'affiche pas de moment à sa position
 - 🔨 Bords tags en thème blueprint
 - 🔨 Afficher les contraintes d'un élément sélectionné
@@ -117,13 +130,9 @@
 - 🆕 Instabilité physique (solver PBD diverge / explosion) : pause auto + snackbar d'erreur
 - 🆕 Conflit cinématique (deux moteurs incompatibles) : surlignage rouge des éléments conflictuels, panneau contextuel bascule sur onglet Analyse avec message explicatif
 
+
+
 ### À faire plus tard
-
-**Mobile mode**
-
-- 🆕 Suivre le plan _plan-mobile.md_ pour téléphone
-- 🤔 Faire un nouveau plan pour tablette
-- 🆕 Ajouter la feature dans les points clés de "A propos"
 
 **Analyse hyperstatique**
 
@@ -215,13 +224,6 @@
 - 🔨 Polish de dimensionAngle: arrondir les angles de 0° / 180°, traits extérieurs pour les petits angles
 - 🔨 Le dessin preview de DimensionAngle devrait tendre vers l'angle le plus petit
 
-**Placement et remplacement d'éléments**
-
-- 🔨 Transférer les propriétées de mesures et overlays au remplacement d'un node / edge
-- 🆕 Placements en 2 étapes (Edges, Loads, etc.) avec down + drag + up
-- 🆕 Placing beam series / only one if hold down when placing (like in OnShape)
-- 🆕 Placer join à la jonction des Beams
-
 **Preview de hover**
 
 - 🤔 Ce n'est pas toujours clair quand un élément est placé ou en train d'être placé : transparence de l'élément en train d'être placé ?
@@ -245,6 +247,7 @@
 - ❇️ S'assurer que la police est toujours la même
 - 🆕 Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🆕 Afficher les couleurs des thèmes dans le menu paramètres
+- 🆕 Ajouter un paramètre pour cacher les unités de la grille
 
 **Probes et graphiques**
 

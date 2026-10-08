@@ -4,6 +4,15 @@ import { ID } from "./element";
 import type { Link } from "./kinematic-solver-links";
 import { WorldPoint } from "./mechanism";
 
+/**
+ * Carried by the second step of a two-step placement.
+ * Set while the press that put the first step down is still held: its release puts the second step down too, so the element is drawn in one gesture.
+ */
+export interface HeldPress {
+  /** A release that never dragged is a click, though: the second step then waits for a click of its own. */
+  pressHeld?: true;
+}
+
 // Define the possible types of canvas states
 export type CanvasStateType =
   | "Selecting"
@@ -127,30 +136,35 @@ export type CanvasState =
   | { type: "Erasing" }
   | { type: "ErasingMultiple"; startPos: WorldPoint; hoveredElementIDs: ID[] }
   | { type: "PlacingBeamStart" }
-  | { type: "PlacingBeamEnd"; startHover: HoveredPart }
+  | ({
+      type: "PlacingBeamEnd";
+      startHover: HoveredPart;
+      /** Set while beams are clicked one after another as a series, `startHover` being the end of the last one. */
+      inSeries?: true;
+    } & HeldPress)
   | { type: "PlacingSpringStart" }
-  | { type: "PlacingSpringEnd"; startHover: HoveredPart }
+  | ({ type: "PlacingSpringEnd"; startHover: HoveredPart } & HeldPress)
   | { type: "PlacingDamperStart" }
-  | { type: "PlacingDamperEnd"; startHover: HoveredPart }
+  | ({ type: "PlacingDamperEnd"; startHover: HoveredPart } & HeldPress)
   | { type: "PlacingBeltStart" }
-  | {
+  | ({
       type: "PlacingBeltEnd";
       startHover: HoveredPart;
       attachedGearsIDs: { id: ID; clockwise: boolean }[];
-    }
+    } & HeldPress)
   | { type: "PlacingMotor" }
   | { type: "PlacingPivot" }
   | { type: "PlacingSlider" }
   | { type: "PlacingJoin" }
   | { type: "PlacingMass" }
   | { type: "PlacingGearStart" } // Placing a 'gear' element's center
-  | { type: "PlacingGearRadius"; startHover: HoveredPart } // Placing a 'gear' element, defining its radius
+  | ({ type: "PlacingGearRadius"; startHover: HoveredPart } & HeldPress) // Placing a 'gear' element, defining its radius
   | { type: "PlacingGround" }
   | { type: "PlacingForceStart" }
-  | { type: "PlacingForceEnd"; startHover: HoveredPart }
-  | { type: "PlacingDistributedForce"; startHover: HoveredPart }
+  | ({ type: "PlacingForceEnd"; startHover: HoveredPart } & HeldPress)
+  | ({ type: "PlacingDistributedForce"; startHover: HoveredPart } & HeldPress)
   | { type: "PlacingMomentStart" }
-  | { type: "PlacingMomentEnd"; startHover: HoveredPart }
+  | ({ type: "PlacingMomentEnd"; startHover: HoveredPart } & HeldPress)
   | { type: "PlacingProbe" }
   // Metric selector popover open on an element, reached either by placing a probe (`armed`, so closing it re-arms the tool) or by clicking the badge of one already there (closing leaves that element selected).
   | {

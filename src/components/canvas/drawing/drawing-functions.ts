@@ -5,10 +5,10 @@
 import { COLORS, ICON_COLORS } from "../../../theme/canvas-theme";
 import { selection_reading } from "../../../theme/mui-theme";
 import {
-  HIT_TOLERANCE,
   INTERACTION_SPECS,
   MODE_ANIMATION,
 } from "../../../constants/interaction-specs";
+import { hit_tolerance } from "../../../utils/pointer-kind";
 import {
   CONTACT_POINT,
   PhysicsOverlayKind,
@@ -2628,7 +2628,7 @@ export function overlay_moment_hit(
   const center = world2screen(moment.at, viewport);
   const radius = stored2screen_moment(moment.torque);
   const dist = mouseScreen.distance_to(center);
-  if (dist > radius + HIT_TOLERANCE.EDGE || dist < radius - HIT_TOLERANCE.EDGE)
+  if (dist > radius + hit_tolerance().EDGE || dist < radius - hit_tolerance().EDGE)
     return false;
   if (!moment.direction || moment.direction.length() < 1e-9) return true;
   const screenDirection = world2screen_vec(moment.direction, viewport);
