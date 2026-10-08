@@ -1,0 +1,16 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="#fff"/>
+      <path d="M19.5,6L5.5,20" stroke="#010101" stroke-width="1.5"/>
+    </mask>
+  </defs>
+  <g mask="url(#cut)" stroke="rgb(0, 29, 89)">
+    <ellipse cx="15" cy="14" rx="4" ry="4" stroke-width="2.25"/>
+    <ellipse cx="9" cy="14" rx="4" ry="4" stroke-width="2.25"/>
+    <path d="M9,7L8,5" stroke-width="2" stroke-linecap="round"/>
+    <path d="M12,6.5L12,4.5" stroke-width="2" stroke-linecap="round"/>
+    <path d="M15,7L16,5" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <path d="M20.5,7L6.5,21" stroke="rgb(0, 29, 89)" stroke-width="1.5"/>
+</svg>
