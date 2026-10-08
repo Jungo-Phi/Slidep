@@ -35,7 +35,9 @@ import {
   sorted_for_display,
 } from "../element-order";
 import { get_element_icon } from "../../element-palette/elementIcon";
+import { icon } from "../../element-palette/iconDataUris";
 import { multiple_selection_state } from "../../canvas/tools/canvas-state-reducer";
+import { collision_count, set_all_collides } from "../collision-actions";
 import ElementDisplay from "./ElementDisplay";
 import GroupProperties from "./GroupProperties";
 import CommandCountRow from "./CommandCountRow";
@@ -539,6 +541,21 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
           );
         })}
       </Box>
+
+      {(() => {
+        const { on, total } = collision_count(listed);
+        if (total === 0) return null;
+        return (
+          <CommandCountRow
+            icon={icon("collision")}
+            label={t("collisions")}
+            on={on}
+            total={total}
+            px={0.5}
+            onSetAll={(show) => applyActions(set_all_collides(listed, show))}
+          />
+        );
+      })()}
 
       {(metrics.massCount > 0 || metrics.beamCount > 0) && (
         <>

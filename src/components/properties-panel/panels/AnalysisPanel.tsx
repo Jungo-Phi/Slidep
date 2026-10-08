@@ -1151,7 +1151,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   );
 
   // A term clicked selects the very thing pointing at it already lights up — a load through the ordinary element selection, exactly as clicking its own arrow on the canvas does; a weight or support reaction through `focusedOverlay`, the same register `onSelectOverlay` reports into from a canvas click.
+  // The grab is a passing interaction rather than something to select: its row answers to a hover only.
   const handleClickBalanceTerm = (term: BalanceTerm) => {
+    if (term.kind === "grab") return;
     if (term.kind === "load")
       setCanvasState({ type: "SelectedElement", elementID: term.elementID });
     else

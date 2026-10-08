@@ -208,6 +208,18 @@ export const STRINGS = {
     de: "Kollisionen aus",
     es: "Colisiones desactivadas",
   },
+  exclude_from_collisions: {
+    fr: "Sortir des collisions",
+    en: "Exclude from collisions",
+    de: "Von Kollisionen ausnehmen",
+    es: "Excluir de las colisiones",
+  },
+  include_in_collisions: {
+    fr: "Remettre dans les collisions",
+    en: "Include in collisions",
+    de: "In Kollisionen einbeziehen",
+    es: "Incluir en las colisiones",
+  },
   // "Boden"/"Suelo" already name the palette's fixed-anchor tool (`ground`) This is a different, distinct concept, so it needs its own words in every language.
   floor: {
     fr: "Plancher",
@@ -289,6 +301,12 @@ export const STRINGS = {
     en: "Show the grid",
     de: "Raster anzeigen",
     es: "Mostrar la cuadrícula",
+  },
+  show_contact_points: {
+    fr: "Afficher les points de contact",
+    en: "Show contact points",
+    de: "Kontaktpunkte anzeigen",
+    es: "Mostrar los puntos de contacto",
   },
   snap_to_grid: {
     fr: "Aimanter à la grille",
@@ -586,11 +604,23 @@ export const STRINGS = {
     de: "Verbindungen",
     es: "Conexiones",
   },
-  structure: {
-    fr: "Structure",
-    en: "Structure",
-    de: "Struktur",
-    es: "Estructura",
+  geometry: {
+    fr: "Géométrie",
+    en: "Geometry",
+    de: "Geometrie",
+    es: "Geometría",
+  },
+  supports: {
+    fr: "Appuis",
+    en: "Supports",
+    de: "Lager",
+    es: "Apoyos",
+  },
+  masses_springs: {
+    fr: "Masses & ressorts",
+    en: "Masses & springs",
+    de: "Massen & Federn",
+    es: "Masas y resortes",
   },
   loads: {
     fr: "Charges",
@@ -669,6 +699,18 @@ export const STRINGS = {
     en: "Energy given by the loads (negative when they oppose the motion)",
     de: "Von den Lasten gelieferte Energie (negativ, wenn sie der Bewegung entgegenwirken)",
     es: "Energía aportada por las cargas (negativa si se oponen al movimiento)",
+  },
+  energy_balance_grab_work: {
+    fr: "Saisie",
+    en: "Grab",
+    de: "Greifen",
+    es: "Agarre",
+  },
+  energy_balance_grab_work_hint: {
+    fr: "Énergie fournie par la saisie à la souris (négative si elle retient le mouvement)",
+    en: "Energy given by the mouse grab (negative when it holds the motion back)",
+    de: "Von der Maus-Greifkraft gelieferte Energie (negativ, wenn sie die Bewegung bremst)",
+    es: "Energía aportada por el agarre con el ratón (negativa si retiene el movimiento)",
   },
   energy_balance_damper_work: {
     fr: "Amortisseurs",
@@ -1565,8 +1607,9 @@ export const STRINGS = {
     de: "Elemente",
     es: "Elementos",
   },
+  // To a mechanical engineer, the French "contraintes" reads as stress, which `beam_stress_lens` does mean.
   constraints: {
-    fr: "Contraintes",
+    fr: "Cotation",
     en: "Constraints",
     de: "Bedingungen",
     es: "Restricciones",
@@ -1628,25 +1671,25 @@ export const STRINGS = {
     es: "{count} errores detectados",
   },
   project_violations_one: {
-    fr: "{count} contrainte non respectée",
+    fr: "{count} condition géométrique non respectée",
     en: "{count} constraint unsatisfied",
     de: "{count} Bedingung nicht erfüllt",
     es: "{count} restricción incumplida",
   },
   project_violations_other: {
-    fr: "{count} contraintes non respectées",
+    fr: "{count} conditions géométriques non respectées",
     en: "{count} constraints unsatisfied",
     de: "{count} Bedingungen nicht erfüllt",
     es: "{count} restricciones incumplidas",
   },
   constraints_empty: {
-    fr: "Pas encore de contraintes",
+    fr: "Pas encore de contraintes géométriques",
     en: "No constraints yet",
     de: "Noch keine Bedingungen",
     es: "Aún no hay restricciones",
   },
   dimensions_empty: {
-    fr: "Pas encore de dimensions",
+    fr: "Pas encore de cotes",
     en: "No dimensions yet",
     de: "Noch keine Maße",
     es: "Aún no hay dimensiones",
@@ -2267,13 +2310,13 @@ export const STRINGS = {
     es: "Hiperestatismo",
   },
   ddl_hyperstatic_degree_one: {
-    fr: "{count} contrainte redondante",
+    fr: "{count} condition surabondante",
     en: "{count} redundant constraint",
     de: "{count} redundante Zwangsbedingung",
     es: "{count} restricción redundante",
   },
   ddl_hyperstatic_degree_other: {
-    fr: "{count} contraintes redondantes",
+    fr: "{count} conditions surabondantes",
     en: "{count} redundant constraints",
     de: "{count} redundante Zwangsbedingungen",
     es: "{count} restricciones redundantes",
@@ -2285,7 +2328,7 @@ export const STRINGS = {
     es: "Localizar",
   },
   ddl_redundant_candidates: {
-    fr: "Chacune de ces contraintes redit ce qu'une autre impose déjà, et rien ne dit laquelle est celle de trop.",
+    fr: "Chacune de ces conditions redit ce qu'une autre impose déjà, et rien ne dit laquelle est celle de trop.",
     en: "Each of these constraints repeats what another already imposes, and nothing says which one is the spare.",
     de: "Jede dieser Zwangsbedingungen wiederholt, was eine andere bereits vorgibt, und welche die überzählige ist, sagt nichts.",
     es: "Cada una de estas restricciones repite lo que otra ya impone, y nada dice cuál sobra.",

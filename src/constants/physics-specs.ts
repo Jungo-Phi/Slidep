@@ -8,8 +8,8 @@ export const DEFAULT = {
   MOTOR_SPEED: (10 * 2 * Math.PI) / 60, // rad/s (10 tr/min)
   MOTOR_TORQUE: 1, // N·m
   MASS: 1, // kg
-  STIFFNESS: 100, // N/m
-  DAMPING: 0.5, // kg/s (= N·s/m)
+  STIFFNESS: 1000, // N/m
+  DAMPING: 10, // kg/s (= N·s/m)
   SLIDING_FRICTION: 0.1, // N·s/m (viscous, same quantity as DAMPING)
   /**
    * N·m·s/rad, viscous.

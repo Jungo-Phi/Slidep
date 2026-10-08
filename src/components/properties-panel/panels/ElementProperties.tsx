@@ -2,7 +2,13 @@
  * ElementProperties component Displays properties for element elements
  */
 
-import { Box, IconButton, Divider, Tooltip, Typography } from "@mui/material";
+import {
+  Box,
+  IconButton,
+  Divider,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { Delete, Lock, LockOpen, Replay } from "@mui/icons-material";
 import {
   ID,
@@ -39,6 +45,8 @@ import { t } from "../../../i18n";
 import { element_to_hovered_part, linked_constraint } from "../../canvas/utils";
 import { measure_belt_length } from "../../../utils/belt-geom";
 import { is_groundable } from "../../../utils/element-queries";
+import CollisionToggleButton from "../components/CollisionToggleButton";
+import ToggleIcon from "../components/ToggleIcon";
 import React from "react";
 import { icon } from "../../element-palette/iconDataUris";
 import StructureOnly from "../components/StructureOnly";
@@ -228,166 +236,56 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           editable={true}
           trailingControls={
             <>
-              <StructureOnly actions={["GroundNode"]} row>
-                {is_groundable(element) && (
-                  <Tooltip title={t(element.isGrounded ? "release" : "anchor")}>
+              <CollisionToggleButton
+                element={element}
+                shown={shown_as(element)}
+                applyActions={applyActions}
+                sx={{ padding: 0.2, border: 1, borderColor: "divider" }}
+              />
+
+              <StructureOnly actions={["SetMotorConfig", "GroundNode"]} row>
+                {element.type === "pivot" && (
+                  <Tooltip
+                    title={t(element.motor ? "motor_revert" : "motor_convert")}
+                  >
                     <IconButton
                       color="inherit"
                       size="small"
-                      onClick={() =>
-                        applyActions([
+                      onClick={() => {
+                        const actions: Action[] = [
                           {
+                            type: "SetMotorConfig",
+                            id: element.id,
+                            newConfig: element.motor
+                              ? undefined
+                              : {
+                                  speed: DEFAULT.MOTOR_SPEED,
+                                  torque: DEFAULT.MOTOR_TORQUE,
+                                },
+                            oldConfig: element.motor,
+                          },
+                        ];
+                        if (!element.motor && !element.isGrounded) {
+                          actions.push({
                             type: "GroundNode",
                             id: element.id,
-                            grounded: !element.isGrounded,
-                          },
-                        ])
-                      }
-                      sx={{
-                        padding: 0.2,
-                        border: 1,
-                        borderColor: "divider",
+                            grounded: true,
+                          });
+                        }
+                        applyActions(actions);
                       }}
+                      sx={{ padding: 0.2, border: 1, borderColor: "divider" }}
                     >
                       <Box
                         component="img"
                         style={{ width: 28, height: 28 }}
-                        src={icon(element.isGrounded ? "ground" : "ground-off")}
+                        src={icon(element.motor ? "motor" : "motor-off")}
                       />
                     </IconButton>
                   </Tooltip>
                 )}
               </StructureOnly>
 
-              {element.type === "pivot" && element.motor && motorConfig && (
-                <StructureOnly actions={["SetMotorConfig", "GroundNode"]} row>
-                  <ElementPicker
-                    label="Ancrage moteur"
-                    options={motorBeams}
-                    extraOption={{
-                      label: t("ground"),
-                      icon: GroundIcon,
-                      selected: motorConfig.parentBeamID === undefined,
-                    }}
-                    selected={motorBeams.find(
-                      (beam) => beam.id === motorConfig.parentBeamID,
-                    )}
-                    onSelectExtra={() =>
-                      applyActions([
-                        {
-                          type: "SetMotorConfig",
-                          id: element.id,
-                          newConfig: {
-                            ...motorConfig,
-                            parentBeamID: undefined,
-                          },
-                          oldConfig: motorConfig,
-                        },
-                        ...(element.isGrounded
-                          ? []
-                          : ([
-                              {
-                                type: "GroundNode",
-                                id: element.id,
-                                grounded: true,
-                              },
-                            ] satisfies Action[])),
-                      ])
-                    }
-                    onSelectElement={(beam) =>
-                      applyActions([
-                        {
-                          type: "SetMotorConfig",
-                          id: element.id,
-                          newConfig: { ...motorConfig, parentBeamID: beam.id },
-                          oldConfig: motorConfig,
-                        },
-                        ...(element.isGrounded
-                          ? ([
-                              {
-                                type: "GroundNode",
-                                id: element.id,
-                                grounded: false,
-                              },
-                            ] satisfies Action[])
-                          : []),
-                      ])
-                    }
-                    onHoverElement={(beam) =>
-                      setHoveredPart(element_to_hovered_part(beam, false))
-                    }
-                    onHoverEnd={() =>
-                      setHoveredPart({ type: "Void", position: ZERO })
-                    }
-                    hoveredPart={hoveredPart}
-                    setHoveredPart={setHoveredPart}
-                    selectedIds={selectedIds}
-                    setCanvasState={setCanvasState}
-                    applyActions={applyActions}
-                    large
-                  />
-                </StructureOnly>
-              )}
-              {element.type === "mass" && (
-                <NumberInput
-                  label="m"
-                  title={t("mass")}
-                  kind={MASS}
-                  value={shown_as(element).mass}
-                  onChange={(mass) =>
-                    applyActions([
-                      {
-                        type: "ChangeMass",
-                        id: element.id,
-                        delta: mass - element.mass,
-                      },
-                    ])
-                  }
-                  large
-                  accent
-                  unsigned
-                />
-              )}
-              {element.type === "spring" && (
-                <NumberInput
-                  label="k"
-                  title={t("stiffness")}
-                  kind={STIFFNESS}
-                  value={shown_as(element).stiffness}
-                  onChange={(stiffness) =>
-                    applyActions([
-                      {
-                        type: "ChangeStiffness",
-                        id: element.id,
-                        delta: stiffness - element.stiffness,
-                      },
-                    ])
-                  }
-                  large
-                  accent
-                  unsigned
-                />
-              )}
-              {element.type === "damper" && (
-                <NumberInput
-                  label="b"
-                  title={t("damping")}
-                  kind={DAMPING}
-                  value={shown_as(element).damping}
-                  onChange={(damping) =>
-                    applyActions([
-                      {
-                        type: "ChangeDamping",
-                        id: element.id,
-                        delta: damping - element.damping,
-                      },
-                    ])
-                  }
-                  large
-                  accent
-                  unsigned
-                />
-              )}
               <StructureOnly actions={["DeleteElement"]} row>
                 <Tooltip title={t("delete")}>
                   <IconButton
@@ -461,45 +359,97 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   ])
                 }
               />
-              {element.type === "pivot" && (
-                <Tooltip
-                  title={t(element.motor ? "motor_revert" : "motor_convert")}
-                >
+              {is_groundable(element) && (
+                <Tooltip title={t(element.isGrounded ? "release" : "anchor")}>
                   <IconButton
                     color="inherit"
                     size="small"
-                    onClick={() => {
-                      const actions: Action[] = [
+                    onClick={() =>
+                      applyActions([
                         {
-                          type: "SetMotorConfig",
-                          id: element.id,
-                          newConfig: element.motor
-                            ? undefined
-                            : {
-                                speed: DEFAULT.MOTOR_SPEED,
-                                torque: DEFAULT.MOTOR_TORQUE,
-                              },
-                          oldConfig: element.motor,
-                        },
-                      ];
-                      if (!element.motor && !element.isGrounded) {
-                        actions.push({
                           type: "GroundNode",
                           id: element.id,
-                          grounded: true,
-                        });
-                      }
-                      applyActions(actions);
-                    }}
+                          grounded: !element.isGrounded,
+                        },
+                      ])
+                    }
                     sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
                   >
-                    <Box
-                      component="img"
-                      style={{ width: 24, height: 24 }}
-                      src={icon(element.motor ? "motor" : "motor-off")}
+                    <ToggleIcon
+                      on={element.isGrounded}
+                      onName="ground"
+                      offName="ground-off"
+                      size={24}
                     />
                   </IconButton>
                 </Tooltip>
+              )}
+              {element.type === "pivot" && element.motor && motorConfig && (
+                <ElementPicker
+                  label="Ancrage moteur"
+                  options={motorBeams}
+                  extraOption={{
+                    label: t("ground"),
+                    icon: GroundIcon,
+                    selected: motorConfig.parentBeamID === undefined,
+                  }}
+                  selected={motorBeams.find(
+                    (beam) => beam.id === motorConfig.parentBeamID,
+                  )}
+                  onSelectExtra={() =>
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: {
+                          ...motorConfig,
+                          parentBeamID: undefined,
+                        },
+                        oldConfig: motorConfig,
+                      },
+                      ...(element.isGrounded
+                        ? []
+                        : ([
+                            {
+                              type: "GroundNode",
+                              id: element.id,
+                              grounded: true,
+                            },
+                          ] satisfies Action[])),
+                    ])
+                  }
+                  onSelectElement={(beam) =>
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: { ...motorConfig, parentBeamID: beam.id },
+                        oldConfig: motorConfig,
+                      },
+                      ...(element.isGrounded
+                        ? ([
+                            {
+                              type: "GroundNode",
+                              id: element.id,
+                              grounded: false,
+                            },
+                          ] satisfies Action[])
+                        : []),
+                    ])
+                  }
+                  onHoverElement={(beam) =>
+                    setHoveredPart(element_to_hovered_part(beam, false))
+                  }
+                  onHoverEnd={() =>
+                    setHoveredPart({ type: "Void", position: ZERO })
+                  }
+                  hoveredPart={hoveredPart}
+                  setHoveredPart={setHoveredPart}
+                  selectedIds={selectedIds}
+                  setCanvasState={setCanvasState}
+                  applyActions={applyActions}
+                  large
+                />
               )}
               {element.type === "gear" && (
                 <NumberInput
@@ -833,41 +783,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         </StructureOnly>
       )}
 
-      <Divider sx={{ mt: 1.5, mb: 1 }} />
-      <ConnectionsProperties
-        element={element}
-        hoveredPart={hoveredPart}
-        setHoveredPart={setHoveredPart}
-        selectedIds={selectedIds}
-        setCanvasState={setCanvasState}
-        applyActions={applyActions}
-        mechanism={mechanism}
-      />
-      {elementLoads.length > 0 && (
-        <Box>
-          <Divider sx={{ my: 1 }} />
-          <LoadsSection
-            element={element}
-            mechanicalElements={mechanism.mechanicalElements}
-            loads={elementLoads}
-            displayLoads={displayLoads}
-            selectedLoadID={selectedLoadID}
-            hoveredPart={hoveredPart}
-            setHoveredPart={setHoveredPart}
-            selectedIds={selectedIds}
-            setCanvasState={setCanvasState}
-            applyActions={applyActions}
-          />
-        </Box>
-      )}
-      <Divider sx={{ my: 1 }} />
-      <ProbesSection element={element} applyActions={applyActions} />
-
       {("rotatingEdgesIDs" in element ||
         "parentBeamID" in element ||
         element.type === "gear" ||
         element.type === "beam" ||
-        element.type === "spring") && (
+        element.type === "mass" ||
+        element.type === "spring" ||
+        element.type === "damper") && (
         <>
           <Divider sx={{ my: 1 }} />
           <Box
@@ -881,6 +803,46 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               my: 1.5,
             }}
           >
+            {element.type === "mass" && (
+              <NumberInput
+                label="m"
+                title={t("mass")}
+                kind={MASS}
+                value={shown_as(element).mass}
+                onChange={(mass) =>
+                  applyActions([
+                    {
+                      type: "ChangeMass",
+                      id: element.id,
+                      delta: mass - element.mass,
+                    },
+                  ])
+                }
+                large
+                accent
+                unsigned
+              />
+            )}
+            {element.type === "damper" && (
+              <NumberInput
+                label="b"
+                title={t("damping")}
+                kind={DAMPING}
+                value={shown_as(element).damping}
+                onChange={(damping) =>
+                  applyActions([
+                    {
+                      type: "ChangeDamping",
+                      id: element.id,
+                      delta: damping - element.damping,
+                    },
+                  ])
+                }
+                large
+                accent
+                unsigned
+              />
+            )}
             {"rotatingEdgesIDs" in element && (
               <NumberInput
                 label="bᵣ"
@@ -975,6 +937,26 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
             )}
             {element.type === "spring" && (
               <NumberInput
+                label="k"
+                title={t("stiffness")}
+                kind={STIFFNESS}
+                value={shown_as(element).stiffness}
+                onChange={(stiffness) =>
+                  applyActions([
+                    {
+                      type: "ChangeStiffness",
+                      id: element.id,
+                      delta: stiffness - element.stiffness,
+                    },
+                  ])
+                }
+                large
+                accent
+                unsigned
+              />
+            )}
+            {element.type === "spring" && (
+              <NumberInput
                 label="L₀"
                 title={t("rest_length")}
                 kind={LENGTH}
@@ -1015,6 +997,35 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           </Box>
         </>
       )}
+      {elementLoads.length > 0 && (
+        <Box>
+          <Divider sx={{ my: 1 }} />
+          <LoadsSection
+            element={element}
+            mechanicalElements={mechanism.mechanicalElements}
+            loads={elementLoads}
+            displayLoads={displayLoads}
+            selectedLoadID={selectedLoadID}
+            hoveredPart={hoveredPart}
+            setHoveredPart={setHoveredPart}
+            selectedIds={selectedIds}
+            setCanvasState={setCanvasState}
+            applyActions={applyActions}
+          />
+        </Box>
+      )}
+      <Divider sx={{ my: 1 }} />
+      <ConnectionsProperties
+        element={element}
+        hoveredPart={hoveredPart}
+        setHoveredPart={setHoveredPart}
+        selectedIds={selectedIds}
+        setCanvasState={setCanvasState}
+        applyActions={applyActions}
+        mechanism={mechanism}
+      />
+      <Divider sx={{ my: 1 }} />
+      <ProbesSection element={element} applyActions={applyActions} />
 
     </Box>
   );

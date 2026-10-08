@@ -1,5 +1,6 @@
 import { Action, LoadElement, Mechanism, MechanicalElement } from "../../types";
 import type { ParameterSnapshot } from "../../types/runtime-state";
+import { element_collides } from "../../utils/element-queries";
 
 /**
  * What a parameter action sets, as a key two actions share exactly when they set the same value.
@@ -22,6 +23,8 @@ function parameter_key(action: Action): string | undefined {
     case "ChangeProfileShape":
     case "SetLoadFrame":
       return `${action.type}:${action.id}`;
+    case "SetElementCollides":
+      return `${action.type}:${action.elementID}`;
     case "ChangeForce":
     case "ChangeDistributedForce":
     case "ChangeMoment":
@@ -97,6 +100,13 @@ function element_rebase(el: MechanicalElement, shown: MechanicalElement): Action
   }
   if (el.type === "damper" && shown.type === "damper")
     delta("ChangeDamping", el.damping, shown.damping);
+  if (element_collides(el) !== element_collides(shown))
+    actions.push({
+      type: "SetElementCollides",
+      elementID: el.id,
+      newValue: element_collides(shown),
+      oldValue: element_collides(el),
+    });
   return actions;
 }
 

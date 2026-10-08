@@ -53,6 +53,7 @@ export const PARAMETER_ACTIONS: Action["type"][] = [
   "ChangeDamping",
   "ChangeRotationalFriction",
   "ChangeSlidingFriction",
+  "SetElementCollides",
   // What a beam is made of and the section it is cut to, whether reached from the beam or from the catalog: the same kind of physical value as its mass.
   // Deleting a catalog entry reassigns the beams holding it in the same bundle, so no model is ever left pointing at a missing one.
   "AssignMaterial",

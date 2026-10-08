@@ -91,6 +91,7 @@ import type {
 } from "./components/solver/analysis/force-balance";
 import { resolve_moment_balance_point } from "./components/solver/analysis/force-balance";
 import type { FocusedOverlay } from "./components/canvas/drawing/drawing-functions";
+import { carried_focus } from "./components/properties-panel/selection-subject";
 import { set_sim_clock as setRuntimeState } from "./components/solver/dynamics/sim-clock";
 import { parameter_snapshot_at } from "./components/solver/dynamics/simulation-engine";
 import {
@@ -108,7 +109,11 @@ import {
   migrate_snap_settings,
   type SnapSettings,
 } from "./utils/snap-corridor";
-import { HoveredAbscissaSource, HoveredPart } from "./types/hovered-part";
+import {
+  HoveredAbscissaSource,
+  HoveredPart,
+  is_measured_reading,
+} from "./types/hovered-part";
 import { actionReducer } from "./components/mechanism/action-reducer";
 import { assert_actions_preserve_validity } from "./utils/assert-mechanism";
 import { apply_actions } from "./components/mechanism/apply-actions";
@@ -203,8 +208,11 @@ const App: React.FC = () => {
   );
   // Goes stale the moment anything else happens on the canvas — a new selection, an armed tool, a deselection.
   // The click that sets it never touches `canvasState` itself, so this is the only thing that ever clears it.
+  // The one exception is a member's internal effort, which follows the selection to another member of the same kind.
   useEffect(() => {
-    setFocusedOverlay(null);
+    setFocusedOverlay((focus) =>
+      carried_focus(focus, canvasState, mechanismRef.current.mechanicalElements),
+    );
   }, [canvasState]);
 
   /** Elements the analysis panel is pointing at, and why (see `CanvasHighlight`). */
@@ -222,6 +230,9 @@ const App: React.FC = () => {
   );
   const [showGrid, setShowGrid] = useState<boolean>(
     getStorageItem<boolean>("showGrid", true),
+  );
+  const [showContactPoints, setShowContactPoints] = useState<boolean>(
+    getStorageItem<boolean>("showContactPoints", true),
   );
   const { previewLens, previewLensLater } = useStressLensPreview(appMode);
   // What the canvas paints the beams with: the lens hovered in the menu while one is being tried on, the chosen one the rest of the time.
@@ -245,6 +256,10 @@ const App: React.FC = () => {
   useEffect(() => {
     setStorageItem("showGrid", showGrid);
   }, [showGrid]);
+
+  useEffect(() => {
+    setStorageItem("showContactPoints", showContactPoints);
+  }, [showContactPoints]);
 
   useEffect(() => {
     setStorageItem("trajectoryDotted", trajectoryDotted);
@@ -389,7 +404,9 @@ const App: React.FC = () => {
     supportReactions: mechanism.simulation.supportReactions,
     focusedOverlay,
     hoveredOverlay:
-      hoveredPart.type === "Overlay" ? hoveredPart.reading : null,
+      hoveredPart.type === "Overlay" && is_measured_reading(hoveredPart.reading)
+        ? hoveredPart.reading
+        : null,
     inertiaNamed: hoveredBalanceTerm?.inertia === true,
     onRecordingLimitReached: (
       reason: SimulationLimitReason,
@@ -925,6 +942,8 @@ const App: React.FC = () => {
         onSelectLang={handleSelectLang}
         showGrid={showGrid}
         setShowGrid={setShowGrid}
+        showContactPoints={showContactPoints}
+        setShowContactPoints={setShowContactPoints}
         snapToGrid={snapToGrid}
         setSnapToGrid={setSnapToGrid}
         snapSettings={snapSettings}
@@ -948,6 +967,7 @@ const App: React.FC = () => {
       language,
       handleSelectLang,
       showGrid,
+      showContactPoints,
       snapToGrid,
       snapSettings,
       isCustomAngleStep,
@@ -1064,6 +1084,7 @@ const App: React.FC = () => {
                 snapToGrid={snapToGrid}
                 snapSettings={snapSettings}
                 showGrid={showGrid}
+                showContactPoints={showContactPoints}
                 beamStressLens={activeBeamStressLens}
                 trajectoryDotted={trajectoryDotted}
                 liveFrameRef={liveFrameRef}

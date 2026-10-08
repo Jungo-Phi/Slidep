@@ -62,6 +62,8 @@ const THEME_MODES: {
 interface SettingsMenuProps {
   showGrid: boolean;
   setShowGrid: (value: boolean) => void;
+  showContactPoints: boolean;
+  setShowContactPoints: (value: boolean) => void;
   snapToGrid: boolean;
   setSnapToGrid: (value: boolean) => void;
   snapSettings: SnapSettings;
@@ -73,10 +75,12 @@ interface SettingsMenuProps {
   previewLater: (name: ThemeName | null) => void;
 }
 
-/** The settings menu: grid/snap toggles, angle step, and theme family/mode picker. */
+/** The settings menu: grid/snap toggles, angle step, contact points, and theme family/mode picker. */
 export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   showGrid,
   setShowGrid,
+  showContactPoints,
+  setShowContactPoints,
   snapToGrid,
   setSnapToGrid,
   snapSettings,
@@ -283,6 +287,26 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         </MenuItem>
 
         <Divider />
+        <MenuItem
+          disableRipple
+          onClick={() => setShowContactPoints(!showContactPoints)}
+        >
+          <FormControlLabel
+            control={
+              <Box sx={{ display: "flex", mr: 1 }}>
+                {showContactPoints ? (
+                  <Visibility fontSize="small" />
+                ) : (
+                  <VisibilityOff fontSize="small" />
+                )}
+              </Box>
+            }
+            label={t("show_contact_points")}
+            sx={{ margin: 0 }}
+          />
+        </MenuItem>
+
+        <Divider />
         <Box
           sx={{
             display: "flex",
@@ -323,9 +347,8 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
             ))}
           </ToggleButtonGroup>
         </Box>
-        {/* The families, each shown in the ambience currently set. The
-          grey name is the theme the pair resolves to, where the family
-          does not already carry it (Fantaisie → Blueprint). */}
+        {/* The families, each shown in the ambience currently set.
+          The grey name is the theme the pair resolves to, where the family does not already carry it (Fantaisie → Blueprint). */}
         {THEME_FAMILIES.map((family) => {
           const resolved = resolve_theme(
             family.name,

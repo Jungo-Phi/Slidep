@@ -1,6 +1,7 @@
 import { LoadElement, Mechanism } from "../../../types";
 import { ZERO } from "../../../types/point2";
 import {
+  ContactSample,
   DynamicSnapshot,
   KinematicSnapshot,
   SimulationSnapshot,
@@ -44,16 +45,15 @@ const REWIND_WINDOW = 5;
  */
 export class Recorder {
   private model: SimulationModel | null = null;
-  /** The mechanism `model` was compiled from — kept only for `setLoads`, which recompiles
-   * `compiledLoads` against it without touching anything else the model bakes in. */
+  /** The mechanism `model` was compiled from — kept only for `setLoads`, which recompiles `compiledLoads` against it without touching anything else the model bakes in. */
   private mechanism: Mechanism | null = null;
   private mode: RecorderMode = "kinematic";
   /** Dynamic mode only: whether the predict step integrates `GRAVITY`. */
   private gravityOn = true;
   /** Both modes: whether the next steps detect and resist collisions. */
   private collisionsOn = false;
-  /** Both modes: whether the next steps detect and resist the floor. Gated independently
-   * from `collisionsOn` — see `collision_links`. */
+  /** Both modes: whether the next steps detect and resist the floor.
+   * Gated independently from `collisionsOn` — see `collision_links`. */
   private floorOn = false;
   private grab: SimGrab | null = null;
   /** Last snapshot handed out, to warm-start the next step from. */
@@ -68,6 +68,11 @@ export class Recorder {
    * The contact hysteresis is what keeps it short: entries are written on a flip, not on a frame.
    */
   private journal: { t: number; state: RewireState }[] = [];
+  /**
+   * The contacts of the steps solved since the last kept one, by id, carried onto the next kept one.
+   * A step that is dropped still shows the impacts it had: they are what a recorded instant's `contacts` stands for.
+   */
+  private pendingContacts = new Map<number, ContactSample>();
 
   /**
    * Adopt a mechanism, discarding whatever the previous one left.
@@ -84,6 +89,7 @@ export class Recorder {
     this.limit = max_recording_time(this.model.layout);
     this.last = resumeFrom;
     this.journal = [];
+    this.pendingContacts.clear();
     // The compile reads the belt's whole pulley list from the mechanism; the run may have taken it off some of them.
     // Dynamic mode never disconnects a belt, so there is nothing to re-bake against.
     if (mode === "kinematic" && resumeFrom)
@@ -136,6 +142,7 @@ export class Recorder {
     if (this.mode === "kinematic")
       restore_belt_state(this.model, resumeFrom as KinematicSnapshot);
     this.last = resumeFrom;
+    this.pendingContacts.clear();
   }
 
   /** The longest this load records, in simulated seconds. */
@@ -257,6 +264,14 @@ export class Recorder {
           };
         }
         latest = dynamicSnapshot;
+      }
+      for (const contact of latest.contacts ?? [])
+        if (!this.pendingContacts.has(contact.id)) this.pendingContacts.set(contact.id, contact);
+      if (kept) {
+        // The pending set holds this step's own contacts too, so the same size means nothing was dropped to add.
+        if (this.pendingContacts.size > (latest.contacts?.length ?? 0))
+          latest = { ...latest, contacts: [...this.pendingContacts.values()] };
+        this.pendingContacts.clear();
       }
       solved++;
       if (kept) snapshots.push(latest);

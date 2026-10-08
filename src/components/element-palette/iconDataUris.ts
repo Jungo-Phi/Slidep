@@ -8,6 +8,7 @@
  * So for any theme that asks for it, the source hues are substituted for that theme's before the URI is built.
  * Results are cached per theme: the substitution runs once per icon per theme, not per draw.
  */
+import { decomposeColor } from "@mui/material/styles";
 import { ICON_COLORS } from "../../theme/canvas-theme";
 import { CanvasPalette } from "../../theme/mui-theme";
 
@@ -53,11 +54,16 @@ const SOURCE_HUES: Record<string, keyof CanvasPalette> = {
 const COLOR_LITERAL =
   /rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b(?:black|white)\b/g;
 
-/** `tint` overrides the accent role alone, whatever the theme would have put there: the hue that says which quantity an icon stands for (see `icon_tinted`). */
-const recolor = (svg: string, palette: CanvasPalette, tint?: string): string =>
+/** `overrides` replaces the named roles, whatever the theme would have put there: the accent for the hue that says which quantity an icon stands for (see `icon_tinted`), the stroke for the ink an icon is drawn in (see `icon_inked`). */
+const recolor = (
+  svg: string,
+  palette: CanvasPalette,
+  overrides: Partial<Record<keyof CanvasPalette, string>> = {},
+): string =>
   svg.replace(COLOR_LITERAL, (literal) => {
     const key = SOURCE_HUES[literal.toLowerCase().replace(/\s+/g, "")];
-    if (tint && key === "ACCENT") return tint;
+    const override = key && overrides[key];
+    if (override) return override;
     const replacement = key && palette[key];
     return typeof replacement === "string" ? replacement : literal;
   });
@@ -107,8 +113,38 @@ export const icon_tinted = (name: string, color: string): string => {
   const key = `${ICON_COLORS.RECOLOR_ICONS ? ICON_COLORS.ELEMENT_STROKE : "source"}|${name}|${color}`;
   let uri = tinted.get(key);
   if (!uri) {
-    uri = toDataUri(recolor(raw, ICON_COLORS, color));
+    uri = toDataUri(recolor(raw, ICON_COLORS, { ACCENT: color }));
     tinted.set(key, uri);
   }
   return uri;
+};
+
+const inked = new Map<string, string>();
+
+/**
+ * Data URI for a palette icon drawn in `ink` instead of the theme's stroke: how a glyph takes the colour of the control it sits in, the way a MUI icon takes `currentColor` — on an accent fill, or greyed like a disabled eye.
+ * Every other hue of the icon still follows the theme.
+ */
+export const icon_inked = (name: string, ink: string): string => {
+  const raw = RAW[name];
+  if (!raw) throw new Error(`Unknown palette icon: ${name}`);
+  const key = `${ICON_COLORS.RECOLOR_ICONS ? ICON_COLORS.ELEMENT_STROKE : "source"}|${name}|ink|${ink}`;
+  let uri = inked.get(key);
+  if (!uri) {
+    uri = toDataUri(recolor(raw, ICON_COLORS, { ELEMENT_STROKE: ink }));
+    inked.set(key, uri);
+  }
+  return uri;
+};
+
+/**
+ * A palette icon read as `color` reads on its own, the way a disabled MUI icon is: drawn opaque in the colour's hue, with its alpha put on the whole image (`opacity` of the `<img>`).
+ * The alpha cannot go in the strokes: translucent ones darken wherever they cross.
+ */
+export const icon_faded = (
+  name: string,
+  color: string,
+): { src: string; opacity: number } => {
+  const [r, g, b, a = 1] = decomposeColor(color).values;
+  return { src: icon_inked(name, `rgb(${r}, ${g}, ${b})`), opacity: a };
 };

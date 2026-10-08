@@ -18,6 +18,8 @@ export const INTERACTION_SPECS = {
   ARROW_HALO_PASSES: 3,
   DELETION_OPACITY: 0.3,
   GHOST_PREVIEW_OPACITY: 0.6,
+  /** Opacity of an element that ignores collisions while they are in play: present, but something others pass through. */
+  COLLISION_OFF_OPACITY: 0.5,
   GEAR_ON_BELT_GROW: 15,
   BELT_GRAB_RADIUS: 4,
   /** Opacity of the library dialog's tint film, over the beam's own normal colors. */

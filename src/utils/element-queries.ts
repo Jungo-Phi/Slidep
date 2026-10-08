@@ -119,3 +119,21 @@ export function overlay_shown(
 ): boolean {
   return !!element.overlays?.[kind] && overlay_applies(element, kind);
 }
+
+/**
+ * Whether `element` can ever take part in collision detection: a node (its point), a beam (its span
+ * and ends) or a gear (its rim). Springs, dampers and belts are massless connections with no body of
+ * their own, so they never collide.
+ */
+export function can_collide(element: MechanicalElement): boolean {
+  return (
+    is_node_element(element) ||
+    element.type === "beam" ||
+    element.type === "gear"
+  );
+}
+
+/** Whether `element` currently collides: true unless its `collides` flag is explicitly `false`. */
+export function element_collides(element: MechanicalElement): boolean {
+  return element.collides !== false;
+}

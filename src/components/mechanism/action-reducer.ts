@@ -485,6 +485,14 @@ export function actionReducer(
         };
         break;
       }
+      case "SetElementCollides": {
+        const element = get_mechanical_element_from_id(
+          action.elementID,
+          mechanicalElements,
+        );
+        element.collides = revert ? action.oldValue : action.newValue;
+        break;
+      }
       case "SetMotorConfig": {
         const pivot = get_mechanical_element_from_id(
           action.id,

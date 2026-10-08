@@ -22,7 +22,7 @@ import { element_reactions } from "../recording/probe-series";
  */
 
 /** Which family a line belongs to — what it is, and what a reader can expect to see of it on the canvas. */
-export type BalanceTermKind = "load" | "weight" | "support";
+export type BalanceTermKind = "load" | "grab" | "weight" | "support";
 
 export interface BalanceTerm {
   /** Stable while the mechanism is, so a hovered line stays hovered as the clock moves. */
@@ -49,7 +49,7 @@ export interface HoveredBalanceTerm {
 }
 
 export interface ForceBalance {
-  /** Every action on the free body: applied loads, weights, support reactions. */
+  /** Every action on the free body: applied loads, the grab, weights, support reactions. */
   actions: BalanceTerm[];
   /** Σ of `actions`. */
   sum: WorldPoint;
@@ -237,6 +237,20 @@ export function compute_force_balance(
     const line = load_terms(load, elements);
     if (line) actions.push(line);
   }
+
+  // The cursor's pull during a dynamic grab is an applied action like a load, and named `"grab"` on the canvas too, which is how a hovered row finds its arrow.
+  const grab = snapshot.grab;
+  if (grab)
+    actions.push(
+      term(
+        "grab",
+        "grab",
+        grab.elementID,
+        new Point2(grab.net.x, grab.net.y) as WorldPoint,
+        new Point2(grab.net.fx, grab.net.fy) as WorldPoint,
+        grab.net.couple,
+      ),
+    );
 
   // Gravity off reads as no weight at all, not as a term sitting at zero: a row nothing carries is noise, not a reading.
   if (gravity.length() > 1e-9)

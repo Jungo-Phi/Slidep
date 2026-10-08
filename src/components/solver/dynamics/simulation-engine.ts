@@ -1,10 +1,11 @@
 import { ID, Link, Mechanism, MechanicalElement, Point2, KinNodes } from "../../../types";
 import { ZERO } from "../../../types/point2";
-import { DEFAULT } from "../../../constants/physics-specs";
+import { DEFAULT, GRAVITY } from "../../../constants/physics-specs";
 import {
   BeltVia,
   belt_arrivals,
   belt_pieces,
+  belt_point_tangent,
   belt_project,
   belt_wraps,
 } from "../../../utils/belt-path";
@@ -12,8 +13,10 @@ import {
   BalanceSample,
   BeamCohesion,
   BeltStrand,
+  ContactSample,
   DynamicSnapshot,
   EnergySample,
+  GrabForceSample,
   KinematicSnapshot,
   LinkReaction,
   MotorSample,
@@ -67,9 +70,11 @@ import {
 import { floor_anchor_and_normal } from "../../../utils/floor-geometry";
 import { ContactSet, collision_links, contact_set, prune_initial_penetrations } from "./collision-detection";
 import { apply_collision_restitution, apply_end_stop_restitution } from "./collision-restitution";
+import { collect_touching_contacts } from "./contact-samples";
 import { MIN_EXTENT_M, positions_extent } from "../nodes";
 import {
   BeltShape,
+  GRAB_BELT_KEY,
   GRAB_BRIDGE_KEY,
   GRAB_KEYS,
   GRAB_PERIMETER_KEY,
@@ -958,6 +963,263 @@ function grab_links(
 }
 
 /**
+ * How a dynamic-mode grab pulls: a real spring from the grabbed point to the cursor, `F = k·d` in world metres.
+ *
+ * One stiffness serves the whole mechanism (`grab_stiffness`), so what the spring does depends on what it pulls: a light part snaps to the cursor, a heavy one lags behind it, and the force read off the spring is the same on both.
+ *
+ * The spring stretches no further than `GRAB_MAX_STRETCH` of the mechanism's extent: the cursor can go on, the far end of the spring stays there, and so does the force.
+ * That ceiling is what keeps a pull within what the contacts and the constraints can carry — past it, a mechanism held by contacts (an escapement) diverges.
+ * It is set as a multiple of the weight of everything that can move, `GRAB_MAX_FORCE_WEIGHTS`, and the stiffness follows from the two.
+ */
+const GRAB_MAX_FORCE_WEIGHTS = 10;
+const GRAB_MAX_STRETCH = 0.25;
+const GRAB_DAMPING_RATIO = 1;
+
+const GRAB_STIFFNESS = new WeakMap<SimulationModel, number>();
+
+/**
+ * N/m — the strongest pull over the longest stretch: `GRAB_MAX_FORCE_WEIGHTS · M·g / (GRAB_MAX_STRETCH · extent)`, with `M` the mass of everything that can move, so that the same pull reads the same on a mechanism of grams and on one of tonnes.
+ * A gear that only turns on an anchored axle moves through its angle alone: its inertia counts as the mass it amounts to at the mechanism's own scale, `J / extent²`.
+ */
+function grab_stiffness(model: SimulationModel): number {
+  let k = GRAB_STIFFNESS.get(model);
+  if (k === undefined) {
+    let mass = 0;
+    for (const [key, inverseMass] of model.dynamicMasses.posMasses)
+      if (inverseMass > 0 && !model.dynamicMasses.phantomKeys.has(key)) mass += 1 / inverseMass;
+    for (const inverseInertia of model.dynamicMasses.angleMasses.values())
+      if (inverseInertia > 0) mass += 1 / (inverseInertia * model.extent * model.extent);
+    k = (GRAB_MAX_FORCE_WEIGHTS * mass * GRAVITY.length()) / (GRAB_MAX_STRETCH * model.extent);
+    GRAB_STIFFNESS.set(model, k);
+  }
+  return k;
+}
+
+/** Where the spring's far end is: the cursor, or the furthest the spring stretches towards it. */
+function spring_end(point: Point2, target: Point2, maxStretch: number): Point2 {
+  const stretch = target.sub(point);
+  const length = stretch.length();
+  return length > maxStretch ? point.add(stretch.mul(maxStretch / length)) : target;
+}
+
+/**
+ * The stiffness and damping a point of effective mass `mass` is pulled with: `stiffness` and the critical damping for this very point.
+ * Both are limited to what one substep of length `subDt` can integrate on a point this light — a light part on a heavy mechanism would otherwise be thrown past the cursor, and the next substep further back.
+ */
+function grab_gains(stiffness: number, subDt: number, mass: number): { k: number; b: number } {
+  const k = Math.min(stiffness, (0.25 * mass) / (subDt * subDt));
+  const b = Math.min(2 * GRAB_DAMPING_RATIO * Math.sqrt(k * mass), mass / subDt);
+  return { k, b };
+}
+
+/** The spring-damper force on a material point of effective inverse mass `inverseMass`, towards `end`: `k·(end − point) − b·velocity`. */
+function grab_spring_force(
+  stiffness: number,
+  subDt: number,
+  end: Point2,
+  point: Point2,
+  velocity: Point2,
+  inverseMass: number,
+): Point2 {
+  const { k, b } = grab_gains(stiffness, subDt, 1 / inverseMass);
+  return end.sub(point).mul(k).sub(velocity.mul(b));
+}
+
+/** The sample of a pull `f` at `point` towards `end`, whose action on the free body is that very force. */
+function pulled_at(elementID: ID, point: Point2, end: Point2, f: Point2): GrabForceSample {
+  return {
+    elementID,
+    x: point.x,
+    y: point.y,
+    tx: end.x,
+    ty: end.y,
+    fx: f.x,
+    fy: f.y,
+    net: { x: point.x, y: point.y, fx: f.x, fy: f.y, couple: 0 },
+  };
+}
+
+/**
+ * The dynamic-mode grab as real forces/torques, folded into the predict step — the same channel gravity, loads, springs and friction use (`resolve_load_forces`/`resolve_spring_damper_forces`/`resolve_friction_forces`).
+ *
+ * Unlike `grab_links` (which turns the grab into transient `HandleGrab`/bridge links for the KINEMATIC sweep), this applies the pull directly at the grabbed material point and splits it onto the DOFs underneath: a body grab at ratio `t` splits the force (1−t)/t between the endpoints, a gear-tooth grab splits it into a centre force plus a rim torque, a belt grab becomes a torque on the reference pulley (only the tangential component can move the belt).
+ *
+ * A grabbed point with no mobility (anchored) gets nothing, exactly as `applyHandleGrabConstraint` refused to move a grounded node.
+ */
+function grab_forces(
+  model: SimulationModel,
+  grab: SimGrab | undefined,
+  positions: Map<string, Point2>,
+  velocities: Map<string, Point2>,
+  angleVelocities: Map<string, number>,
+  angles: Map<string, number>,
+  wrapsByBelt: Map<ID, number[]>,
+  disconnectedByBelt: Map<ID, boolean[]>,
+  /** The substep the force is applied over, which bounds what a spring can be integrated at (see `grab_gains`). */
+  subDt: number,
+): {
+  forces: Map<string, Point2>;
+  torques: Map<string, number>;
+  display?: GrabForceSample;
+} {
+  const forces = new Map<string, Point2>();
+  const torques = new Map<string, number>();
+  let display: GrabForceSample | undefined;
+  if (!grab || !Number.isFinite(grab.target.x) || !Number.isFinite(grab.target.y))
+    return { forces, torques };
+  const posMasses = model.dynamicMasses.posMasses;
+  const angleMasses = model.dynamicMasses.angleMasses;
+  const stiffness = grab_stiffness(model);
+  const maxStretch = GRAB_MAX_STRETCH * model.extent;
+  const add_force = (key: string, f: Point2) =>
+    forces.set(key, (forces.get(key) ?? ZERO).add(f));
+
+  if ("key" in grab) {
+    const key = model.keyMap.get(grab.key) ?? grab.key;
+    const p = positions.get(key);
+    if (!p) return { forces, torques };
+    const w = posMasses.get(key) ?? 1;
+    if (w === 0) return { forces, torques };
+    const end = spring_end(p, grab.target, maxStretch);
+    const f = grab_spring_force(stiffness, subDt, end, p, velocities.get(key) ?? ZERO, w);
+    add_force(key, f);
+    // A node key is the element's id, an endpoint's is `<id>:start`/`<id>:end`.
+    display = pulled_at(grab.key.replace(/:(start|end)$/, "") as ID, p, end, f);
+  } else if ("edgeID" in grab) {
+    const startKey = model.keyMap.get(`${grab.edgeID}:start`) ?? `${grab.edgeID}:start`;
+    const endKey = model.keyMap.get(`${grab.edgeID}:end`) ?? `${grab.edgeID}:end`;
+    const start = positions.get(startKey);
+    const end = positions.get(endKey);
+    if (!start || !end) return { forces, torques };
+    const wStart = posMasses.get(startKey) ?? 1;
+    const wEnd = posMasses.get(endKey) ?? 1;
+    const t = grab.t;
+    // Effective inverse mass of the material point on a rigid rod with lumped endpoint masses.
+    const wEff = (1 - t) * (1 - t) * wStart + t * t * wEnd;
+    if (wEff === 0) return { forces, torques };
+    const point = start.lerp(end, t);
+    const velocity = (velocities.get(startKey) ?? ZERO).lerp(
+      velocities.get(endKey) ?? ZERO,
+      t,
+    );
+    const reach = spring_end(point, grab.target, maxStretch);
+    const f = grab_spring_force(stiffness, subDt, reach, point, velocity, wEff);
+    add_force(startKey, f.mul(1 - t));
+    add_force(endKey, f.mul(t));
+    display = pulled_at(grab.edgeID as ID, point, reach, f);
+  } else if ("gearID" in grab) {
+    const centerKey = model.keyMap.get(grab.gearID) ?? grab.gearID;
+    const center = positions.get(centerKey);
+    if (!center) return { forces, torques };
+    const angle = angles.get(grab.gearID);
+    if (angle === undefined) return { forces, torques };
+    const theta = angle + grab.angleOffset;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    const rim = center.add(new Point2(grab.radius * cos, grab.radius * sin));
+    const wCenter = posMasses.get(centerKey) ?? 1;
+    const wAngle = angleMasses.get(grab.gearID) ?? 0;
+    const wEff = wCenter + grab.radius * grab.radius * wAngle;
+    if (wEff === 0) return { forces, torques };
+    const vCenter = velocities.get(centerKey) ?? ZERO;
+    const omega = angleVelocities.get(grab.gearID) ?? 0;
+    const vRim = vCenter.add(
+      new Point2(-grab.radius * omega * sin, grab.radius * omega * cos),
+    );
+    const reach = spring_end(rim, grab.target, maxStretch);
+    const f = grab_spring_force(stiffness, subDt, reach, rim, vRim, wEff);
+    add_force(centerKey, f);
+    torques.set(
+      grab.gearID,
+      (torques.get(grab.gearID) ?? 0) +
+        grab.radius * (cos * f.y - sin * f.x),
+    );
+    display = pulled_at(grab.gearID as ID, rim, reach, f);
+  } else if ("beltPin" in grab) {
+    const pin = grab.beltPin;
+    // Refresh the per-frame wraps/disconnected from the belt's own BeltLength link — the transient pin was baked at grab start and does not ride the updates by itself.
+    const wraps = wrapsByBelt.get(pin.beltID);
+    const disconnected = disconnectedByBelt.get(pin.beltID);
+    // Rebuild the loop the point rides, from live positions — the same via set `applyBeltPinConstraint` walks, skipping pulleys that lost contact.
+    const vias: BeltVia[] = [];
+    if (!pin.closed) {
+      const s = positions.get(pin.startKey ?? "");
+      if (!s) return { forces, torques };
+      vias.push({ pos: s, radius: 0, clockwise: false });
+    }
+    for (let i = 0; i < pin.gearPosKeys.length; i++) {
+      if (disconnected?.[i]) continue;
+      const p = positions.get(pin.gearPosKeys[i]);
+      if (!p) return { forces, torques };
+      vias.push({ pos: p, radius: pin.radii[i], clockwise: pin.directions[i] });
+    }
+    if (!pin.closed) {
+      const e = positions.get(pin.endKey ?? "");
+      if (!e) return { forces, torques };
+      vias.push({ pos: e, radius: 0, clockwise: false });
+    }
+    if (vias.length < (pin.closed ? 2 : 3)) return { forces, torques };
+    const thetaRef = angles.get(pin.refAngleKey);
+    if (thetaRef === undefined) return { forces, torques };
+    const rEps = pin.radii[pin.refIndex] * (pin.directions[pin.refIndex] ? -1 : 1);
+    if (Math.abs(rEps) < 1e-9) return { forces, torques };
+    let s = pin.s0 + rEps * (thetaRef - pin.thetaRef0);
+    if (!pin.closed) {
+      const total = belt_pieces(vias, false, wraps).reduce(
+        (a, piece) => a + piece.length,
+        0,
+      );
+      s = Math.max(0, Math.min(total, s));
+    }
+    const { point, tangent } = belt_point_tangent(vias, s, pin.closed, wraps);
+    // The point's tangential mobility: d²s/dθ_ref² mapped through the reference pulley — `wEff = rEps²·wAngle` is the inverse mass the tangential spring answers to.
+    const wAngle = angleMasses.get(pin.refAngleKey);
+    if (wAngle === undefined || wAngle === 0) return { forces, torques };
+    const wEff = rEps * rEps * wAngle;
+    const { k, b } = grab_gains(stiffness, subDt, 1 / wEff);
+    // Only the tangential part of the cursor's offset can move the belt, so that is the spring's extension.
+    const tangentialError = Math.max(
+      -maxStretch,
+      Math.min(maxStretch, grab.target.sub(point).dot(tangent)),
+    );
+    const sDot = rEps * (angleVelocities.get(pin.refAngleKey) ?? 0);
+    const fTangential = k * tangentialError - b * sDot;
+    torques.set(
+      pin.refAngleKey,
+      (torques.get(pin.refAngleKey) ?? 0) + fTangential * rEps,
+    );
+    // Only the torque on the reference pulley reaches the DOFs, so that is what the balance is given.
+    const pulley = positions.get(pin.gearPosKeys[pin.refIndex]) ?? point;
+    display = {
+      ...pulled_at(
+        pin.beltID as ID,
+        point,
+        point.add(tangent.mul(tangentialError)),
+        tangent.mul(fTangential),
+      ),
+      net: { x: pulley.x, y: pulley.y, fx: 0, fy: 0, couple: fTangential * rEps },
+    };
+  }
+  // A pull that is not a number (a state that has already diverged, a degenerate belt) is no pull, rather than a NaN folded into every DOF it touches.
+  const finite =
+    display === undefined ||
+    [display.fx, display.fy, display.net.fx, display.net.fy, display.net.couple].every(Number.isFinite);
+  return finite ? { forces, torques, display } : { forces: new Map(), torques: new Map() };
+}
+
+/**
+ * The reserved snapshot slot a grab's "grabbed point" lands in, so a frame records where the cursor pulled — the same slots `grab_links` filled with its bridge nodes.
+ * A node grab needs none: the node itself is a real slot.
+ */
+function grab_readout_key(grab: SimGrab | undefined): string | undefined {
+  if (!grab) return undefined;
+  if ("edgeID" in grab) return GRAB_BRIDGE_KEY;
+  if ("gearID" in grab) return GRAB_PERIMETER_KEY;
+  if ("beltPin" in grab) return GRAB_BELT_KEY;
+  return undefined;
+}
+
+/**
  * Advance the simulation by one frame.
  *
  * Warm-starts from the previous positions/angles, refreshes the motor targets (target = current real angle + ω·dt — no backlog when blocked) and the continuous line-of-centres angle of gear meshes, then runs PBD on the frozen links.
@@ -1158,6 +1420,19 @@ export function step_simulation(
     model.kinematicDirectSolve === true && !collisionsOn && !floorOn && !grab,
   );
 
+  const touching = new Map<number, ContactSample>();
+  if (collisionsOn || floorOn)
+    collect_touching_contacts(
+      model.collisionCandidates,
+      result.positions,
+      model.extent,
+      collisionsOn,
+      floorOn,
+      model.floorNormal,
+      model.layout,
+      touching,
+    );
+
   // ── Belt topology changed this frame → rebuild its no-slip links, AFTER the solve ──
   // The bake has to happen on a state the other constraints agree with.
   // Baking on the warm start, before the solve, freezes into `h⁰` whatever the frame was about to correct: measured on `Déconnexion courroie`, a 26 px lurch on the transition frame and 1.3 px of residual that never went away afterwards.
@@ -1238,6 +1513,7 @@ export function step_simulation(
     angles: outAngles,
     unsatisfied: result.unsatisfied?.length ? result.unsatisfied : undefined,
     stalledMotors: stalledMotors.length > 0 ? stalledMotors : undefined,
+    contacts: touching.size > 0 ? [...touching.values()] : undefined,
   };
 }
 
@@ -1275,14 +1551,112 @@ function contact_set_of(model: SimulationModel, collisionsOn: boolean, floorOn: 
 }
 
 /**
+ * Thrown by a substep whose solve left a non-finite number in the state, and caught by `step_dynamic_simulation`.
+ * It stops the frame before the next substep: the model keeps state that is corrected from one frame to the next (the unwrapped mesh and belt angles), and one substep reading a NaN into it would leave every later frame NaN, whatever it is restarted from.
+ */
+class DivergedFrame extends Error {}
+
+/** Whether the solve left every position, angle and velocity finite. */
+function state_is_finite(
+  positions: Map<string, Point2>,
+  velocities: Map<string, Point2>,
+  angles: Map<string, number>,
+  angleVelocities: Map<string, number>,
+): boolean {
+  for (const p of positions.values()) if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return false;
+  for (const v of velocities.values()) if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) return false;
+  for (const a of angles.values()) if (!Number.isFinite(a)) return false;
+  for (const w of angleVelocities.values()) if (!Number.isFinite(w)) return false;
+  return true;
+}
+
+/**
+ * Whether every number a frame publishes is finite.
+ * The reserved grab slots are skipped: they read NaN whenever no grab fills them.
+ */
+function is_finite_frame(snapshot: DynamicSnapshot): boolean {
+  const reserved = new Set(GRAB_KEYS.map((key) => snapshot.layout.index.get(key)));
+  const { positions, velocities, angles, angleVelocities } = snapshot;
+  for (let slot = 0; 2 * slot < positions.length; slot++) {
+    if (reserved.has(slot)) continue;
+    if (
+      !Number.isFinite(positions[2 * slot]) ||
+      !Number.isFinite(positions[2 * slot + 1]) ||
+      !Number.isFinite(velocities[2 * slot]) ||
+      !Number.isFinite(velocities[2 * slot + 1])
+    )
+      return false;
+  }
+  for (let i = 0; i < angles.length; i++) if (!Number.isFinite(angles[i])) return false;
+  for (let i = 0; i < angleVelocities.length; i++)
+    if (!Number.isFinite(angleVelocities[i])) return false;
+  return true;
+}
+
+/** `prev` held still through `t`: same pose, nothing moving, nothing pulling. */
+function held_frame(prev: DynamicSnapshot, t: number): DynamicSnapshot {
+  // NaN stays NaN: those are the reserved grab slots, which no velocity fills.
+  const at_rest = (values: Float64Array) => values.map((v) => (Number.isNaN(v) ? v : 0));
+  return {
+    ...prev,
+    t,
+    positions: prev.positions.slice(),
+    angles: prev.angles.slice(),
+    velocities: at_rest(prev.velocities),
+    angleVelocities: at_rest(prev.angleVelocities),
+    accelerations: at_rest(prev.accelerations),
+    angleAccelerations: at_rest(prev.angleAccelerations),
+    energy: prev.energy && { ...prev.energy, grabWork: 0, impactLoss: 0 },
+    grab: undefined,
+  };
+}
+
+/**
+ * Advance a DYNAMIC-mode frame (`solve_dynamic_frame`), publishing only finite numbers.
+ *
+ * A frame that diverges — a pull or a contact the explicit predict step cannot absorb — is solved again without the grab, and held still if that one is not finite either.
+ * A single NaN in a recording is warm-started into every frame after it, and from there into the recording's memory: nothing non-finite may get past this function.
+ * What the failed attempt left in the model's own state (the belts' tracked wraps) is put back from `prev`.
+ */
+export function step_dynamic_simulation(
+  ...args: Parameters<typeof solve_dynamic_frame>
+): DynamicSnapshot {
+  const [model, t, prev, dt, gravity, grab, ...rest] = args;
+  const solved = finite_frame(...args);
+  if (solved) return solved;
+  if (prev) restore_belt_state(model, prev);
+  if (grab) {
+    const released = finite_frame(model, t, prev, dt, gravity, undefined, ...rest);
+    if (released) return released;
+    if (prev) restore_belt_state(model, prev);
+  }
+  if (prev) return held_frame(prev, t);
+  // The very first frame has nothing to hold: only its re-projection onto the edition geometry is left, which no pull or contact can have diverged.
+  const edition = finite_frame(model, t, null, 0, gravity, undefined, ...rest);
+  if (edition) return edition;
+  throw new Error("The mechanism's own geometry cannot be solved: its first frame is not finite.");
+}
+
+/** `solve_dynamic_frame`, or `undefined` when it diverged — by a substep that stopped it, or by a result with a non-finite number in it. */
+function finite_frame(...args: Parameters<typeof solve_dynamic_frame>): DynamicSnapshot | undefined {
+  try {
+    const snapshot = solve_dynamic_frame(...args);
+    return is_finite_frame(snapshot) ? snapshot : undefined;
+  } catch (error) {
+    if (error instanceof DivergedFrame) return undefined;
+    throw error;
+  }
+}
+
+/**
  * Advance a DYNAMIC-mode frame: gravity (today; any other force joins later) integrated in the predict step, XPBD velocity read back from the whole displacement, everything else the same rigid-constraint sweep `step_simulation` runs — split into `substeps` physical substeps (see `DYNAMIC_SUBSTEPS`), each running the full body below in turn.
  *
  * Deliberately narrower than `step_simulation` for now: no motor-target refresh — a motor's `targetAngle` stays wherever the model was compiled with, the plan's step 5 ("imposed torque versus imposed position") is what decides how a motor belongs in a force-driven step in the first place.
  * Everything else `step_simulation` does once per frame before its own solve — gear-mesh angle unwrap, belt disconnect/reattach tracking, junction re-baking, belt state sharing — runs here too, but once per SUBSTEP rather than once per frame: both the unwrapped `GearMeshAngle.alpha` and the belt's tracked wrap feed a constraint that runs every sweep of the solve about to happen, and holding either at its value from the START of the frame across all `DYNAMIC_SUBSTEPS` substeps measurably reintroduces the very listing-order sensitivity this bookkeeping exists to remove — negligible for a slow kinematic frame, enough to blow up a chaotic pendulum train within 60 frames of free fall (see `docs/courroie-dynamique.md`).
  * Only the no-slip links' REBUILD (after a disconnect/reattach) is deferred to once, after the last substep, against the state the frame's own solve agrees with — same reasoning as `step_simulation`'s own post-solve rebuild.
- * Grab is kept: it is core interaction, not a load, and costs nothing extra to support (`grab_links` is shared with `step_simulation`).
+ * The grab is applied as a force (`grab_forces`): it is core interaction, not a load, but it pulls through the same predict step a load does.
  */
-export function step_dynamic_simulation(
+function solve_dynamic_frame(
   model: SimulationModel,
   t: number,
   /** The frame to warm-start from — position, angle AND velocity. */
@@ -1371,6 +1745,12 @@ export function step_dynamic_simulation(
     torques: new Map<string, number>(),
   };
   let result: SolverMaps | undefined;
+  /** The grab force this frame drew as an arrow — see `GrabForceSample`. */
+  let grabDisplay: GrabForceSample | undefined;
+  /** J — the work the grab gave over this frame's substeps, which the energy balance reads the power of. */
+  let grabWork = 0;
+  /** Every contact that touched at the end of one of this frame's substeps: an impact over within the frame is still one it had. */
+  const touching = new Map<number, ContactSample>();
 
   for (let sub = 0; sub < substeps; sub++) {
     const isLastSubstep = sub === substeps - 1;
@@ -1379,8 +1759,7 @@ export function step_dynamic_simulation(
       angleVelocitiesBeforeSolve = new Map(angleVelocities);
     }
 
-    // ── Gear-mesh angle unwrap + belt-contact bookkeeping — EVERY substep, not once per
-    // frame.
+    // ── Gear-mesh angle unwrap + belt-contact bookkeeping — EVERY substep, not once per frame.
     // Both feed `applyGearMeshAngleConstraint`/`applyBeltLengthConstraint` on every sweep of the solve about to run; measured directly (`docs/courroie-dynamique.md`): measuring them once at frame start and holding that hint stale across all `DYNAMIC_SUBSTEPS` substeps injects a small, listing-order-dependent bias into the belt-length constraint whenever the mechanism moves fast within the frame (free fall, not a slow motor-driven kinematic step) — negligible on its own, but enough for a chaotic pendulum train to blow up within 60 frames.
     // The disconnect/reattach EVENT itself stays rare regardless of how often it is tested for, so testing it this often costs nothing beyond the same trig `step_simulation` already pays once per (unsubstepped) frame, `substeps` times over.
     model.links.forEach((link) => {
@@ -1433,8 +1812,7 @@ export function step_dynamic_simulation(
         link.disconnected = disconnectedByBelt.get(link.beltID);
       }
 
-    // ── Beam midpoints (dynamics-only, every substep) ── a virtual mass, not a real
-    // element: pinned onto the live segment so the beam's own rotational inertia comes out right — see `DynamicMassModel.beamMidpoints`.
+    // ── Beam midpoints (dynamics-only, every substep) ── a virtual mass, not a real element: pinned onto the live segment so the beam's own rotational inertia comes out right — see `DynamicMassModel.beamMidpoints`.
     // Position is recomputed from THIS substep's start/end regardless of any warm start, since it is fully determined by them (`t = 0.5`, never a free DOF) — but velocity DOES need seeding: left at 0, the predict step leaves the midpoint sitting at last substep's spot while `start`/`end` predict onward under their own warm-started velocity, so `FixedOnSegment` spends the whole sweep dragging it back into place — pulling `end` backwards right along with it, since the projection corrects both ends of a violated constraint.
     // Seeding it at the segment's own linear interpolation of `start`/`end`'s velocity — exactly what a rigid rod's midpoint velocity actually is — starts the constraint already near-satisfied, so nothing gets eaten.
     const midLinks: Link[] = [];
@@ -1456,29 +1834,40 @@ export function step_dynamic_simulation(
       });
     }
 
-    // ── Grab (transient, this substep only) ── belt maps refreshed just above, this
-    // substep.
+    // The grab is NOT a link in dynamic mode: `grab_forces` (resolved just below, against the same live positions) applies it as a real force.
     // The links only the kinematic modes use are dropped: see `KINEMATIC_ONLY`.
-    const links: Link[] = grab_links(
-      model,
-      grab,
-      positions,
-      wrapsByBelt,
-      disconnectedByBelt,
-    ).filter((link) => !KINEMATIC_ONLY.has(link.type));
+    const links: Link[] = model.links.filter(
+      (link) => !KINEMATIC_ONLY.has(link.type),
+    );
     links.push(...midLinks);
     // Everything from here on is a collision contact, which the sweep may leave out while it is far from touching.
     const contactsFrom = links.length;
     const contacts = collisionsOn || floorOn ? contact_set_of(model, collisionsOn, floorOn) : undefined;
     if (contacts) for (const link of contacts.links) links.push(link);
 
-    // ── User loads, spring/damper and motor forces, resolved against THIS substep's live
-    // positions and pre-predict velocities — all three follow the mechanism as it moves. ──
+    // ── User loads, spring/damper and motor forces, resolved against THIS substep's live positions and pre-predict velocities — all three follow the mechanism as it moves. ──
     const { forces, torques, distributed } = resolve_load_forces(model.compiledLoads, positions);
     const merge_forces = (extra: Map<string, Point2>) => {
       for (const [key, f] of extra) forces.set(key, (forces.get(key) ?? ZERO).add(f));
     };
     merge_forces(resolve_spring_damper_forces(model.compiledSpringDampers, positions, velocities));
+    // The grab, as a force rather than a `HandleGrab` position constraint — resolved against the same live positions/velocities, and folded into `passive`/`applied` so the statics balance accounts for it like any other external action.
+    const grabForce = grab_forces(
+      model,
+      grab,
+      positions,
+      velocities,
+      angleVelocities,
+      angles,
+      wrapsByBelt,
+      disconnectedByBelt,
+      subDt,
+    );
+    merge_forces(grabForce.forces);
+    for (const [key, t] of grabForce.torques)
+      torques.set(key, (torques.get(key) ?? 0) + t);
+    // The arrow the canvas draws for this grab, from the last substep's resolved state — the closest there is to the positions/angles the frame actually publishes.
+    if (isLastSubstep) grabDisplay = grabForce.display;
     // Loads and springs, before motors join the same maps below.
     const passive = { forces: new Map(forces), torques: new Map(torques) };
     const drives = drives_of(model.compiledMotors);
@@ -1506,10 +1895,12 @@ export function step_dynamic_simulation(
     // A free node needs none of this: its weight already comes out mass-independent, exactly like real gravity.
     merge_forces(groundedWeights);
 
-    // ── XPBD solve ── `velocities`/`angleVelocities` are mutated in place with the
-    // result.
+    // ── XPBD solve ── `velocities`/`angleVelocities` are mutated in place with the result.
     // Snapshot the incoming velocity first: restitution below needs both what the substep started with and what the plain (inelastic) solve produced, to know how much bounce to add back.
     const subVelocitiesBeforeSolve = new Map(velocities);
+    const grabOmegaBeforeSolve = new Map<string, number>();
+    for (const key of grabForce.torques.keys())
+      grabOmegaBeforeSolve.set(key, angleVelocities.get(key) ?? 0);
     // Diagnostics (reactions, unsatisfied) only collected on the LAST substep — an earlier one reads an intermediate, not-yet-converged state (see `DYNAMIC_SUBSTEPS`), and collecting them costs a per-link bookkeeping step across the whole sweep a caller measuring pure solver performance skips.
     const restitution = { coefficient: DEFAULT.RESTITUTION, lost: 0 };
     const stepReactions: LinkReaction[] | undefined =
@@ -1548,12 +1939,25 @@ export function step_dynamic_simulation(
       dynamics,
       model.extent,
     );
+    if (!state_is_finite(result.positions, velocities, result.angles, angleVelocities))
+      throw new DivergedFrame();
     reactions = stepReactions;
     // Cheap (one entry per motor) unlike `reactions`, so kept on every substep rather than gated behind `collectDiagnostics` — the last substep's values are what the frame ends on.
     motor = motor_samples(model.compiledMotors, drives, result.positions, velocities, angleVelocities);
+    // The grab's pull varies a great deal within a frame — it closes the gap to the cursor in a frame or two — so its work is summed substep by substep rather than read off the last one.
+    // On the mean of the substep's two velocities: the pull is large enough for `h·F·v⁺` alone to be off by `F²h²/2m`.
+    for (const [key, f] of grabForce.forces) {
+      const before = subVelocitiesBeforeSolve.get(key) ?? ZERO;
+      const after = velocities.get(key) ?? ZERO;
+      grabWork += subDt * f.dot(before.add(after).mul(0.5));
+    }
+    for (const [key, torque] of grabForce.torques)
+      grabWork +=
+        subDt *
+        torque *
+        (((grabOmegaBeforeSolve.get(key) ?? 0) + (angleVelocities.get(key) ?? 0)) / 2);
 
-    // ── Restitution: bounce whatever collision constraints actually resolved this
-    // substep, instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response.
+    // ── Restitution: bounce whatever collision constraints actually resolved this substep, instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response.
     // The direct solve has already bounced them through the whole mechanism; the sweeps leave it to the pairs below, which move only the two points in contact.
     // Against the same fixed scale as `collision_links` above. ──
     impactLoss += restitution.lost;
@@ -1570,6 +1974,18 @@ export function step_dynamic_simulation(
         floorOn,
         model.floorNormal,
         contacts?.near,
+      );
+    if (contacts)
+      collect_touching_contacts(
+        model.collisionCandidates,
+        result.positions,
+        model.extent,
+        collisionsOn,
+        floorOn,
+        model.floorNormal,
+        model.layout,
+        touching,
+        contacts.near,
       );
     if (!model.directSolve)
       impactLoss += apply_end_stop_restitution(
@@ -1588,8 +2004,7 @@ export function step_dynamic_simulation(
   // The re-projection step (`dt = 0`) moves nothing, so every turning motor would read as standing still.
   const stalledMotors = dt > 0 ? stalled_motors(model.compiledMotors, motor, prev?.motor, dt) : [];
 
-  // ── Belt topology changed this frame → rebuild its no-slip links, AFTER every substep has
-  // run — same reasoning as `step_simulation`: baking against the warm start instead would freeze in whatever the frame's own solve was about to correct.
+  // ── Belt topology changed this frame → rebuild its no-slip links, AFTER every substep has run — same reasoning as `step_simulation`: baking against the warm start instead would freeze in whatever the frame's own solve was about to correct.
   if (beltsToRewire.size > 0 && beltContact.rebuildQLinks) {
     for (const belt of beltsToRewire)
       model.links = sort_links(
@@ -1610,6 +2025,7 @@ export function step_dynamic_simulation(
     angleVelocities,
     gravity,
     impactLoss,
+    grabWork,
   );
 
   // ── Into the snapshot's slots, fused keys decoupled back to one slot per original key ──
@@ -1641,10 +2057,12 @@ export function step_dynamic_simulation(
       outAccelerations[2 * slots[s] + 1] = ay;
     }
   }
-  // The reserved grab slots: only the bridge node this frame's own grab added, if any — and never a velocity, since a grab bridge does not exist across frames to warm-start one.
+  // The reserved grab slots: this frame's grab records the cursor target, if any — the point being pulled, since a force-based grab leaves no bridge node to read back.
+  // Never a velocity: a grab is transient and does not exist across frames to warm-start one.
+  const readoutKey = grab_readout_key(grab);
   for (const key of GRAB_KEYS) {
     const slot = layout.index.get(key)!;
-    const p = finalResult.positions.get(key);
+    const p = key === readoutKey && grab ? grab.target : undefined;
     outPositions[2 * slot] = p ? p.x : NaN;
     outPositions[2 * slot + 1] = p ? p.y : NaN;
     outVelocities[2 * slot] = NaN;
@@ -1745,6 +2163,8 @@ export function step_dynamic_simulation(
       ? beam_cohesion_from_statics(model.beamCohesionSpecs, staticsFrame, statics)
       : undefined,
     beltStrands: collectDiagnostics ? belt_strands_from_statics(statics) : undefined,
+    grab: grabDisplay,
+    contacts: touching.size > 0 ? [...touching.values()] : undefined,
   };
 }
 
@@ -1759,6 +2179,8 @@ function compute_energy_sample(
   angleVelocities: Map<string, number>,
   gravity: Point2,
   impactLoss: number,
+  /** J — what the grab gave over the frame, summed substep by substep in `step_dynamic_simulation`. */
+  grabWork: number,
 ): EnergySample {
   let kinetic = 0;
   let potentialGravity = 0;
@@ -1819,6 +2241,7 @@ function compute_energy_sample(
       angleVelocities,
     ),
     loadPower,
+    grabWork,
     impactLoss,
   };
 }
@@ -1866,11 +2289,14 @@ export function snapshot_at(
     // Diagnostics belong to a state the solver actually produced.
     unsatisfied: a.unsatisfied,
     stalledMotors: a.stalledMotors,
+    // `b`'s are the ones that touched on the way to it, which is the stretch `t` is in.
+    contacts: b.contacts,
   };
 }
 
 /**
- * Numerical noise floor for `effort_sign` below — far under any real reaction, torsor or belt tension, whatever units it reads in (N or N·m). Same reasoning as `equilibrium-solve.ts`'s `COUPLING_EPSILON`, applied to a physical reading instead of a unit-vector component.
+ * Numerical noise floor for `effort_sign` below — far under any real reaction, torsor or belt tension, whatever units it reads in (N or N·m).
+ * Same reasoning as `equilibrium-solve.ts`'s `COUPLING_EPSILON`, applied to a physical reading instead of a unit-vector component.
  */
 const EFFORT_SIGN_EPSILON = 1e-6;
 
@@ -1889,10 +2315,36 @@ function lerp_num(av: number, bv: number, u: number): number {
   return av + (bv - av) * u;
 }
 
+/** Blend two frames' grab springs so its foot rides the interpolated pose; at the edge of a grab, only one side has one and the nearer frame decides. */
+function interpolate_grab(
+  a: GrabForceSample | undefined,
+  b: GrabForceSample | undefined,
+  u: number,
+): GrabForceSample | undefined {
+  if (!a || !b) return u <= 0.5 ? a : b;
+  return {
+    elementID: a.elementID,
+    x: lerp_num(a.x, b.x, u),
+    y: lerp_num(a.y, b.y, u),
+    tx: lerp_num(a.tx, b.tx, u),
+    ty: lerp_num(a.ty, b.ty, u),
+    fx: lerp_num(a.fx, b.fx, u),
+    fy: lerp_num(a.fy, b.fy, u),
+    net: {
+      x: lerp_num(a.net.x, b.net.x, u),
+      y: lerp_num(a.net.y, b.net.y, u),
+      fx: lerp_num(a.net.fx, b.net.fx, u),
+      fy: lerp_num(a.net.fy, b.net.fy, u),
+      couple: lerp_num(a.net.couple, b.net.couple, u),
+    },
+  };
+}
+
 /**
  * Blend two frames' `LinkReaction`s, matched by what a consumer already tells them apart by — `type`/`owner`/`key`/`kind`, see `LinkReaction`'s own doc — never by `linkIndex`, which only means something inside the frame that produced it.
  * A reaction on one side only (a contact link the other frame's sweep never touched) is dropped rather than shown at one value across the whole span: the topology guard above already rules out the common cause of that (a belt/layout change), so what is left is rare enough that excluding it costs less than inventing where it came from.
- * A force's `fx`/`fy` gate together, never split — same reasoning `use-simulation-playback.ts` already states for why a reaction's resultant and its couple draw as one reading. Wherever a reading does not blend, it holds whichever side `t` sits nearer to, matching every other "hold" in this file (`dynamic_snapshot_at`'s own `nearest`, `effort_snapshot_at`).
+ * A force's `fx`/`fy` gate together, never split — same reasoning `use-simulation-playback.ts` already states for why a reaction's resultant and its couple draw as one reading.
+ * Wherever a reading does not blend, it holds whichever side `t` sits nearer to, matching every other "hold" in this file (`dynamic_snapshot_at`'s own `nearest`, `effort_snapshot_at`).
  */
 function interpolate_reactions(
   a: LinkReaction[] | undefined,
@@ -1959,8 +2411,10 @@ function axial_transverse(f: { fx: number; fy: number }, axis: Point2): { n: num
 
 /**
  * One end's, or one attached node's, force-and-couple torsor, blended in the beam's OWN local frame rather than in world `fx`/`fy` directly.
- * A straight lerp (or an untouched hold) of a world vector does not stay aligned with a beam that turns between the two instants, because the beam itself is drawn at its OWN, separately-interpolated pose — the arrow visibly comes off the member it belongs to. `axisA`/`axisB` are the beam's unit direction at each recorded instant (what `at`/`bt` were actually solved against); `axisU` is its CURRENT, already-interpolated direction (what is actually drawn this frame).
- * The axial/transverse split (`axial_transverse`) is taken at the instant each torsor belongs to — direction-free — so a blend or a hold of `n`/`t`/`m` is always rebuilt against `axisU` at the end, whichever one `allowBlend` and sign-stability land on. The arrow's direction therefore never disagrees with the beam under it, whether its magnitude is blending or holding — realigning a HELD value costs nothing extra: it is exactly the reading `effort_snapshot_at` would already show at that instant, only pointed at the pose actually on screen instead of the pose it was solved at.
+ * A straight lerp (or an untouched hold) of a world vector does not stay aligned with a beam that turns between the two instants, because the beam itself is drawn at its OWN, separately-interpolated pose — the arrow visibly comes off the member it belongs to.
+ * `axisA`/`axisB` are the beam's unit direction at each recorded instant (what `at`/`bt` were actually solved against); `axisU` is its CURRENT, already-interpolated direction (what is actually drawn this frame).
+ * The axial/transverse split (`axial_transverse`) is taken at the instant each torsor belongs to — direction-free — so a blend or a hold of `n`/`t`/`m` is always rebuilt against `axisU` at the end, whichever one `allowBlend` and sign-stability land on.
+ * The arrow's direction therefore never disagrees with the beam under it, whether its magnitude is blending or holding — realigning a HELD value costs nothing extra: it is exactly the reading `effort_snapshot_at` would already show at that instant, only pointed at the pose actually on screen instead of the pose it was solved at.
  * `allowBlend` is `false` wherever the caller has already decided blending is not safe (today: `BeamCohesion.determinate` false on either side) — `n`/`t`/`m` then always hold, same as a sign crossing would force on their own.
  */
 function blend_torsor_aligned<T extends { fx: number; fy: number; m: number }>(
@@ -2062,7 +2516,8 @@ function interpolate_belt_strands(
 }
 
 /**
- * Blend two frames' `MotorSample`s, matched by `pivotID`. Reuses `saturated` as the discontinuity flag it already is (see `MotorSample`'s own doc) — a motor pinned at its torque ceiling on one side and free on the other has hit exactly the kind of event a blend would paper over, so it holds whichever side `t` sits nearer to instead.
+ * Blend two frames' `MotorSample`s, matched by `pivotID`.
+ * Reuses `saturated` as the discontinuity flag it already is (see `MotorSample`'s own doc) — a motor pinned at its torque ceiling on one side and free on the other has hit exactly the kind of event a blend would paper over, so it holds whichever side `t` sits nearer to instead.
  */
 function interpolate_motor(
   a: MotorSample[] | undefined,
@@ -2129,7 +2584,8 @@ function hermite_weights(u: number): {
 }
 
 /**
- * A cubic Hermite spline through `p0`→`p1` over one recorded interval, using each end's own rate of change (`v0`/`v1` — already known from the solve, not fitted) as its tangent there. Matches the TRUE curve's value AND slope at both recorded instants, unlike the straight chord a plain lerp draws between them, which only ever matches the value — the gap between the two is exactly the visible faceting a fast rotation/oscillation shows under a plain lerp, one recorded interval at a time.
+ * A cubic Hermite spline through `p0`→`p1` over one recorded interval, using each end's own rate of change (`v0`/`v1` — already known from the solve, not fitted) as its tangent there.
+ * Matches the TRUE curve's value AND slope at both recorded instants, unlike the straight chord a plain lerp draws between them, which only ever matches the value — the gap between the two is exactly the visible faceting a fast rotation/oscillation shows under a plain lerp, one recorded interval at a time.
  * `v0`/`v1` are rates in `t`; a Hermite tangent is defined on the unit interval, so they are scaled by `span` going in (`h10`/`h11` weight `span·v`, not `v`) — the reverse of what `hermite_rate` undoes to read a rate back out.
  * Operates on `p0.length` scalars in lockstep (interleaved x/y, or one gear angle per slot) — same shape `lerp` already assumes throughout this file.
  */
@@ -2173,8 +2629,10 @@ function hermite_rate(
  * `snapshot_index_at` is the part that IS shared, being purely a search over `.t`.
  *
  * The gear-angle prefix of `angles` (`layout.wrapBase` entries, matching `angleVelocities`' own length) rides the same Hermite curve as position; the belt wrap/detach/arrival block AFTER it has no velocity counterpart at all and stays a plain lerp, same as ever.
- * `accelerations`/`angleAccelerations` stay a plain lerp too, deliberately NOT the Hermite curve's own second derivative: that second derivative is only linear in `u` and kinks at every recorded instant, no better a model of the true curve than the solver's own measured `(v_after − v_before)/subDt` already lerped here — and unlike position/velocity, nothing downstream needs it to be the FIRST curve's exact derivative. Their own sign turns over in perfectly ordinary motion, so — same reasoning as before — neither is gated the way an effort is gated below.
- * Everything downstream of an equilibrium solve — reactions, beam torsors, belt tensions, motor samples — blends too, but only where nothing marks the two instants as different states: see `interpolate_reactions`/`interpolate_beam_cohesion`/`interpolate_belt_strands`/`interpolate_motor` for what each reads as that marker (a `determined`/`determinate`/`saturated` flag already computed by the statics pass, or a reading crossing sign between the two instants). Wherever a reading does not blend, it holds whichever recorded instant `t` sits nearer to, same as `effort_snapshot_at`.
+ * `accelerations`/`angleAccelerations` stay a plain lerp too, deliberately NOT the Hermite curve's own second derivative: that second derivative is only linear in `u` and kinks at every recorded instant, no better a model of the true curve than the solver's own measured `(v_after − v_before)/subDt` already lerped here — and unlike position/velocity, nothing downstream needs it to be the FIRST curve's exact derivative.
+ * Their own sign turns over in perfectly ordinary motion, so — same reasoning as before — neither is gated the way an effort is gated below.
+ * Everything downstream of an equilibrium solve — reactions, beam torsors, belt tensions, motor samples — blends too, but only where nothing marks the two instants as different states: see `interpolate_reactions`/`interpolate_beam_cohesion`/`interpolate_belt_strands`/`interpolate_motor` for what each reads as that marker (a `determined`/`determinate`/`saturated` flag already computed by the statics pass, or a reading crossing sign between the two instants).
+ * Wherever a reading does not blend, it holds whichever recorded instant `t` sits nearer to, same as `effort_snapshot_at`.
  * This still does not close the gap the guard cannot see: even where nothing crosses sign, a blend of two solved equilibria is no state the mechanism was actually in, and on one that turns between the two instants its own balance closes only approximately — accepted, not fixed, by this function.
  */
 export function dynamic_snapshot_at(
@@ -2244,6 +2702,9 @@ export function dynamic_snapshot_at(
     ),
     balance: interpolate_balance(a.balance, b.balance, u),
     beltStrands: interpolate_belt_strands(a.beltStrands, b.beltStrands, u),
+    grab: interpolate_grab(a.grab, b.grab, u),
+    // Same reading as `snapshot_at`'s.
+    contacts: b.contacts,
   };
 }
 

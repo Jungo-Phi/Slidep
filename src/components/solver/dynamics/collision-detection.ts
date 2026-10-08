@@ -3,9 +3,8 @@ import { CollisionCandidates, FLOOR_ANCHOR_KEY } from "./collision-candidates";
 import { MIN_EXTENT_M } from "../nodes";
 import type { LinkSlots } from "../kinematics/link-slots";
 
-/** Signed distance of `(px,py)` from the floor's line — positive on the allowed (`normal`)
- * side, the anchor read straight off `positions` (its own position, never `normal`, is what a height drag changes). */
-function floor_signed_distance(
+/** Signed distance of `(px,py)` from the floor's line — positive on the allowed (`normal`) side, the anchor read straight off `positions` (its own position, never `normal`, is what a height drag changes). */
+export function floor_signed_distance(
   px: number,
   py: number,
   anchor: Point2,
@@ -28,14 +27,14 @@ export function contact_eps(extent: number): number {
   return CONTACT_EPS_RATIO * (extent || MIN_EXTENT_M);
 }
 
-function within(px: number, py: number, tx: number, ty: number, boundary: number): boolean {
+/** Whether `(px, py)` lies strictly within `boundary` of `(tx, ty)`. */
+export function within(px: number, py: number, tx: number, ty: number, boundary: number): boolean {
   const dx = px - tx;
   const dy = py - ty;
   return dx * dx + dy * dy < boundary * boundary;
 }
 
-/** Which side of `(sx,sy)-(ex,ey)`'s left normal `(px,py)` is currently on — `+1`/`-1`, the
- * same convention `applyPointSegmentContactConstraint` enforces against.
+/** Which side of `(sx,sy)-(ex,ey)`'s left normal `(px,py)` is currently on — `+1`/`-1`, the same convention `applyPointSegmentContactConstraint` enforces against.
  * Exactly on the segment (or a degenerate zero-length one) reads as `+1`, matching `projectOnSegment`'s own tie-break — reproducible rather than arbitrary. */
 export function segment_side(
   px: number,
@@ -54,9 +53,8 @@ export function segment_side(
   return (px - sx) * nx + (py - sy) * ny < 0 ? -1 : 1;
 }
 
-/** Whether `(px, py)` is within `boundary` of its nearest point on segment `(sx,sy)-(ex,ey)`,
- * extremities included (clamped, never projected past them). */
-function point_segment_within(
+/** Whether `(px, py)` is within `boundary` of its nearest point on segment `(sx,sy)-(ex,ey)`, extremities included (clamped, never projected past them). */
+export function point_segment_within(
   px: number,
   py: number,
   sx: number,

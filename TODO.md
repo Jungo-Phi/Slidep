@@ -10,9 +10,6 @@
 
 **Terminer la physique**
 
-- 🔨 Passer la cinématique et édition en solver direct
-- 🤔 Clarifier le grab en dynamique (grab -> force ?)
-- 🆕 Ajouter un paramètre pour inclure/exclure des collisions par élément
 - 🆕 Ajouter un paramètre pour mettre des enroulements en édition
 - 🚨 Faire fonctionner les treuils "Treuil court.slidep"
 
@@ -20,8 +17,11 @@
 - 🚨 Les forces de réaction et efforts internes disparaissent après un grab dans "Hoist.slidep"
 - 🚨 On manque d'un moment de réaction d'appuis sur le slider de "Puente"
 - 🚨 Comment est-ce qu'on peut avoir des réactions d'appuis "moment" sur un pivot, wtf !?
+- 🚨 L'erreur sur le bilan des forces est de presque 100% pour "Pendulum clock.slidep"
 - 🤔 Pas plus fins près des points morts (ex. vilbrequin) ?
 - 🤔 Donner une élasticité aux courroies ?
+- 🔨 Passer la cinématique et édition en solver direct
+- 🔨 Rendre le grab plus stable (cinématique et dynamique)
 
 **Priorités sur le plan général**
 
@@ -104,7 +104,6 @@
 - 🚨 Vérifier ce que fait la bande de contact (0.5 unité) des collisions (et l'enlever ?)
 - 🔨 Ajouter un filtre géométrique grossier (bounding box, grille spatiale) pour les collisions (recalculé peu souvent)
 - 🔨 Vérifier les éléments exclus des collisions
-- 🆕 Indiquer les collisions sur le canvas (point de contact)
 
 **Solveur géométrique**
 
@@ -235,7 +234,7 @@
 - 🚨 Shift + Click sur l'unique élément sélectionné ne le désélectionne pas
 - 🆕 Ajouter le copié-collé
 - 🤔 Symétrie / Rotation / Scale d'éléments multiples.
-- 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément ?)
+- 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément : activer/désactiver les collisions, supprimer, ajouter des mesures, etc.)
 - 🚨 Le déplacement d'une sélection multiple devrait conserver les positions relatives des éléments déplacés
 - 🔨 Le déplacement d'une sélection multiple doit snap à la grille
 

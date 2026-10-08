@@ -2,6 +2,7 @@ import { CanvasDrawing, draw_mechanism } from "./draw-mechanism";
 import { draw_gesture_preview } from "./draw-gesture-preview";
 import { draw_ruler } from "./draw-measure";
 import {
+  draw_contact_points,
   draw_floor,
   draw_overlay_arrow,
   draw_overlay_arrow_label,
@@ -16,6 +17,7 @@ import {
 import type { HoveredBalanceTerm } from "../../solver/analysis/force-balance";
 import type { FloorConfig, ID, ViewportState } from "../../../types";
 import type { HoveredPart } from "../../../types/hovered-part";
+import type { Point2 } from "../../../types/point2";
 import type { CanvasState } from "../../../types/canvas-state";
 
 export type { CanvasDrawing, CanvasHighlight } from "./draw-mechanism";
@@ -25,6 +27,7 @@ export { NO_HIGHLIGHT } from "./draw-mechanism";
 const EMPTY_TRAJECTORIES: TrajectoryDisplay[] = [];
 const EMPTY_ARROWS: OverlayArrow[] = [];
 const EMPTY_MOMENTS: OverlayMoment[] = [];
+const EMPTY_POINTS: Point2[] = [];
 
 /**
  * One frame of the scene: what `draw_mechanism` shows, plus the layers that go under and over it.
@@ -42,6 +45,8 @@ export type MechanicalCanvasDrawing = Omit<
   /** The probed points' travelled paths, under everything else: they are where the mechanism has been, not part of it. */
   trajectories?: TrajectoryDisplay[];
   trajectoryDotted?: boolean;
+  /** Where the collision and floor contacts touch, over the elements touching there. */
+  contactPoints?: Point2[];
   /** The recording's readings for this frame, drawn over the elements they dress. */
   overlayArrows?: OverlayArrow[];
   overlayMoments?: OverlayMoment[];
@@ -132,6 +137,8 @@ function draw_overlay_readings(
   focused: FocusedOverlay | null,
   arrows: OverlayArrow[],
   moments: OverlayMoment[],
+  /** The cursor is holding the mechanism: the grab's value stays on screen for as long as it is pulling. */
+  grabHeld: boolean,
 ) {
   const hoveredEdgeID =
     hoveredPart.type === "Edge" ? hoveredPart.id : undefined;
@@ -179,7 +186,11 @@ function draw_overlay_readings(
   // Every place the named reading is drawn gets its value, not just the first: both ends of a member's own internal effort read at once, which is the whole point of naming it once.
   // The hovered readings come last, so their values land on top of a selected one they overlap.
   const labelledArrows = [
-    ...arrows.filter((a) => names_focused(a) && !hovered.arrows.includes(a)),
+    ...arrows.filter(
+      (a) =>
+        (names_focused(a) || (grabHeld && a.kind === "grab")) &&
+        !hovered.arrows.includes(a),
+    ),
     ...hovered.arrows,
   ];
   const labelledMoments = [
@@ -211,7 +222,7 @@ function floor_hover(
 }
 
 /**
- * Draws the whole scene, in one place so nothing decides its own layer: the trajectories, the floor they run over, the mechanism itself, the ruler's readings, the ghost of the tool gesture in progress if the cursor is over the canvas, then the overlay readings.
+ * Draws the whole scene, in one place so nothing decides its own layer: the trajectories, the floor they run over, the mechanism itself, where its contacts touch, the ruler's readings, the ghost of the tool gesture in progress if the cursor is over the canvas, then the overlay readings.
  * The grid, the axes and the lens legend stay out: they are screen furniture, read against the drawing rather than part of it.
  *
  * The ruler is drawn ahead of the gesture preview: a reading is meant to be read, and reading it means looking away from the canvas.
@@ -229,6 +240,7 @@ export function draw_mechanical_canvas(
     floor,
     trajectories = EMPTY_TRAJECTORIES,
     trajectoryDotted = false,
+    contactPoints = EMPTY_POINTS,
     overlayArrows = EMPTY_ARROWS,
     overlayMoments = EMPTY_MOMENTS,
     hoveredBalanceTerm = null,
@@ -265,6 +277,7 @@ export function draw_mechanical_canvas(
     hoveredOverlayElementID: hovered.elementID,
     litLoadIDs: hovered.loadIDs,
   });
+  draw_contact_points(ctx, viewport, contactPoints);
   draw_ruler(ctx, {
     viewport,
     state,
@@ -289,5 +302,6 @@ export function draw_mechanical_canvas(
     focusedOverlay,
     overlayArrows,
     overlayMoments,
+    state.type === "SimulationDragging",
   );
 }

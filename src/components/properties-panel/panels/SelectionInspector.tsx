@@ -62,6 +62,7 @@ import { InspectedSubject } from "../selection-subject";
 import { LiveParameter, live_parameters } from "../live-parameters";
 import { format_metric, format_scalar } from "../metric-display";
 import CohesionDiagrams from "../components/CohesionDiagrams";
+import CollisionToggleButton from "../components/CollisionToggleButton";
 import ElementDisplay from "../components/ElementDisplay";
 import HostRow from "../components/HostRow";
 import LoadInspector from "../components/LoadInspector";
@@ -385,7 +386,7 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
         onChange={(value) => applyActions(parameter.change(value))}
         unsigned
         precision={2}
-        accent={parameter.slot === "header"}
+        accent={parameter.defining}
       />
     );
 
@@ -493,14 +494,20 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
 
     return (
       <>
-        {/* Beside the name, what the elements tab puts there: the one value that defines the element, then the two ways out — to its probes, and out of the selection. */}
+        {/* Beside the name, the two ways out: to its probes, and out of the selection. */}
         <Box sx={HEADER_INSET}>
           {card(
             element,
             true,
             <>
-              {in_slot("header").map(parameter_input)}
               <Box sx={ICON_GROUP_SX}>
+                <CollisionToggleButton
+                  element={element}
+                  shown={shown_of(element)}
+                  applyActions={applyActions}
+                  size={22}
+                  sx={ROW_ICON_BUTTON_SX}
+                />
                 <ProbeMetricsButton
                   element={element}
                   applyActions={applyActions}
@@ -513,14 +520,6 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
         </Box>
         <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
         {parameter_row(in_slot("drive"))}
-        {firstBlock}
-        {firstBlock.length > 0 && secondBlock.length > 0 && (
-          <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
-        )}
-        {secondBlock}
-        {(physical.length > 0 || selectedBeam) && (
-          <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
-        )}
         {parameter_row(physical)}
         {selectedBeam && (
           <MaterialProfileSection
@@ -532,6 +531,15 @@ export const SelectionInspector: React.FC<SelectionInspectorProps> = ({
             compact
           />
         )}
+        {(physical.length > 0 || selectedBeam) &&
+          (firstBlock.length > 0 || secondBlock.length > 0) && (
+            <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
+          )}
+        {firstBlock}
+        {firstBlock.length > 0 && secondBlock.length > 0 && (
+          <Divider sx={{ my: 0.5, ...FULL_BLEED }} />
+        )}
+        {secondBlock}
       </>
     );
   };

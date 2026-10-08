@@ -22,6 +22,7 @@ import {
 } from "../solver/recording/probe-series";
 import { MaterialDef, ProfileDef } from "../../types/material";
 import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
+import type { HoveredReading } from "../../types/hovered-part";
 
 /** Every list that shows an overlay glyph draws it at this size, the one the "Afficher" menu sets. */
 export const OVERLAY_ICON_SIZE = 18;
@@ -215,14 +216,14 @@ export function merged_internal(focus: FocusedOverlay): boolean {
  * The reading a click names, as the panel and the canvas both understand it.
  * The one place an end is dropped: a click lands on one arrow, but what it names is the effort the whole member carries.
  */
-export function focus_of_reading(focus: FocusedOverlay): FocusedOverlay {
+export function focus_of_reading(focus: HoveredReading): HoveredReading {
   return focus.kind === "reaction-internal" && focus.which !== "node"
     ? { elementID: focus.elementID, kind: focus.kind }
     : focus;
 }
 
 /** Whether two readings name the same thing — a canvas click and a panel row meeting on one row. */
-export function same_reading(a: FocusedOverlay, b: FocusedOverlay): boolean {
+export function same_reading(a: HoveredReading, b: HoveredReading): boolean {
   return (
     a.elementID === b.elementID && a.kind === b.kind && a.which === b.which
   );

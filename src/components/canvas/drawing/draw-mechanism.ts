@@ -87,6 +87,7 @@ import {
   moment_screen_geometry,
 } from "../../../utils/load-geom";
 import { is_zero_load } from "../../../utils/load-scale";
+import { can_collide, element_collides } from "../../../utils/element-queries";
 import {
   get_belt_vias,
   belt_wrap_direction,
@@ -554,6 +555,9 @@ export type CanvasDrawing = {
   /** Motors the simulation cannot push through (see `motors_blocked_at`), marked like anything else the analysis finds at fault.
    * Unlike `highlight`, held for as long as the block lasts rather than for as long as a panel points at them. */
   blockedMotors?: ReadonlySet<ID>;
+  /** Whether the per-element collision flags take effect in this frame: elements that ignore collisions are then drawn translucent.
+   * Simulation only, and only while collisions or the floor are on — otherwise every flag is dormant and there is nothing to tell apart. */
+  collisionsInPlay?: boolean;
   /** The elements the ruler is holding whole, lit in the measurement hue. A ruler marks what
    * it takes whole by lighting the element itself, never by drawing a shape around it. */
   measured?: ReadonlySet<ID>;
@@ -634,6 +638,7 @@ export function draw_mechanism(
     focusedOverlay,
     blockedMotors = EMPTY_IDS,
     measured = EMPTY_IDS,
+    collisionsInPlay = false,
     redundancySymbols = EMPTY_SYMBOLS,
     now = 0,
     libraryTint,
@@ -668,6 +673,13 @@ export function draw_mechanism(
   if (!hideConstraints) allElements = allElements.concat(constraintElements);
   if (!hideLoads) allElements = allElements.concat(loads);
   const undrawable = undrawable_elements(allElements, mechanicalElements);
+  const ignoringCollisions = collisionsInPlay
+    ? new Set(
+        mechanicalElements
+          .filter((el) => can_collide(el) && !element_collides(el))
+          .map((el) => el.id),
+      )
+    : EMPTY_IDS;
   const terminalNodeID = hovered_terminal_node(
     hoveredPart,
     state,
@@ -1090,6 +1102,8 @@ export function draw_mechanism(
         ctx.strokeStyle = COLORS.DELETION_STROKE;
       // Fade out revealed constraints at the end of their hover cooldown.
       if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
+      if (ignoringCollisions.has(element.id))
+        ctx.globalAlpha *= INTERACTION_SPECS.COLLISION_OFF_OPACITY;
       // A row hovered in the library panel: its own beams thicken, same as any other hover — the rest keep their tint, undimmed.
       if (
         libraryTint &&

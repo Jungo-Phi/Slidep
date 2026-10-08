@@ -7,14 +7,12 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
+  useTheme,
 } from "@mui/material";
 import {
   ChevronLeft,
   ChevronRight,
   FirstPage,
-  HorizontalRule,
-  JoinInner,
-  KeyboardDoubleArrowDown,
   LastPage,
   Pause,
   PlayArrow,
@@ -29,6 +27,7 @@ import {
   MechanismMetadata,
   SimulationSpeed,
 } from "../../types";
+import { icon, icon_inked } from "../element-palette/iconDataUris";
 import { useAmbient } from "../common/use-ambient";
 import {
   apply_parameter_snapshot_to_mechanism,
@@ -61,7 +60,8 @@ const SPEEDS: SimulationSpeed[] = [0.1, 0.25, 0.5, 1, 2, 4, 10];
 
 interface PhysicsToggleProps {
   on: boolean;
-  Icon: typeof KeyboardDoubleArrowDown;
+  /** The palette icon's basename: the off state is its `-off` sibling. */
+  iconName: "gravity" | "collision" | "floor";
   tooltip: string;
   onToggle: () => void;
 }
@@ -69,37 +69,51 @@ interface PhysicsToggleProps {
 /** One simulation switch (gravity, collisions, floor): icon only, filled when on. */
 const PhysicsToggle: React.FC<PhysicsToggleProps> = ({
   on,
-  Icon,
+  iconName,
   tooltip,
   onToggle,
-}) => (
-  <Tooltip title={tooltip}>
-    <Chip
-      icon={<Icon sx={{ fontSize: "14px !important" }} />}
-      size="small"
-      clickable
-      onClick={onToggle}
-      variant="outlined"
-      sx={{
-        width: 22,
-        height: 22,
-        borderRadius: "50%",
-        borderColor: on ? "primary.main" : "text.primary",
-        backgroundColor: on ? "primary.main" : "transparent",
-        color: on ? "primary.contrastText" : "inherit",
-        // The label's slot is what makes a chip a pill: dropped, the icon centres on its own.
-        "& .MuiChip-label": { display: "none" },
-        "& .MuiChip-icon": {
-          margin: 0,
+}) => {
+  const theme = useTheme();
+  return (
+    <Tooltip title={tooltip}>
+      <Chip
+        icon={
+          <Box
+            component="img"
+            src={
+              on
+                ? icon_inked(iconName, theme.palette.primary.contrastText)
+                : icon(`${iconName}-off`)
+            }
+            alt=""
+            sx={{ width: 18, height: 18 }}
+          />
+        }
+        size="small"
+        clickable
+        onClick={onToggle}
+        variant="outlined"
+        sx={{
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
+          borderColor: on ? "primary.main" : "text.primary",
+          backgroundColor: on ? "primary.main" : "transparent",
           color: on ? "primary.contrastText" : "inherit",
-        },
-        "&.MuiChip-clickable:hover": {
-          backgroundColor: on ? "primary.dark" : "action.hover",
-        },
-      }}
-    />
-  </Tooltip>
-);
+          // The label's slot is what makes a chip a pill: dropped, the icon centres on its own.
+          "& .MuiChip-label": { display: "none" },
+          "& .MuiChip-icon": {
+            margin: 0,
+            color: on ? "primary.contrastText" : "inherit",
+          },
+          "&.MuiChip-clickable:hover": {
+            backgroundColor: on ? "primary.dark" : "action.hover",
+          },
+        }}
+      />
+    </Tooltip>
+  );
+};
 
 interface PlaybackControlsProps {
   appMode: AppMode;
@@ -422,7 +436,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
         >
           <PhysicsToggle
             on={shownSimulation.gravity}
-            Icon={KeyboardDoubleArrowDown}
+            iconName="gravity"
             tooltip={t(shownSimulation.gravity ? "gravity_on" : "gravity_off")}
             onToggle={() =>
               applyActions([
@@ -432,7 +446,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           />
           <PhysicsToggle
             on={shownSimulation.collisions}
-            Icon={JoinInner}
+            iconName="collision"
             tooltip={t(
               shownSimulation.collisions ? "collisions_on" : "collisions_off",
             )}
@@ -447,7 +461,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           />
           <PhysicsToggle
             on={shownSimulation.floor.enabled}
-            Icon={HorizontalRule}
+            iconName="floor"
             tooltip={t(shownSimulation.floor.enabled ? "floor_on" : "floor_off")}
             onToggle={() =>
               applyActions([

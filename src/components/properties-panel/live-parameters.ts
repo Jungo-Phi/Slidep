@@ -16,11 +16,10 @@ import { gear_inertia, surface_mass_for_inertia } from "../../utils/gear-mass";
 
 /**
  * Where a live value sits, the same place the elements tab gives it.
- * - `header`: beside the element's name, the one value that defines it.
  * - `drive`: a motor's own commands.
- * - `physical`: the properties listed below everything else.
+ * - `physical`: the element's own physical properties, listed right after its geometry.
  */
-export type LiveParameterSlot = "header" | "drive" | "physical";
+export type LiveParameterSlot = "drive" | "physical";
 
 /**
  * One physical value of an element that a running simulation absorbs: it takes effect at the current time, the past stays valid and the motion is recomputed from there (see `PARAMETER_ACTIONS`).
@@ -34,6 +33,8 @@ export interface LiveParameter {
   value: number;
   /** A value whose sign is part of the reading — a motor's own sense of rotation. */
   signed?: boolean;
+  /** The one value that defines the element — a mass's weight, a spring's stiffness: drawn accented among its neighbours. */
+  defining?: boolean;
   slot: LiveParameterSlot;
   change: (value: number) => Action[];
 }
@@ -54,7 +55,8 @@ export function live_parameters(
       titleKey: "mass",
       kind: MASS,
       value: shown.mass,
-      slot: "header",
+      defining: true,
+      slot: "physical",
       change: (mass) => [
         { type: "ChangeMass", id: element.id, delta: mass - element.mass },
       ],
@@ -65,7 +67,8 @@ export function live_parameters(
       titleKey: "stiffness",
       kind: STIFFNESS,
       value: shown.stiffness,
-      slot: "header",
+      defining: true,
+      slot: "physical",
       change: (stiffness) => [
         {
           type: "ChangeStiffness",
@@ -80,7 +83,8 @@ export function live_parameters(
       titleKey: "damping",
       kind: DAMPING,
       value: shown.damping,
-      slot: "header",
+      defining: true,
+      slot: "physical",
       change: (damping) => [
         {
           type: "ChangeDamping",

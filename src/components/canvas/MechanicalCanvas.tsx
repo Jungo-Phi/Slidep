@@ -12,6 +12,7 @@ import {
   HoveredPart,
   HoveredReading,
   ID,
+  is_measured_reading,
   Mechanism,
   Point2,
   PropertiesPanelTab,
@@ -177,6 +178,8 @@ interface MechanicalCanvasProps {
   snapToGrid: boolean;
   snapSettings: SnapSettings;
   showGrid: boolean;
+  /** Whether a simulation marks where its collision and floor contacts touch. */
+  showContactPoints: boolean;
   /** Which reading tints every beam's fill — mechanism-wide, see `BeamStressLens`'s own doc (docs/plan-efforts-interieurs.md phase 9). */
   beamStressLens: BeamStressLens;
   /** Trajectory overlay style: dots at fixed spacing versus one continuous stroke. */
@@ -214,8 +217,7 @@ interface MechanicalCanvasProps {
   /** Where the force balance's moment is taken about — the origin, or wherever the panel's reference currently names.
    * Feeds the moment marker's own position, and the ring drawn at it. */
   momentBalancePoint: WorldPoint;
-  /** A node or beam end clicked while `canvasState.type === "PickingMomentBalanceNode"` — a
-   * UI preference the panel owns, not a mechanism edit, so it never goes through `Action`. */
+  /** A node or beam end clicked while `canvasState.type === "PickingMomentBalanceNode"` — a UI preference the panel owns, not a mechanism edit, so it never goes through `Action`. */
   onMomentBalanceReferencePicked: (reference: MomentBalanceReference) => void;
   /** The panel's own reference-point picker is hovered — draws the ring at `momentBalancePoint` the same way the picking tool itself does, so a reader can preview it without arming anything. */
   momentBalanceReferenceHovered: boolean;
@@ -247,6 +249,8 @@ export interface LiveFrame {
    * Consumed by the analysis panel's N/T/Mf diagrams (phase 5bis) and the beam-fill lens below (phase 9).
    */
   cohesionFields?: CohesionField[];
+  /** Where the collision and floor contacts touch — every one that did since the previous recorded instant, see `SimulationSnapshot.contacts`. */
+  contactPoints: Point2[];
   /** The `normal` lens' shared scale (`StressScaleCache.maxNormal`) — the highest `|N/A|` ever recorded, Pa.
    * Never below its own negligibility floor (`negligible_stress_floors`), so a recording holding nothing but solver noise reads flat rather than ramped across it.
    * `0` outside dynamic mode or before anything has been recorded yet. */
@@ -291,6 +295,7 @@ const MechanicalCanvasView = forwardRef<
       snapToGrid,
       snapSettings,
       showGrid,
+      showContactPoints,
       beamStressLens,
       trajectoryDotted,
       liveFrameRef,
@@ -642,6 +647,8 @@ const MechanicalCanvasView = forwardRef<
             : live?.overlayMoments,
         trajectories: live?.trajectories,
         trajectoryDotted,
+        // Read off the recorded pose, which a mode swing has moved the mechanism away from.
+        contactPoints: showContactPoints && !swinging ? live?.contactPoints : undefined,
         // The floor in effect at the instant on screen: a simulation moves what rests on it, never the surface itself, but an edit made during the run can change it.
         floor: mechanismRef.current.simulation.floor,
         state: canvasStateRef.current,
@@ -662,6 +669,11 @@ const MechanicalCanvasView = forwardRef<
         ),
         // A running kinematic simulation moves the mechanism away from the poses the loads were placed at, so they step aside rather than point at nothing.
         hideLoads: appModeRef.current === "kinematic",
+        // The per-element collision flags only act in a run, and only while collisions or the floor are on.
+        collisionsInPlay:
+          appModeRef.current !== "edition" &&
+          (mechanismRef.current.simulation.collisions ||
+            mechanismRef.current.simulation.floor.enabled),
         dimensionSnapped: snapFeedbackRef.current.distanceSnapped ?? false,
         highlight: highlightRef.current,
         blockedMotors: blockedMotorsRef.current,
@@ -934,6 +946,7 @@ const MechanicalCanvasView = forwardRef<
       }
     }, [
       showGrid,
+      showContactPoints,
       beamStressLens,
       trajectoryDotted,
       snapSettings.highlightSnap,
@@ -1013,8 +1026,10 @@ const MechanicalCanvasView = forwardRef<
           hoveredPartRef.current.type === "Overlay"
             ? hoveredPartRef.current.reading
             : null;
+        // The grab's arrow only answers a hover: there is nothing of it to select once the cursor has let go.
         if (
           target &&
+          is_measured_reading(target) &&
           onSelectOverlayRef.current &&
           appModeRef.current === "dynamic" &&
           (canvasStateRef.current.type === "Selecting" ||
@@ -1086,6 +1101,7 @@ const MechanicalCanvasView = forwardRef<
      * A reaction's two glyphs name one reading, so either of them answers with the same one and both light up together.
      * Silent while the ruler is out, same reasoning as every other hover (`draw-mechanism`'s own `rulerOut`): the measurement hue already says what is under the cursor.
      * Silent too while the moment-balance picker is armed: only a node or a beam end is a legal target there, and a reading lighting up on top would read as a second, competing tool.
+     * And silent during a simulation grab: a hovered reading makes the reducer ignore every move, so the cursor resting on the arrow of its own pull would freeze the very grab it is holding.
      */
     const overlayReadingUnder = useCallback(
       (
@@ -1097,7 +1113,8 @@ const MechanicalCanvasView = forwardRef<
           !live ||
           !cursorOnCanvasRef.current ||
           ruler_is_out(canvasStateRef.current) ||
-          canvasStateRef.current.type === "PickingMomentBalanceNode"
+          canvasStateRef.current.type === "PickingMomentBalanceNode" ||
+          canvasStateRef.current.type === "SimulationDragging"
         )
           return undefined;
         const moment = live.overlayMoments.find(

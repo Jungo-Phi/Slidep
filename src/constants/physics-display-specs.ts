@@ -11,8 +11,7 @@ export const LOAD_SCALING = {
   MIN_PX: 30,
   /** Drawn length (screen px) each decade of magnitude adds. Sets both how far apart two loads read and how coarse a value drag feels: the `SNAP_MANTISSAS` rungs land about a third of it apart. */
   PX_PER_DECADE: 35,
-  /** Mantissas of the round values a load drag snaps to, one set per decade
-   * (…, 1, 2, 5, 10, 20, 50, 100, …).
+  /** Mantissas of the round values a load drag snaps to, one set per decade (…, 1, 2, 5, 10, 20, 50, 100, …).
    * Pure powers of ten would leave most of a drag with no rung nearby. */
   SNAP_MANTISSAS: [1, 2, 5],
 };
@@ -35,8 +34,8 @@ export const TRAJECTORY_SAMPLING = {
   HERMITE_SUBSAMPLES: 5,
 };
 
-/** The same ruler as `LOAD_SCALING`, on a moment's own range: torques are commonly tenths of
- * N·m, not hundreds of N. Halved, because a moment's footprint is its arc's DIAMETER — it is drawn around a node instead of pointing away from one — so that diameter reads on the very ruler a force arrow's length does. */
+/** The same ruler as `LOAD_SCALING`, on a moment's own range: torques are commonly tenths of N·m, not hundreds of N.
+ * Halved, because a moment's footprint is its arc's DIAMETER — it is drawn around a node instead of pointing away from one — so that diameter reads on the very ruler a force arrow's length does. */
 export const MOMENT_SCALING = {
   ...LOAD_SCALING,
   /** Value a moment is drawn at while being placed (N·m). */
@@ -64,6 +63,18 @@ export const VELOCITY_SCALING = {
   MAX_PX: 250,
 };
 
+/**
+ * The dot marking where a collision or floor contact touches.
+ * One bright red on every theme, ringed in the canvas background so it stays legible over an element of any colour.
+ */
+export const CONTACT_POINT = {
+  COLOR: "#FF1A1A",
+  /** Screen px, whatever the zoom. */
+  RADIUS: 3,
+  /** Screen px of background ring around it. */
+  RING: 1,
+};
+
 /** The physics-overlay quantities drawn on the canvas: a probed velocity, the two flavours of reaction force/moment a constraint can carry, and a body's own weight/inertia force. */
 export const PHYSICS_OVERLAY_KINDS = [
   "velocity",
@@ -74,6 +85,12 @@ export const PHYSICS_OVERLAY_KINDS = [
 ] as const;
 
 export type PhysicsOverlayKind = (typeof PHYSICS_OVERLAY_KINDS)[number];
+
+/**
+ * What a hoverable reading on the canvas can be: a measured overlay, or the force the cursor is pulling with during a dynamic grab.
+ * The grab is no measurement and has no palette entry — it is drawn in the load's accent, like the action it is.
+ */
+export type ReadingKind = PhysicsOverlayKind | "grab";
 
 /** What a reading is before a theme says what it looks like — `canvas_palette` solves the lightness that stands `contrast` off the ground the reading is drawn on. */
 export interface PhysicsOverlaySpec {
@@ -106,20 +123,19 @@ export const PHYSICS_OVERLAY_SPEC: Record<
 
 /**
  * The hue one line of the force balance is drawn and read in — the same colour for the arrow on the canvas and the figure in the panel, which is what says they are one and the same action.
- * A load keeps the accent it is already drawn with, the other two are the very overlays they itemise.
+ * A load and the grab, both applied by the user, keep the accent they are drawn with; the other two are the very overlays they itemise.
  * `accent` and `overlay` are handed in rather than reached for: both are the theme's own, which a constants module has no business reading (`COLORS` on the canvas, `palette` in the interface).
  */
 export function balance_term_color(
-  kind: "load" | "weight" | "support",
+  kind: "load" | "grab" | "weight" | "support",
   accent: string,
   overlay: Record<PhysicsOverlayKind, string>,
 ): string {
-  if (kind === "load") return accent;
+  if (kind === "load" || kind === "grab") return accent;
   return overlay[kind === "weight" ? "weight" : "reaction-support"];
 }
 
-/** The three internal-force diagrams of one beam, shown together in the analysis panel
- * (docs/plan-efforts-interieurs.md phase 5bis). */
+/** The three internal-force diagrams of one beam, shown together in the analysis panel (docs/plan-efforts-interieurs.md phase 5bis). */
 export type CohesionQuantity = "N" | "T" | "Mf";
 
 /**

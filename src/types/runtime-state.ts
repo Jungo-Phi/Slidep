@@ -86,6 +86,9 @@ export interface EnergySample {
   frictionPower: number;
   /** W — Σ F·v + Σ τ·ω over every user load: signed, positive when the loads push the mechanism along its motion. */
   loadPower: number;
+  /** J — the work the pull of a dynamic grab gave over this frame, apart from `loadPower` since it is the cursor's action and not a load the mechanism carries: signed, positive while the cursor drags the mechanism along its motion, and zero without a grab.
+   * An energy per frame rather than a rate, like `impactLoss`: the pull closes the gap to the cursor within a frame or two, so a power read at the frame's end says nothing of what it gave. */
+  grabWork: number;
   /** J — kinetic energy the collision and floor bounces removed during this frame: an energy, not a rate, since an impact is an event. */
   impactLoss: number;
 }
@@ -214,7 +217,24 @@ export interface SimulationSnapshot {
    * The only input `dead_points` reads: a motor's constraint showing up in `unsatisfied` is a solve that has not converged, not a stall.
    */
   stalledMotors?: ID[];
+  /**
+   * The collision and floor contacts that touched at any solved step since the previous recorded instant, even one the bodies have already left by this one; undefined when there are none.
+   * See `ContactSample`.
+   */
+  contacts?: ContactSample[];
 }
+
+/**
+ * A contact that touched, named by the snapshot slots (indices into `layout.keys`) its point is read from, so that point follows the pose actually drawn, interpolation included (see `contact_point`).
+ * `id` is the contact's rank among the run's collision candidates: the same contact touching on several solved steps is one entry.
+ */
+export type ContactSample =
+  /** A point or a disc against a segment: touches at the foot of `point` on `start`–`end`. */
+  | { id: number; kind: "segment"; point: number; start: number; end: number }
+  /** A point or a disc against a disc of `radius` around `centre`: touches on that rim, towards `other`. */
+  | { id: number; kind: "circle"; centre: number; other: number; radius: number }
+  /** A point or a disc against the floor, through `anchor` and of unit normal `(nx, ny)`: touches at the foot of `point` on it. */
+  | { id: number; kind: "floor"; point: number; anchor: number; nx: number; ny: number };
 
 export interface KinematicSnapshot extends SimulationSnapshot {
   /**
@@ -222,6 +242,24 @@ export interface KinematicSnapshot extends SimulationSnapshot {
    * See `SnapshotLayout`.
    */
   angles: Float64Array;
+}
+
+/**
+ * What a grab does to the mechanism at one recorded instant, ready to draw as a spring: the grabbed point, the spring's far end (world) and the pull it gives there (world, N) — the same single pull `grab_forces` split onto the DOFs underneath.
+ * Plain numbers, not `Point2`, so it crosses the worker boundary untouched (see `recorder-protocol.ts`).
+ */
+export interface GrabForceSample {
+  /** The element the cursor holds — what the arrow names when it is hovered. */
+  elementID: ID;
+  x: number;
+  y: number;
+  /** The spring's far end (world): the cursor, or where the spring stops stretching towards it. */
+  tx: number;
+  ty: number;
+  fx: number;
+  fy: number;
+  /** What the free body receives, for the force balance: the same pull at the same point, except on a belt, where only a torque on the reference pulley reaches the DOFs (N·m, counter-clockwise positive, with `fx`/`fy` zero and `x`/`y` on that pulley). */
+  net: { x: number; y: number; fx: number; fy: number; couple: number };
 }
 
 /**
@@ -271,6 +309,9 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   /** Every strand of every belt the statics pass could carry — see `BeltStrand`.
    * Undefined under the same `collectDiagnostics` gate as `reactions`. */
   beltStrands?: BeltStrand[];
+  /** The grab force applied this frame, as the arrow to draw — see `GrabForceSample`.
+   * Undefined on frames without a grab. */
+  grab?: GrabForceSample;
 }
 
 /**

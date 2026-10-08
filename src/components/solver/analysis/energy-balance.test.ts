@@ -45,6 +45,7 @@ const zeroEnergy = (kinetic: number): EnergySample => ({
   damperPower: 0,
   frictionPower: 0,
   loadPower: 0,
+  grabWork: 0,
   impactLoss: 0,
 });
 
@@ -57,6 +58,7 @@ describe("bilan énergétique", () => {
       mechanical: [],
       motorWork: [],
       loadWork: [],
+      grabWork: [],
       damperWork: [],
       frictionWork: [],
       impactWork: [],

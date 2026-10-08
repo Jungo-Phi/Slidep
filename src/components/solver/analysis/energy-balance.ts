@@ -24,6 +24,8 @@ export interface EnergyBalanceSeries {
   motorWork: number[];
   /** J — work the user loads have given since the start of the recording (signed). */
   loadWork: number[];
+  /** J — work the cursor's grab has given since the start of the recording (signed): what pulling a part by hand puts in, or takes back when it holds one. */
+  grabWork: number[];
   /** J — what the dampers have dissipated so far, always ≥ 0 and growing. */
   damperWork: number[];
   /** J — what the frictional joints have dissipated so far, always ≥ 0 and growing. */
@@ -41,6 +43,7 @@ export const EMPTY_ENERGY_BALANCE: EnergyBalanceSeries = {
   mechanical: [],
   motorWork: [],
   loadWork: [],
+  grabWork: [],
   damperWork: [],
   frictionWork: [],
   impactWork: [],
@@ -50,6 +53,7 @@ export const EMPTY_ENERGY_BALANCE: EnergyBalanceSeries = {
 interface EnergyCarry {
   motorJ: number;
   loadJ: number;
+  grabJ: number;
   damperJ: number;
   frictionJ: number;
   impactJ: number;
@@ -101,6 +105,7 @@ export function extend_energy_balance(
         mechanical: [],
         motorWork: [],
         loadWork: [],
+        grabWork: [],
         damperWork: [],
         frictionWork: [],
         impactWork: [],
@@ -110,6 +115,7 @@ export function extend_energy_balance(
     : {
         motorJ: 0,
         loadJ: 0,
+        grabJ: 0,
         damperJ: 0,
         frictionJ: 0,
         impactJ: 0,
@@ -128,6 +134,7 @@ export function extend_energy_balance(
       damperPower,
       frictionPower,
       loadPower,
+      grabWork,
       impactLoss,
     } = snap.energy;
     const epRaw = potentialGravity + potentialSpring;
@@ -148,6 +155,7 @@ export function extend_energy_balance(
       carry.damperJ += ((power.damper + carry.prev.damper) / 2) * dt;
       carry.frictionJ += ((power.friction + carry.prev.friction) / 2) * dt;
       // Already an energy per frame, so summed as is rather than integrated; the first frame's is dropped like the powers' first interval.
+      carry.grabJ += grabWork;
       carry.impactJ += impactLoss;
     }
     carry.prevT = snap.t;
@@ -159,6 +167,7 @@ export function extend_energy_balance(
     series.mechanical.push(ec + ep);
     series.motorWork.push(carry.motorJ);
     series.loadWork.push(carry.loadJ);
+    series.grabWork.push(carry.grabJ);
     series.damperWork.push(carry.damperJ);
     series.frictionWork.push(carry.frictionJ);
     series.impactWork.push(carry.impactJ);

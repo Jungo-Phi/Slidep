@@ -24,16 +24,14 @@ import {
   TOP_BAR_SLIM_BUTTON_SX,
 } from "./toolbar-metrics";
 
-/** Zoom as a share of the framing "Recentrer" aims for — the one a document opens at, so
- * 100 % is where every mechanism starts.
+/** Zoom as a share of the framing "Recentrer" aims for — the one a document opens at, so 100 % is where every mechanism starts.
  * Kept short: three digits are plenty to place oneself, and the toolbar cannot afford a number that grows. */
 const format_zoom = (scale: number, reference: number): string => {
   const pct = (scale / reference) * 100;
   return pct >= 10 ? String(Math.round(pct)) : pct.toPrecision(2);
 };
 
-/** The zoom steps the buttons walk, in percent of that same framing: a click always lands
- * on a reading one can name, which a constant ratio per click never does. */
+/** The zoom steps the buttons walk, in percent of that same framing: a click always lands on a reading one can name, which a constant ratio per click never does. */
 const ZOOM_STEPS = [
   1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140,
   150, 160, 180, 200, 250, 300, 350, 400, 500, 600, 800, 1000,
@@ -71,8 +69,7 @@ interface ZoomControlsProps {
   onRecenter: (target: ViewportState) => void;
 }
 
-/** The viewport stepper: the zoom steps frame the current zoom, which doubles as the
- * "Recentrer" command — clicking it is what brings the reading back to 100 %. */
+/** The viewport stepper: the zoom steps frame the current zoom, which doubles as the "Recentrer" command — clicking it is what brings the reading back to 100 %. */
 const ZoomControls: React.FC<ZoomControlsProps> = ({
   viewport,
   recenterTarget,
@@ -199,6 +196,8 @@ interface ToolsMenuProps {
   onSelectLang: (lang: Lang) => void;
   showGrid: boolean;
   setShowGrid: (value: boolean) => void;
+  showContactPoints: boolean;
+  setShowContactPoints: (value: boolean) => void;
   snapToGrid: boolean;
   setSnapToGrid: (value: boolean) => void;
   snapSettings: SnapSettings;
@@ -224,6 +223,8 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
   onSelectLang,
   showGrid,
   setShowGrid,
+  showContactPoints,
+  setShowContactPoints,
   snapToGrid,
   setSnapToGrid,
   snapSettings,
@@ -294,6 +295,8 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     <SettingsMenu
       showGrid={showGrid}
       setShowGrid={setShowGrid}
+      showContactPoints={showContactPoints}
+      setShowContactPoints={setShowContactPoints}
       snapToGrid={snapToGrid}
       setSnapToGrid={setSnapToGrid}
       snapSettings={snapSettings}

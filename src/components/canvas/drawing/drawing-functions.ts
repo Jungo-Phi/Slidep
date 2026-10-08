@@ -10,7 +10,9 @@ import {
   MODE_ANIMATION,
 } from "../../../constants/interaction-specs";
 import {
+  CONTACT_POINT,
   PhysicsOverlayKind,
+  ReadingKind,
   SIGNED_STRESS_RAMP,
   STRESS_RAMP,
   STRESS_INDETERMINATE_COLOR,
@@ -38,7 +40,7 @@ import { RedundancySymbol } from "../../solver/analysis/redundancy-symbols";
 import { Point2 } from "../../../types/point2";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import {
-  HoveredReading,
+  MeasuredReading,
   ID,
   ScreenPoint,
   UnionElement,
@@ -2320,6 +2322,29 @@ export interface TrajectoryDisplay {
   color: string;
 }
 
+/** Marks each point where a collision or floor contact touches with a dot of fixed screen size. */
+export function draw_contact_points(
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  points: Point2[],
+) {
+  if (points.length === 0) return;
+  ctx.save();
+  ctx.beginPath();
+  for (const point of points) {
+    const p = world2screen(point, viewport);
+    ctx.moveTo(p.x + CONTACT_POINT.RADIUS, p.y);
+    ctx.arc(p.x, p.y, CONTACT_POINT.RADIUS, 0, TAU);
+  }
+  ctx.fillStyle = CONTACT_POINT.COLOR;
+  ctx.strokeStyle = COLORS.BACKGROUND;
+  ctx.lineWidth = 2 * CONTACT_POINT.RING;
+  // The ring is the outer half of a stroke the fill then covers on the inside.
+  ctx.stroke();
+  ctx.fill();
+  ctx.restore();
+}
+
 /** Draws the trajectory of a probed point: the portion already travelled as a solid line, the rest of the recording (ahead of the cursor) faded. */
 export function draw_trajectory(
   ctx: CanvasRenderingContext2D,
@@ -2388,7 +2413,7 @@ export interface OverlayArrow {
   vector: WorldPoint;
   /** Drawn length (screen px), for a reading whose quantity has a ruler of its own (`velocity2screen`) — left out, the load ruler applies. */
   screenLength?: number;
-  kind: PhysicsOverlayKind;
+  kind: ReadingKind;
   /** What this reading is, where anything else may want to point at the same one — the force balance names its own terms the same way (`BalanceTerm.id`), which is how a hovered line finds the arrow already on screen instead of drawing a second one over it. */
   id?: string;
   /** The element this reading is read from.
@@ -2398,13 +2423,20 @@ export interface OverlayArrow {
   which?: ReactionPoint;
   /** Set on a belt strand's reaction, so the arrow can be carried onto the belt as it lies on screen (`overlay-anchor.ts`). */
   strand?: StrandReading;
+  /** A grab is drawn as the spring it is, from `at` to here; `vector` stays the force it gives, drawn as an arrow only while the reading is hovered. */
+  springTo?: WorldPoint;
 }
 
 /**
  * An overlay reading clicked on the canvas, kept just long enough to re-derive its own value declaratively on every render — never the `OverlayArrow`/`OverlayMoment` object itself, rebuilt from scratch every frame and so unfit to hold onto.
  * The same identity a hover names (`HoveredReading`), so the two are compared field by field and never confused with the element the reading belongs to.
  */
-export type FocusedOverlay = HoveredReading;
+export type FocusedOverlay = MeasuredReading;
+
+/** The grab is drawn in the load's accent, being an action the user applies; every measured reading has its own hue. */
+function overlay_arrow_color(kind: ReadingKind): string {
+  return kind === "grab" ? COLORS.ACCENT : COLORS.OVERLAY[kind];
+}
 
 function overlay_arrow_screen_length(arrow: OverlayArrow): number {
   return arrow.screenLength ?? stored2screen_load(arrow.vector.length());
@@ -2418,9 +2450,14 @@ function overlay_arrow_screen_geometry(
   viewport: ViewportState,
   arrow: OverlayArrow,
 ): { base: ScreenPoint; vector: ScreenPoint; tip: ScreenPoint } | undefined {
+  const base = world2screen(arrow.at, viewport);
+  // A grab is where its spring is, wherever the force it gives points and however small it is.
+  if (arrow.springTo) {
+    const tip = world2screen(arrow.springTo, viewport);
+    return tip.distance_to(base) > 1e-3 ? { base, vector: tip.sub(base), tip } : undefined;
+  }
   const magnitude = arrow.vector.length();
   if (magnitude < 1e-9) return undefined;
-  const base = world2screen(arrow.at, viewport);
   const vector = world2screen_vec(arrow.vector, viewport).with_length(
     overlay_arrow_screen_length(arrow),
   );
@@ -2450,13 +2487,17 @@ export function draw_overlay_arrow(
   isHovered: boolean = false,
   isSelected: boolean = false,
 ) {
+  // A grab is its spring, whose force reads as an arrow only while the cursor is on it.
+  const spring = arrow.springTo ? overlay_arrow_screen_geometry(viewport, arrow) : undefined;
+  if (arrow.springTo && !spring) return;
   const magnitude = arrow.vector.length();
-  if (magnitude < 1e-9) return;
+  const drawsForce = magnitude >= 1e-9 && (!arrow.springTo || isHovered);
+  if (!spring && !drawsForce) return;
   const base = world2screen(arrow.at, viewport);
-  const screenVec = world2screen_vec(arrow.vector, viewport).with_length(
-    overlay_arrow_screen_length(arrow),
-  );
-  const baseColor = COLORS.OVERLAY[arrow.kind];
+  const screenVec = drawsForce
+    ? world2screen_vec(arrow.vector, viewport).with_length(overlay_arrow_screen_length(arrow))
+    : undefined;
+  const baseColor = overlay_arrow_color(arrow.kind);
   ctx.save();
   ctx.strokeStyle = isSelected ? selection_reading(baseColor) : baseColor;
   ctx.fillStyle = ctx.strokeStyle;
@@ -2469,17 +2510,47 @@ export function draw_overlay_arrow(
     ctx.shadowColor = baseColor;
     ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
   }
-  draw_force(
-    ctx,
-    base,
-    screenVec,
-    magnitude,
-    true,
-    FORCE,
-    undefined,
-    arrow.kind === "velocity" ? "open" : "filled",
-  );
+  if (spring) draw_grab_spring(ctx, spring.base, spring.tip);
+  if (screenVec)
+    draw_force(
+      ctx,
+      base,
+      screenVec,
+      magnitude,
+      true,
+      FORCE,
+      undefined,
+      arrow.kind === "velocity" ? "open" : "filled",
+    );
   ctx.restore();
+}
+
+/** One coil per this many screen pixels of the spring: its length is the whole of what the drawing says, so the coils follow it rather than being counted against a rest length it has none of. */
+const GRAB_COIL_PITCH_PX = 14;
+
+/**
+ * The spring a grab pulls with, from the grabbed point to the cursor, and a dot where the cursor holds it.
+ * Shorter than its own terminals a spring has no coils to draw, and is a line.
+ */
+function draw_grab_spring(
+  ctx: CanvasRenderingContext2D,
+  base: ScreenPoint,
+  tip: ScreenPoint,
+) {
+  const draw = () => {
+    if (base.distance_to(tip) > 2 * DIM.TAC) draw_spring(ctx, base, tip, GRAB_COIL_PITCH_PX);
+    else {
+      ctx.beginPath();
+      ctx.moveTo(base.x, base.y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.stroke();
+    }
+  };
+  with_halo(ctx, draw);
+  draw();
+  ctx.beginPath();
+  ctx.arc(tip.x, tip.y, DIM.PIVOT_INNER_RADIUS, 0, TAU);
+  ctx.fill();
 }
 
 /**
@@ -2494,7 +2565,7 @@ export function draw_overlay_arrow_label(
 ) {
   const geom = overlay_arrow_screen_geometry(viewport, arrow);
   if (!geom) return;
-  const baseColor = COLORS.OVERLAY[arrow.kind];
+  const baseColor = overlay_arrow_color(arrow.kind);
   ctx.save();
   // The same treatment the arrow itself takes when selected, so a value and the reading it belongs to read as one thing.
   ctx.strokeStyle = isSelected ? selection_reading(baseColor) : baseColor;
@@ -2768,8 +2839,7 @@ export function draw_overlay_moment_label(
 
 // ─── Signed stress fill (normal beam-fill lens only, phase 9) ──────────────────
 
-/** Linear interpolation on `SIGNED_STRESS_RAMP`, `t = stress/scaleMax` clamped to `[-1, 1]` —
- * docs/plan-efforts-interieurs.md phase 9, the `normal` lens' counterpart to `stress_ramp_color`.
+/** Linear interpolation on `SIGNED_STRESS_RAMP`, `t = stress/scaleMax` clamped to `[-1, 1]` — docs/plan-efforts-interieurs.md phase 9, the `normal` lens' counterpart to `stress_ramp_color`.
  * No danger threshold of its own (no `STRESS_OVERSTRESS_COLOR` equivalent): unlike the utilization ratio, there is no `σ_adm`-style limit to step to.
  * `scaleMax <= 0` (nothing recorded yet) or a non-finite `stress` reads as the ramp's own neutral midpoint.
  * Only `normal` uses this diverging ramp — `bending` has no whole-section traction/compression state to sign (see `magnitude_stress_color`'s own doc), so it reads `STRESS_RAMP` on a plain magnitude instead. */

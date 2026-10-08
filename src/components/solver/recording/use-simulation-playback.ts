@@ -45,6 +45,7 @@ import {
   snapshot_index_at,
 } from "../dynamics/simulation-engine";
 import { motors_blocked_at } from "../kinematics/dead-points";
+import { contact_point } from "../snapshot";
 import { RecorderClient } from "./recorder-client";
 import { RecorderMode } from "./recorder-protocol";
 import {
@@ -837,6 +838,17 @@ export function useSimulationPlayback({
             }
           }
         }
+        // The spring the cursor holds the mechanism with, whatever the overlay settings: it is the action the user is applying, not a reading to switch on.
+        // Named `"grab"` like its row of the force balance, which is how one lights the other.
+        if (dynSnap.grab)
+          overlayArrows.push({
+            at: new Point2(dynSnap.grab.x, dynSnap.grab.y),
+            vector: new Point2(dynSnap.grab.fx, dynSnap.grab.fy),
+            kind: "grab",
+            id: "grab",
+            elementID: dynSnap.grab.elementID,
+            springTo: new Point2(dynSnap.grab.tx, dynSnap.grab.ty),
+          });
       } else {
         // Kinematic mode records positions only, so a velocity here is differentiated from them.
         // It is the motion of the drive, not of a mechanism with its real masses: the direction and the ratios between points are meaningful, the absolute speeds are as fast as the motors are set.
@@ -862,6 +874,9 @@ export function useSimulationPlayback({
         overlayArrows,
         overlayMoments,
         cohesionFields,
+        contactPoints: (snapshot.contacts ?? [])
+          .map((contact) => contact_point(snapshot, contact))
+          .filter((point): point is Point2 => point !== undefined),
 
         // One frame behind whatever the recording loop last published, exactly like `rs.negligibilityPool` above: a running maximum that lags by one instant cannot move a ramp visibly.
         stressScale: Math.max(rs.stressScale.maxStress, negligibleStress),

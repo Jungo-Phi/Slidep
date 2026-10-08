@@ -360,6 +360,12 @@ export type Action =
       oldValue: boolean;
     }
   | {
+      type: "SetElementCollides";
+      elementID: ID;
+      newValue: boolean;
+      oldValue: boolean;
+    }
+  | {
       type: "SetBeamStressLens";
       newValue: BeamStressLens;
       oldValue: BeamStressLens;

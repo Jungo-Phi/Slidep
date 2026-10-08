@@ -102,6 +102,28 @@ export const edition_palette = (): {
     ],
   },
   {
+    titleKey: "geometry",
+    elements: [
+      {
+        nameKey: "beam",
+        iconSrc: icon("beam"),
+        goToStateType: "PlacingBeamStart",
+        hilightRule: (state) =>
+          state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
+      },
+      {
+        nameKey: "join",
+        iconSrc: icon("join"),
+        goToStateType: "PlacingJoin",
+        hilightRule: (state) => state.type === "PlacingJoin",
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
+      },
+    ],
+  },
+  {
     titleKey: "connections",
     elements: [
       {
@@ -142,25 +164,8 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "structure",
+    titleKey: "supports",
     elements: [
-      {
-        nameKey: "join",
-        iconSrc: icon("join"),
-        goToStateType: "PlacingJoin",
-        hilightRule: (state) => state.type === "PlacingJoin",
-        hilightColor: COLORS.ACCENT,
-        hilightHoverColor: COLORS.ACCENT_DARK,
-      },
-      {
-        nameKey: "beam",
-        iconSrc: icon("beam"),
-        goToStateType: "PlacingBeamStart",
-        hilightRule: (state) =>
-          state.type === "PlacingBeamStart" || state.type === "PlacingBeamEnd",
-        hilightColor: COLORS.ACCENT,
-        hilightHoverColor: COLORS.ACCENT_DARK,
-      },
       {
         nameKey: "ground",
         iconSrc: icon("ground"),
@@ -172,7 +177,7 @@ export const edition_palette = (): {
     ],
   },
   {
-    titleKey: "mode_dynamic",
+    titleKey: "masses_springs",
     elements: [
       {
         nameKey: "damper",
@@ -199,6 +204,32 @@ export const edition_palette = (): {
         iconSrc: icon("mass"),
         goToStateType: "PlacingMass",
         hilightRule: (state) => state.type === "PlacingMass",
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
+      },
+    ],
+  },
+  {
+    titleKey: "loads",
+    elements: [
+      {
+        nameKey: "force",
+        iconSrc: icon("force"),
+        goToStateType: "PlacingForceStart",
+        hilightRule: (state) =>
+          state.type === "PlacingForceStart" ||
+          state.type === "PlacingForceEnd" ||
+          state.type === "PlacingDistributedForce",
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
+      },
+      {
+        nameKey: "moment",
+        iconSrc: icon("moment"),
+        goToStateType: "PlacingMomentStart",
+        hilightRule: (state) =>
+          state.type === "PlacingMomentStart" ||
+          state.type === "PlacingMomentEnd",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
@@ -292,32 +323,6 @@ export const edition_palette = (): {
         hilightRule: (state) =>
           state.type === "ParallelConstraintStart" ||
           state.type === "ParallelConstraintEdge",
-        hilightColor: COLORS.ACCENT,
-        hilightHoverColor: COLORS.ACCENT_DARK,
-      },
-    ],
-  },
-  {
-    titleKey: "loads",
-    elements: [
-      {
-        nameKey: "force",
-        iconSrc: icon("force"),
-        goToStateType: "PlacingForceStart",
-        hilightRule: (state) =>
-          state.type === "PlacingForceStart" ||
-          state.type === "PlacingForceEnd" ||
-          state.type === "PlacingDistributedForce",
-        hilightColor: COLORS.ACCENT,
-        hilightHoverColor: COLORS.ACCENT_DARK,
-      },
-      {
-        nameKey: "moment",
-        iconSrc: icon("moment"),
-        goToStateType: "PlacingMomentStart",
-        hilightRule: (state) =>
-          state.type === "PlacingMomentStart" ||
-          state.type === "PlacingMomentEnd",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
@@ -470,9 +475,13 @@ const ElementPaletteView: React.FC<ElementPaletteProps> = ({
               />
               <Typography
                 sx={{
+                  // A title wraps instead of widening the palette: the icon grid alone sets the width.
+                  width: 0,
+                  minWidth: "100%",
                   textAlign: "center",
                   fontSize: "0.65rem",
                   fontWeight: 800,
+                  lineHeight: 1.15,
                   color: "text.disabled",
                 }}
               >

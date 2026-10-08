@@ -144,6 +144,12 @@ export interface BaseMechanicalElement extends BaseElement {
   name?: string;
   probes: ProbeConfig[];
   overlays: OverlayFlags;
+  /**
+   * Whether this element takes part in collision detection; absent (the default) collides.
+   * `false` excludes it from every contact pair, the floor included, whatever the mechanism-wide `collisions` and floor switches say about the others.
+   * Only meaningful on elements that can collide at all (a node, a beam, a gear — see `can_collide`).
+   */
+  collides?: boolean;
 }
 
 /** Base interface for Node elements (defined by a position) */

@@ -1,6 +1,7 @@
 import { ID } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import {
+  ContactSample,
   DynamicSnapshot,
   SimulationSnapshot,
   SnapshotLayout,
@@ -39,8 +40,7 @@ export interface BeltShape {
   pulleys: number;
 }
 
-/** A layout over exactly these slots, grab keys included: the form the wire carries, where
- * the reserved slots are already part of `keys`. */
+/** A layout over exactly these slots, grab keys included: the form the wire carries, where the reserved slots are already part of `keys`. */
 export function snapshot_layout(
   keys: string[],
   angleKeys: string[],
@@ -133,8 +133,9 @@ export function snapshot_belt_detached<S extends SimulationSnapshot>(
   return out;
 }
 
-/** The position recorded for `key`, or `undefined` when this snapshot has none. */
 /**
+ * The position recorded for `key`, or `undefined` when this snapshot has none.
+ *
  * Generic over `SimulationSnapshot`: `positions` is always exactly `2 * layout.keys.length` long on either concrete subtype, so a position slot is never out of bounds whichever kind this is called with.
  * The belt accessors above index past `angleKeys.length` on purpose — both concrete subtypes' `angles` array has room for it (see `SnapshotLayout`).
  */
@@ -148,8 +149,46 @@ export function snapshot_point<S extends SimulationSnapshot>(
   return Number.isNaN(x) ? undefined : new Point2(x, snapshot.positions[2 * i + 1]);
 }
 
-/** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none. Generic
- * like `snapshot_point`, for the same reason — an angle slot never exceeds `layout.angleKeys.length`, which both concrete subtypes size their `angles` array to at least (and beyond, for the belt blocks that follow it). */
+/** Where `contact` touches in this snapshot's pose, or `undefined` where a slot it reads holds no position. */
+export function contact_point<S extends SimulationSnapshot>(
+  snapshot: S,
+  contact: ContactSample,
+): Point2 | undefined {
+  const at = (slot: number): Point2 | undefined => {
+    const x = snapshot.positions[2 * slot];
+    return Number.isNaN(x) ? undefined : new Point2(x, snapshot.positions[2 * slot + 1]);
+  };
+  switch (contact.kind) {
+    case "segment": {
+      const p = at(contact.point);
+      const a = at(contact.start);
+      const b = at(contact.end);
+      if (!p || !a || !b) return undefined;
+      const d = b.sub(a);
+      const lengthSq = d.length_squared();
+      const t = lengthSq > 0 ? Math.max(0, Math.min(1, p.sub(a).dot(d) / lengthSq)) : 0;
+      return a.add(d.mul(t));
+    }
+    case "circle": {
+      const c = at(contact.centre);
+      const o = at(contact.other);
+      if (!c || !o) return undefined;
+      const d = o.sub(c);
+      const length = d.length();
+      return length > 0 ? c.add(d.mul(contact.radius / length)) : undefined;
+    }
+    case "floor": {
+      const p = at(contact.point);
+      const a = at(contact.anchor);
+      if (!p || !a) return undefined;
+      const n = new Point2(contact.nx, contact.ny);
+      return p.sub(n.mul(p.sub(a).dot(n)));
+    }
+  }
+}
+
+/** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none.
+ * Generic like `snapshot_point`, for the same reason — an angle slot never exceeds `layout.angleKeys.length`, which both concrete subtypes size their `angles` array to at least (and beyond, for the belt blocks that follow it). */
 export function snapshot_angle<S extends SimulationSnapshot>(
   snapshot: S,
   key: string,
@@ -182,8 +221,7 @@ export function snapshot_acceleration(
   return Number.isNaN(x) ? undefined : new Point2(x, snapshot.accelerations[2 * i + 1]);
 }
 
-/** The angular velocity (rad/s) recorded for `key` in a dynamic-mode snapshot — see
- * `snapshot_angle`. */
+/** The angular velocity (rad/s) recorded for `key` in a dynamic-mode snapshot — see `snapshot_angle`. */
 export function snapshot_angle_velocity(
   snapshot: DynamicSnapshot,
   key: string,

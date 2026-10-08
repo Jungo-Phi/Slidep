@@ -41,13 +41,13 @@ function direction_on(
 /**
  * Where a term of the force balance is drawn: its own element's centre on the pose on screen.
  * The balance is read off the pose the panel last rendered, which trails the canvas by a mirror tick and parts from it entirely wherever the panel stops being handed new instants — so the point comes from the drawing rather than from the term, and a term whose element is gone keeps its own.
- * Terms that are not read at a body (a load, applied where it was placed) have no such anchor.
+ * Terms that are not read at a body (a load, applied where it was placed; the grab, where the cursor holds) have no such anchor.
  */
 export function balance_term_anchor(
   term: { kind: string; elementID: ID },
   elements: MechanicalElement[],
 ): WorldPoint | undefined {
-  if (term.kind === "load") return undefined;
+  if (term.kind === "load" || term.kind === "grab") return undefined;
   const element = elements.find((el) => el.id === term.elementID);
   return element ? body_centre(element) : undefined;
 }

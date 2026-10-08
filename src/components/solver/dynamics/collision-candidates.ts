@@ -1,4 +1,5 @@
 import { GearElement, ID, Mechanism } from "../../../types";
+import { element_collides } from "../../../utils/element-queries";
 
 /** The floor's fixed anchor node — no backing `MechanicalElement`, injected once in
  * `compile_simulation_model` (see `floor_anchor_and_normal`), like `GRAB_BRIDGE_KEY` but permanent rather than re-injected per frame. */
@@ -25,7 +26,7 @@ export type CollisionCandidates = {
     key2: string;
     radius2: number;
   }[];
-  /** Every node/gear against the floor's line — always built, independently of
+  /** Every colliding node/gear against the floor's line — always built, independently of
    * `mechanism.simulation.floor.enabled`: the live flag gates their use at runtime (see `collision_links`), the same way ordinary candidates are always built regardless of `collisions`.
    * A height/angle change only takes effect on the next compile. */
   pointFloor: { pointKey: string }[];
@@ -53,6 +54,9 @@ const NODE_TYPES = new Set(["pivot", "slider", "slidep", "join", "mass"]);
 /**
  * Builds the candidate pairs for `mechanism`, translating every raw element id through `keyMap` — the same fused-key map `compile_simulation_model` builds for its links and hands to `compile_loads`/`compute_dynamic_mass_model`/`compile_springs_dampers`, so a candidate lands on the exact key `nodes.positions` and every other link use.
  * Structural exclusions (a beam's own extremities, whatever is welded to it or to a gear, meshed gear pairs) are read straight off the elements — see `BeamElement.fixedNodesBodyIDs`/`GearElement. fixedNodesBodyIDs`/`meshedGearsIDs` — rather than re-derived from the compiled links, which is both more direct and immune to link shapes changing under it.
+ *
+ * An element whose `collides` flag is off drops out of every pair it would be part of, the floor included, so a pair is tested only when both its sides collide.
+ * A point fused from several elements still collides as long as one of them does.
  */
 export function build_collision_candidates(
   mechanism: Mechanism,
@@ -72,7 +76,16 @@ export function build_collision_candidates(
   }
   const points = dedupe_points(rawPoints);
 
-  const gears = elements.filter((e): e is GearElement => e.type === "gear");
+  const ignoring = new Set<ID>();
+  for (const element of elements)
+    if (!element_collides(element)) ignoring.add(element.id);
+  const collidingPoints = points.filter((p) =>
+    p.rawIds.some((id) => !ignoring.has(id)),
+  );
+
+  const gears = elements.filter(
+    (e): e is GearElement => e.type === "gear" && !ignoring.has(e.id),
+  );
 
   const weldedTo = new Map<ID, Set<ID>>();
   for (const element of elements) {
@@ -87,11 +100,12 @@ export function build_collision_candidates(
   const pointCircle: CollisionCandidates["pointCircle"] = [];
   const circleSegment: CollisionCandidates["circleSegment"] = [];
   for (const element of elements) {
+    if (ignoring.has(element.id)) continue;
     if (element.type === "beam") {
       const segKey1 = remap(`${element.id}:start`);
       const segKey2 = remap(`${element.id}:end`);
       const welded = weldedTo.get(element.id)!;
-      for (const p of points) {
+      for (const p of collidingPoints) {
         if (p.key === segKey1 || p.key === segKey2) continue; // the beam's own ends
         if (p.rawIds.some((id) => welded.has(id))) continue; // welded to this beam's span
         pointSegment.push({ pointKey: p.key, segKey1, segKey2 });
@@ -109,7 +123,7 @@ export function build_collision_candidates(
       const centerKey = remap(element.id);
       const radius = element.radius;
       const welded = weldedTo.get(element.id)!;
-      for (const p of points) {
+      for (const p of collidingPoints) {
         if (p.key === centerKey) continue; // fused with its own axle
         if (p.rawIds.some((id) => welded.has(id))) continue; // welded to this gear (rim, e.g.)
         pointCircle.push({ pointKey: p.key, centerKey, radius });
@@ -132,8 +146,8 @@ export function build_collision_candidates(
       });
     }
 
-  // Not pairwise like the rest — there is only ever one floor, so every point/gear is a candidate against it, unconditionally (see `CollisionCandidates.pointFloor`).
-  const pointFloor: CollisionCandidates["pointFloor"] = points.map((p) => ({
+  // Not pairwise like the rest — there is only ever one floor, so every colliding point/gear is a candidate against it (see `CollisionCandidates.pointFloor`).
+  const pointFloor: CollisionCandidates["pointFloor"] = collidingPoints.map((p) => ({
     pointKey: p.key,
   }));
   const circleFloor: CollisionCandidates["circleFloor"] = gears.map((g) => ({

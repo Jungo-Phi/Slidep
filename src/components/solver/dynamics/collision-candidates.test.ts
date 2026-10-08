@@ -242,4 +242,95 @@ describe("build_collision_candidates", () => {
     expect(pointKeys).toContain(GA); // a gear's axle is a node too
     expect(circleFloor).toEqual([{ centerKey: G, radius: 10 }]);
   });
+
+  it("retire d'un nœud qui ignore les collisions toutes ses paires, contre poutres et roues", () => {
+    const J = id();
+    const B = id();
+    const GA = id();
+    const G = id();
+    const before = mechanism([
+      { ...join(J, new Point2(50, 50)), collides: false },
+      beam(B, new Point2(0, 0), new Point2(100, 0)),
+      pivot(GA, new Point2(0, 80), { fixedGearsIDs: [G] }),
+      gear(G, new Point2(0, 80), GA),
+    ]);
+    const { pointSegment, pointCircle } = build_collision_candidates(before, IDENTITY);
+    expect(pointSegment.some((c) => c.pointKey === J)).toBe(false);
+    expect(pointCircle.some((c) => c.pointKey === J)).toBe(false);
+    expect(pointSegment.some((c) => c.pointKey === GA)).toBe(true);
+  });
+
+  it("retire d'une poutre qui ignore les collisions son segment et ses extrémités", () => {
+    const B1 = id();
+    const B2 = id();
+    const before = mechanism([
+      { ...beam(B1, new Point2(0, 0), new Point2(100, 0)), collides: false },
+      beam(B2, new Point2(0, 50), new Point2(100, 50)),
+    ]);
+    const { pointSegment } = build_collision_candidates(before, IDENTITY);
+    expect(pointSegment.some((c) => c.segKey1 === `${B1}:start`)).toBe(false);
+    expect(pointSegment.some((c) => c.pointKey === `${B1}:start`)).toBe(false);
+    expect(pointSegment.some((c) => c.pointKey === `${B2}:start`)).toBe(false);
+  });
+
+  it("retire d'une roue qui ignore les collisions ses paires contre poutres, nœuds et autres roues", () => {
+    const P1 = id();
+    const P2 = id();
+    const G1 = id();
+    const G2 = id();
+    const B = id();
+    const M = id();
+    const before = mechanism([
+      pivot(P1, new Point2(0, 0), { fixedGearsIDs: [G1] }),
+      pivot(P2, new Point2(100, 0), { fixedGearsIDs: [G2] }),
+      { ...gear(G1, new Point2(0, 0), P1), collides: false },
+      gear(G2, new Point2(100, 0), P2),
+      beam(B, new Point2(0, 50), new Point2(100, 50)),
+      mass(M, new Point2(50, 20)),
+    ]);
+    const { circleSegment, circleCircle, pointCircle } = build_collision_candidates(
+      before,
+      IDENTITY,
+    );
+    expect(circleSegment.some((c) => c.centerKey === G1)).toBe(false);
+    expect(circleSegment.some((c) => c.centerKey === G2)).toBe(true);
+    expect(circleCircle).toEqual([]);
+    expect(pointCircle.some((c) => c.centerKey === G1)).toBe(false);
+    expect(pointCircle.some((c) => c.centerKey === G2 && c.pointKey === M)).toBe(true);
+  });
+
+  it("garde un point fusionné tant qu'un de ses éléments collisionne", () => {
+    const J = id();
+    const B = id();
+    const OTHER = id();
+    const fused = new Map([
+      [J, `${J},${B}:end`],
+      [`${B}:end`, `${J},${B}:end`],
+    ]);
+    const before = mechanism([
+      { ...join(J, new Point2(100, 0)), collides: false },
+      beam(B, new Point2(0, 0), new Point2(100, 0)),
+      beam(OTHER, new Point2(50, -50), new Point2(50, 50)),
+    ]);
+    const { pointSegment } = build_collision_candidates(before, fused);
+    expect(pointSegment.some((c) => c.pointKey === `${J},${B}:end`)).toBe(true);
+  });
+
+  it("retire aussi du plancher les éléments qui ignorent les collisions", () => {
+    const P = id();
+    const Q = id();
+    const GA = id();
+    const G = id();
+    const before = mechanism([
+      { ...pivot(P, new Point2(0, 0)), collides: false },
+      pivot(Q, new Point2(10, 0)),
+      pivot(GA, new Point2(30, 0), { fixedGearsIDs: [G] }),
+      { ...gear(G, new Point2(30, 0), GA), collides: false },
+    ]);
+    const { pointFloor, circleFloor } = build_collision_candidates(before, IDENTITY);
+    const pointKeys = pointFloor.map((c) => c.pointKey);
+    expect(pointKeys).not.toContain(P);
+    expect(pointKeys).toContain(Q);
+    expect(circleFloor).toEqual([]);
+  });
 });

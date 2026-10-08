@@ -1,5 +1,5 @@
 import type { StringKey } from "../i18n";
-import { PhysicsOverlayKind } from "../constants/physics-display-specs";
+import { PhysicsOverlayKind, ReadingKind } from "../constants/physics-display-specs";
 import { ID } from "./element";
 import type { QuantityKind } from "../utils/quantity-format";
 import type { CohesionField } from "../components/solver/recording/cohesion-field";
@@ -13,9 +13,18 @@ import { WorldPoint } from "./mechanism";
  */
 export type HoveredReading = {
   elementID: ID;
-  kind: PhysicsOverlayKind;
+  kind: ReadingKind;
   which?: "node" | "start" | "end";
 };
+
+/** A reading the panel can take as its subject: every one but the grab, which is only ever pointed at. */
+export type MeasuredReading = HoveredReading & { kind: PhysicsOverlayKind };
+
+export function is_measured_reading(
+  reading: HoveredReading,
+): reading is MeasuredReading {
+  return reading.kind !== "grab";
+}
 
 type HoveredElement = {
   position: WorldPoint;
