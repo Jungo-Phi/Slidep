@@ -1,9 +1,13 @@
-import { Action, MechanicalElement, OverlayKind } from "../../types";
+import {
+  Action,
+  BeamStressLens,
+  MechanicalElement,
+  OverlayKind,
+} from "../../types";
 import { available_overlays, overlay_shown } from "../../utils/element-queries";
 import { PluralKey } from "../../i18n";
 
-/** Human label of each overlay layer, singular or plural depending on how many
- * elements it's said of — see `tn` (the "Afficher" menu says it of several elements at once, a single element's own panel switch says it of just itself). */
+/** Human label of each overlay layer, singular or plural depending on how many elements it's said of — see `tn` (the "Afficher" menu says it of several elements at once, a single element's own panel switch says it of just itself). */
 export const OVERLAY_LABEL_KEYS: Record<OverlayKind, PluralKey> = {
   trajectory: "overlay_trajectory",
   force: "overlay_force",
@@ -55,11 +59,21 @@ export function overlay_count(
   };
 }
 
-/** True as soon as one layer shows at least one element — the single bit that
- * lights up the "Afficher" button ("something is drawn over my canvas"). */
+/** True as soon as one layer shows at least one element. */
 export function any_overlay_shown(elements: MechanicalElement[]): boolean {
   return elements.some((el) =>
     available_overlays(el).some((kind) => overlay_shown(el, kind)),
+  );
+}
+
+/** Whether anything at all is drawn over the mechanism — a layer, a stress lens, the support reactions: the one bit that opens the "Afficher" button's eye. */
+export function overlays_shown(
+  elements: MechanicalElement[],
+  beamStressLens: BeamStressLens,
+  supportReactions: boolean,
+): boolean {
+  return (
+    any_overlay_shown(elements) || beamStressLens !== "none" || supportReactions
   );
 }
 

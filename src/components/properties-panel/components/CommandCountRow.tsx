@@ -4,6 +4,10 @@ import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { t } from "../../../i18n";
 import { OVERLAY_ICON_SIZE } from "../element-readings";
 
+// The negative margin gives back what the padding adds, so a wider target never makes the row taller.
+const BUTTON_SX = { p: 1, m: -0.25 } as const;
+const TOUCH_BUTTON_SX = { p: 1.25, m: -0.25 } as const;
+
 interface CommandCountRowProps {
   /** Data URI of the layer's own glyph, ahead of the label — absent for a set with no glyph of its own. */
   icon?: string;
@@ -19,6 +23,10 @@ interface CommandCountRowProps {
   offTitle?: string;
   /** Horizontal inset, in theme units — a menu's own margin is wider than a panel's. */
   px?: number;
+  /** Labelled at the text size of a menu it sits in, rather than a panel's compact one. */
+  menu?: boolean;
+  /** Pads the two commands for a finger rather than a mouse. */
+  touch?: boolean;
   /** Extra control rendered between the label and the counter — the trajectory row's style toggle. */
   children?: React.ReactNode;
 }
@@ -38,13 +46,15 @@ export const CommandCountRow: React.FC<CommandCountRowProps> = ({
   onTitle,
   offTitle,
   px = 1.5,
+  menu = false,
+  touch = false,
   children,
 }) => (
   <Box
     sx={{
       display: "flex",
       alignItems: "center",
-      gap: 0.5,
+      gap: 1,
       px,
       py: 0.25,
       opacity: total === 0 ? 0.4 : 1,
@@ -64,7 +74,10 @@ export const CommandCountRow: React.FC<CommandCountRowProps> = ({
         }}
       />
     )}
-    <Typography variant="body2" sx={{ flex: 1, whiteSpace: "nowrap" }}>
+    <Typography
+      variant={menu ? "body1" : "body2"}
+      sx={{ flex: 1, whiteSpace: "nowrap" }}
+    >
       {label}
     </Typography>
     {children}
@@ -87,7 +100,7 @@ export const CommandCountRow: React.FC<CommandCountRowProps> = ({
           color="inherit"
           onClick={() => onSetAll(true)}
           disabled={total === 0 || on === total}
-          sx={{ p: 0.5 }}
+          sx={touch ? TOUCH_BUTTON_SX : BUTTON_SX}
         >
           {onIcon}
         </IconButton>
@@ -100,7 +113,7 @@ export const CommandCountRow: React.FC<CommandCountRowProps> = ({
           color="inherit"
           onClick={() => onSetAll(false)}
           disabled={total === 0 || on === 0}
-          sx={{ p: 0.5 }}
+          sx={touch ? TOUCH_BUTTON_SX : BUTTON_SX}
         >
           {offIcon}
         </IconButton>

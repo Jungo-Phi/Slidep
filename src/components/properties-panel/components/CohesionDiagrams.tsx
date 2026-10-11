@@ -13,6 +13,7 @@ import {
   COHESION_DIAGRAM_COLOR,
 } from "../../../constants/physics-display-specs";
 import { t } from "../../../i18n";
+import { useTouchScrub } from "../../common/use-touch-scrub";
 import type {
   AbscissaFrame,
   HoveredAbscissa,
@@ -47,8 +48,7 @@ const fmt = (v: number): string => {
   return a >= 1000 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
 };
 
-/** The curve's own value at a CONTINUOUS abscissa `s` — linear between the two bracketing
- * samples, so it lies exactly on the drawn polyline (itself already straight between samples, never a true smooth curve).
+/** The curve's own value at a CONTINUOUS abscissa `s` — linear between the two bracketing samples, so it lies exactly on the drawn polyline (itself already straight between samples, never a true smooth curve).
  * At a discontinuity this naturally resolves to whichever side `s` sits on, since the bracket search only crosses to the far side once `s` is past the jump's own abscissa entirely. */
 function value_at(
   field: CohesionField,
@@ -68,8 +68,7 @@ function value_at(
   return va + u * (vb - va);
 }
 
-/** The hovered dot's own height: matches `value_at` off a discontinuity, but once the cursor
- * is snapped onto one (`hoveredS !== hoveredValueS`) reads the exact before/after sample instead of interpolating from the raw position — otherwise the dot keeps sliding vertically for tiny mouse movements inside the snap tolerance while its `x` is already pinned, i.e. it never visually "snaps" the way the abscissa does.
+/** The hovered dot's own height: matches `value_at` off a discontinuity, but once the cursor is snapped onto one (`hoveredS !== hoveredValueS`) reads the exact before/after sample instead of interpolating from the raw position — otherwise the dot keeps sliding vertically for tiny mouse movements inside the snap tolerance while its `x` is already pinned, i.e. it never visually "snaps" the way the abscissa does.
  * Which of the two co-located samples to use still comes from the raw position's side of the jump, exactly as `value_at` alone would pick — just resolved once, not continuously. */
 function hovered_value(
   field: CohesionField,
@@ -91,15 +90,12 @@ function hovered_value(
 interface OneDiagramProps {
   field: CohesionField;
   quantity: CohesionQuantity;
-  /** This quantity's own running scale (force for N/T, moment for Mf) over the whole
-   * recording — the axis flattens instead of auto-zooming when the field's own excursion is negligible next to it (see `is_negligible`). */
+  /** This quantity's own running scale (force for N/T, moment for Mf) over the whole recording — the axis flattens instead of auto-zooming when the field's own excursion is negligible next to it (see `is_negligible`). */
   poolMax: number;
   toX: (s: number) => number;
-  /** Where the cursor line/dot is DRAWN — snapped to a "point particulier" when close enough,
-   * otherwise the same as `hoveredValueS`. */
+  /** Where the cursor line/dot is DRAWN — snapped to a "point particulier" when close enough, otherwise the same as `hoveredValueS`. */
   hoveredS: number | null;
-  /** Where the cursor's VALUE is read from — always the raw, unsnapped position, so a
-   * snapped cursor still shows the value of whichever side of a jump the mouse actually approached from, not an arbitrary pick. */
+  /** Where the cursor's VALUE is read from — always the raw, unsnapped position, so a snapped cursor still shows the value of whichever side of a jump the pointer actually approached from, not an arbitrary pick. */
   hoveredValueS: number | null;
   color: string;
   divider: string;
@@ -207,8 +203,7 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
         stroke={divider}
         strokeWidth={0.5}
       />
-      {/* The abscissa itself (y = 0) — always drawn, the reference the filled area anchors
-       *  to, not a dashed hint shown only when the data happens to straddle zero. */}
+      {/* The abscissa itself (y = 0) — always drawn, the reference the filled area anchors to, not a dashed hint shown only when the data happens to straddle zero. */}
       <line
         x1={GUTTER}
         x2={VIEW_W - PAD_RIGHT}
@@ -218,10 +213,8 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
         strokeWidth={0.5}
       />
       <path d={fillD} fill={color} opacity={0.18} stroke="none" />
-      {/* The field's own sample grid — a light, neutral tick per point (not the accent
-       * colour: these are a reading aid, the "points particuliers" below carry the meaning).
-       * Skips samples that coincide with a discontinuity — that one already
-       *  gets its own, more prominent tick just below. */}
+      {/* The field's own sample grid — a light, neutral tick per point (not the accent colour: these are a reading aid, the "points particuliers" below carry the meaning).
+       * Skips samples that coincide with a discontinuity — that one already gets its own, more prominent tick just below. */}
       {field.samples.map(
         (sample, i) =>
           !isDiscontinuity(sample.s) && (
@@ -323,23 +316,20 @@ const OneDiagram: React.FC<OneDiagramProps> = ({
 
 interface CohesionDiagramsProps {
   field: CohesionField | undefined;
-  /** The mechanism's own running force/moment scale over the whole recording (see
-   * `NegligibilityPool`) — N/T flatten against `forcePoolMax`, Mf against `momentPoolMax`. */
+  /** The mechanism's own running force/moment scale over the whole recording (see `NegligibilityPool`) — N/T flatten against `forcePoolMax`, Mf against `momentPoolMax`. */
   forcePoolMax: number;
   momentPoolMax: number;
-  /** Shown in place of the diagrams when `field` is undefined (kinematic mode, or dynamic
-   * mode with nothing recorded yet). */
+  /** Shown in place of the diagrams when `field` is undefined (kinematic mode, or dynamic mode with nothing recorded yet). */
   emptyMessage: string;
   /** The beam these diagrams are of, named in the abscissa handed to `onHoverAbscissa`. */
   beamID: ID;
-  /** Abscissa hovered over any of the three diagrams — `null` off them. Panel → canvas only
-   * (see docs/plan-efforts-interieurs.md phase 5bis: the reverse link was cut, unneeded).
+  /** Abscissa pointed at on any of the three diagrams — `null` off them.
+   * Panel → canvas only: the canvas never points back into the diagrams (see docs/plan-efforts-interieurs.md phase 5bis).
    * A resolver, so the canvas places it on the field of the frame it draws. */
   onHoverAbscissa?: (source: HoveredAbscissaSource | null) => void;
 }
 
-/** How close the cursor must be to a "point particulier" (`field.discontinuities`) to lock
- * onto it, in the SVG's own viewBox units — proportional to the rendered width regardless of the container's actual screen size.
+/** How close the cursor must be to a "point particulier" (`field.discontinuities`) to lock onto it, in the SVG's own viewBox units — proportional to the rendered width regardless of the container's actual screen size.
  * Everywhere else the cursor is fully continuous. */
 const SNAP_TOLERANCE_VIEW = 5;
 
@@ -418,6 +408,26 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
       place_cursor(field, cursorRatioRef.current);
   }, [field, place_cursor]);
 
+  const scrub_at = (clientX: number) => {
+    const el = wrapperRef.current;
+    if (!el || !field || field.length < 1e-9) return;
+    const rect = el.getBoundingClientRect();
+    const xView = ((clientX - rect.left) / rect.width) * VIEW_W;
+    const plotW = VIEW_W - GUTTER - PAD_RIGHT;
+    const ratio = Math.max(0, Math.min(1, (xView - GUTTER) / plotW));
+    cursorRatioRef.current = ratio;
+    // The value readout keeps reading `rawS`, so a snapped cursor still shows whichever side of a jump the pointer actually approached from, not an arbitrary pick forced by the snap.
+    place_cursor(field, ratio);
+    onHoverAbscissa?.(hovered_abscissa);
+  };
+  const release_cursor = () => {
+    cursorRatioRef.current = null;
+    onHoverAbscissa?.(null);
+    setHoveredS(null);
+    setHoveredValueS(null);
+  };
+  const touchScrub = useTouchScrub<HTMLDivElement>(scrub_at, release_cursor);
+
   if (!field || field.length < 1e-9) {
     return (
       <Box
@@ -441,34 +451,18 @@ export const CohesionDiagrams: React.FC<CohesionDiagramsProps> = ({
   const plotW = VIEW_W - GUTTER - PAD_RIGHT;
   const toX = (s: number) => GUTTER + (s / field.length) * plotW;
 
-  const handleMove = (e: React.MouseEvent) => {
-    const el = wrapperRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const xView = ((e.clientX - rect.left) / rect.width) * VIEW_W;
-    const ratio = Math.max(0, Math.min(1, (xView - GUTTER) / plotW));
-    cursorRatioRef.current = ratio;
-    // The value readout keeps reading `rawS`, so a snapped cursor still shows whichever side of a jump the mouse actually approached from, not an arbitrary pick forced by the snap.
-    place_cursor(field, ratio);
-    onHoverAbscissa?.(hovered_abscissa);
-  };
-  const handleLeave = () => {
-    cursorRatioRef.current = null;
-    onHoverAbscissa?.(null);
-    setHoveredS(null);
-    setHoveredValueS(null);
-  };
-
   return (
     <Box
       ref={wrapperRef}
-      onMouseMove={handleMove}
-      onMouseLeave={handleLeave}
+      onMouseMove={(e) => scrub_at(e.clientX)}
+      onMouseLeave={release_cursor}
+      {...touchScrub}
       sx={{
         borderRadius: 1,
         backgroundColor: "background.sunken",
         overflow: "hidden",
         cursor: "crosshair",
+        touchAction: "pan-y",
       }}
     >
       {(["N", "T", "Mf"] as const).map((quantity) => (

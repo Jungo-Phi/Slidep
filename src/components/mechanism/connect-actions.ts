@@ -285,13 +285,6 @@ export function disconnect_element(
   containerType: ConnectsActionType,
   mechanicalElements: MechanicalElement[],
 ): Action {
-  console.log(
-    "Disconnect: ",
-    connectedElement.type,
-    connectedElement.id.toString().padStart(3, "0"),
-    "  from: ",
-    element.type + "." + containerType.replace("Connects", ""),
-  );
   if (containerType === "ConnectsAttachedGears") {
     const belt = get_mechanical_element_from_id(
       element.id,
@@ -1433,15 +1426,6 @@ export function connect_elements(
   ) as MechanicalElement;
   const actions: Action[] = [];
 
-  console.log(
-    "CONNECT ELEMENT : ",
-    selectedElement.type,
-    selectedPart,
-    " TO HOVERED :",
-    hoveredElement.type,
-    hoveredPart,
-  ); // DEBUG
-
   switch (selectedPart.type) {
     case "Node":
       const selectedNode = selectedElement as NodeElement;
@@ -1570,9 +1554,6 @@ export function connect_elements(
       }
       break;
   }
-
-  console.log("connect_elements : ", actions);
-
   return actions;
 }
 

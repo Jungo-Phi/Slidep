@@ -15,6 +15,44 @@ export const STRINGS = {
     de: "Unbenannt",
     es: "Sin título",
   },
+  menu: { fr: "Menu", en: "Menu", de: "Menü", es: "Menú" },
+  palette: { fr: "Palette", en: "Palette", de: "Palette", es: "Paleta" },
+  open_mechanism: {
+    fr: "Ouvrir",
+    en: "Open",
+    de: "Öffnen",
+    es: "Abrir",
+  },
+  mechanism_currently_open: {
+    fr: "Ouvert",
+    en: "Open",
+    de: "Geöffnet",
+    es: "Abierto",
+  },
+  mechanism_details: {
+    fr: "Détails",
+    en: "Details",
+    de: "Details",
+    es: "Detalles",
+  },
+  stop_simulation: {
+    fr: "Arrêter",
+    en: "Stop",
+    de: "Stoppen",
+    es: "Detener",
+  },
+  physics_settings: {
+    fr: "Réglages physiques",
+    en: "Physics settings",
+    de: "Physikeinstellungen",
+    es: "Ajustes físicos",
+  },
+  simulation_speed: {
+    fr: "Vitesse de simulation",
+    en: "Simulation speed",
+    de: "Simulationsgeschwindigkeit",
+    es: "Velocidad de simulación",
+  },
   mechanism_library: {
     fr: "Bibliothèque de mécanismes",
     en: "Mechanism library",
@@ -403,6 +441,18 @@ export const STRINGS = {
     en: "Install Slidep from your browser to use it without a connection.",
     de: "Installieren Sie Slidep aus dem Browser heraus, um es ohne Verbindung zu nutzen.",
     es: "Instala Slidep desde tu navegador para usarlo sin conexión.",
+  },
+  anywhere_title: {
+    fr: "Partout",
+    en: "Anywhere",
+    de: "Überall",
+    es: "En todas partes",
+  },
+  anywhere_body: {
+    fr: "Pensé aussi pour le tactile : concevez sur ordinateur, tablette ou téléphone.",
+    en: "Built for touch too: design on a computer, a tablet or a phone.",
+    de: "Auch für Touch gedacht: konstruieren Sie am Computer, Tablet oder Smartphone.",
+    es: "Pensado también para lo táctil: diseña en ordenador, tableta o teléfono.",
   },
   local_title: {
     fr: "Chez vous",

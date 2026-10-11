@@ -68,6 +68,7 @@ import {
 const PAUSED_FOR_EDIT_NOTICE_KEY = "pausedForEditNoticeShown";
 import MechanicalCanvas, {
   ConstraintChangeSignal,
+  type MechanicalCanvasProps,
 } from "./components/canvas/MechanicalCanvas";
 import {
   CanvasHighlight,
@@ -79,7 +80,12 @@ import {
 } from "./components/solver/analysis/redundancy-symbols";
 
 import { ElementPalette } from "./components/element-palette";
-import { PropertiesPanel } from "./components/properties-panel/PropertiesPanel";
+import {
+  PropertiesPanel,
+  type PropertiesPanelProps,
+} from "./components/properties-panel/PropertiesPanel";
+import { PhoneLayout } from "./components/phone/PhoneLayout";
+import { usePhoneLayout } from "./components/phone/use-phone-layout";
 import { AboutDialog } from "./components/toolbar/AboutDialog";
 import { SimulationTimeline } from "./components/toolbar/SimulationTimeline";
 import { ToolsMenu } from "./components/toolbar/ToolsMenu";
@@ -272,6 +278,7 @@ const App: React.FC = () => {
   // The top bar's width follows the window, not the canvas: these queries re-render the component every time a breakpoint is crossed.
   const condensed = useMediaQuery(`(max-width:${CONDENSED_BREAKPOINT}px)`);
   const tight = useMediaQuery(`(max-width:${TIGHT_BREAKPOINT}px)`);
+  const phone = usePhoneLayout();
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
   );
@@ -309,8 +316,8 @@ const App: React.FC = () => {
 
   if (prevCanvasState !== canvasState) {
     setPrevCanvasState(canvasState);
-    if (canvasState === skipTabSyncStateRef.current) {
-      // no-op: this exact transition asked to keep the current tab.
+    if (phone || canvasState === skipTabSyncStateRef.current) {
+      // Kept as it is: this exact transition asked to keep the current tab, or the phone's sheet — which keeps its tab across selections — decides it.
     } else if (
       canvasState.type === "PlacingProbe" ||
       canvasState.type === "PlacingProbeMetrics" ||
@@ -484,6 +491,7 @@ const App: React.FC = () => {
     handleLoadFromGallery,
     handleRenameFromGallery,
     handleUpdateTagsFromGallery,
+    handleUpdateMetadataFromGallery,
     handleDeleteFromGallery,
     handleDuplicateFromGallery,
     handleNewFromGallery,
@@ -928,6 +936,80 @@ const App: React.FC = () => {
     [],
   );
 
+  // The same canvas and panel whichever layout holds them.
+  const canvasProps: MechanicalCanvasProps = {
+    setCanvasState,
+    canvasState,
+    applyActions,
+    changeViewport,
+    mechanism,
+    setHoveredPart,
+    hoveredPart,
+    undoMechanism,
+    redoMechanism,
+    appMode,
+    activeTab,
+    constraintChangeRef,
+    onSpaceKey: handleSpaceKey,
+    onEscapeKey: handleEscapeKey,
+    onSimulationGrab: handleSimulationGrab,
+    onSimulationGrabEnd: handleSimulationGrabEnd,
+    canSimulationGrab,
+    snapToGrid,
+    snapSettings,
+    showGrid,
+    showContactPoints,
+    beamStressLens: activeBeamStressLens,
+    trajectoryDotted,
+    liveFrameRef,
+    highlight,
+    blockedMotors,
+    modePreviewRef,
+    redundancySymbols,
+    hoveredAbscissa,
+    hoveredBalanceTerm,
+    momentBalancePoint,
+    onMomentBalanceReferencePicked: setMomentBalanceReference,
+    momentBalanceReferenceHovered,
+    onSelectOverlay: setFocusedOverlay,
+    focusedOverlay,
+    librarySection:
+      activeTab === "library" ? (librarySection ?? undefined) : undefined,
+    hoveredLibraryEntryID,
+    galleryOpen,
+  };
+  const panelProps: PropertiesPanelProps = {
+    setHighlight,
+    setRedundancySymbols,
+    modePreviewRef,
+    setCanvasState,
+    clearSelectionKeepTab,
+    canvasState,
+    applyActions,
+    mechanism,
+    hoveredPart,
+    setHoveredPart,
+    updateMetadata,
+    allTags,
+    setRuntimeState,
+    setSimulationConfig,
+    simulationConfig,
+    appMode,
+    activeTab,
+    setActiveTab,
+    blockedMotors,
+    setHoveredAbscissa,
+    setHoveredBalanceTerm,
+    momentBalanceReference,
+    setMomentBalanceReference,
+    setMomentBalanceReferenceHovered,
+    focusedOverlay,
+    setFocusedOverlay,
+    setLibrarySection,
+    hoveredLibraryEntryID,
+    setHoveredLibraryEntryID,
+  };
+
   const toolsMenu = useMemo(
     () => (
       <ToolsMenu
@@ -984,164 +1066,149 @@ const App: React.FC = () => {
     <ThemeProvider theme={currentTheme}>
       <HistorySealContext.Provider value={historySeal}>
         <CssBaseline />
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            height: "100vh",
-            overflow: "hidden",
-          }}
-        >
-          {/* App Bar */}
-          <AppBar
-            position="static"
-            elevation={0}
+        {phone ? (
+          <PhoneLayout
+            renderCanvas={(onTap) => (
+              <MechanicalCanvas ref={canvasRef} {...canvasProps} onTap={onTap} />
+            )}
+            topBar={{
+              mechanism,
+              undoMechanism,
+              redoMechanism,
+              recenterTarget,
+              onRecenter: recenter,
+              appMode,
+              setAppMode,
+              updateMetadata,
+              applyActions,
+              onOpenGallery: handleOpenGallery,
+              onOpenAbout: handleInfoOpen,
+              language,
+              onSelectLang: handleSelectLang,
+              showGrid,
+              setShowGrid,
+              showContactPoints,
+              setShowContactPoints,
+              snapToGrid,
+              setSnapToGrid,
+              snapSettings,
+              setSnapSettings,
+              isCustomAngleStep,
+              themeChoice,
+              systemDark,
+              changeTheme,
+              previewLater,
+              overlays: {
+                mechanicalElements: mechanism.mechanicalElements,
+                applyActions,
+                beamStressLens: mechanism.simulation.beamStressLens,
+                onChangeBeamStressLens: (lens) =>
+                  applyActions([
+                    {
+                      type: "SetBeamStressLens",
+                      newValue: lens,
+                      oldValue: mechanism.simulation.beamStressLens,
+                    },
+                  ]),
+                onPreviewBeamStressLens: previewLensLater,
+                trajectoryDotted,
+                onChangeTrajectoryDotted: setTrajectoryDotted,
+                supportReactions: mechanism.simulation.supportReactions,
+                onChangeSupportReactions: (on) =>
+                  applyActions([{ type: "SetSupportReactions", enabled: on }]),
+              },
+            }}
+            panel={panelProps}
+            setCanvasState={setCanvasState}
+            onPlayPause={handleSpaceKey}
+            timelineTrackRef={timelineTrackRef}
+          />
+        ) : (
+          <Box
             sx={{
-              backgroundColor: "background.toolbar",
-              border: "none",
-              borderRadius: 0,
-              // A rule in the top bar is read against the toolbar, never against the `paper` the default divider is cut for.
-              "& .MuiDivider-root": { borderColor: "dividers.toolbar" },
+              display: "flex",
+              flexDirection: "column",
+              height: "100vh",
+              overflow: "hidden",
             }}
           >
-            {/* ── Main toolbar ── */}
-            <Toolbar
-              variant="dense"
-              disableGutters
+            {/* App Bar */}
+            <AppBar
+              position="static"
+              elevation={0}
               sx={{
-                display: "grid",
-                // Equal side columns keep the center column geometrically centered regardless of how wide the title or the right-hand controls are.
-                gridTemplateColumns: "1fr auto 1fr",
-                alignItems: "center",
-                px: 1,
-                gap: 0.5,
-                minHeight: "40px !important",
+                backgroundColor: "background.toolbar",
+                border: "none",
+                borderRadius: 0,
+                // A rule in the top bar is read against the toolbar, never against the `paper` the default divider is cut for.
+                "& .MuiDivider-root": { borderColor: "dividers.toolbar" },
               }}
             >
-              <PlaybackControls
+              {/* ── Main toolbar ── */}
+              <Toolbar
+                variant="dense"
+                disableGutters
+                sx={{
+                  display: "grid",
+                  // Equal side columns keep the center column geometrically centered regardless of how wide the title or the right-hand controls are.
+                  gridTemplateColumns: "1fr auto 1fr",
+                  alignItems: "center",
+                  px: 1,
+                  gap: 0.5,
+                  minHeight: "40px !important",
+                }}
+              >
+                <PlaybackControls
+                  appMode={appMode}
+                  setAppMode={setAppMode}
+                  mechanism={mechanism}
+                  updateMetadata={updateMetadata}
+                  applyActions={applyActions}
+                  condensed={condensed}
+                  tight={tight}
+                  resetToStart={resetToStart}
+                  handleSpaceKey={handleSpaceKey}
+                  onOpenGallery={handleOpenGallery}
+                  saveStatus={saveStatus}
+                  previewBeamStressLens={previewLensLater}
+                  trajectoryDotted={trajectoryDotted}
+                  setTrajectoryDotted={setTrajectoryDotted}
+                  rightSlot={toolsMenu}
+                />
+              </Toolbar>
+
+              <SimulationTimeline
                 appMode={appMode}
-                setAppMode={setAppMode}
-                mechanism={mechanism}
-                updateMetadata={updateMetadata}
-                applyActions={applyActions}
-                condensed={condensed}
-                tight={tight}
-                resetToStart={resetToStart}
-                handleSpaceKey={handleSpaceKey}
-                onOpenGallery={handleOpenGallery}
-                saveStatus={saveStatus}
-                previewBeamStressLens={previewLensLater}
-                trajectoryDotted={trajectoryDotted}
-                setTrajectoryDotted={setTrajectoryDotted}
-                rightSlot={toolsMenu}
+                timelineTrackRef={timelineTrackRef}
               />
-            </Toolbar>
+            </AppBar>
 
-            <SimulationTimeline
-              appMode={appMode}
-              timelineTrackRef={timelineTrackRef}
-            />
-          </AppBar>
-
-          {/* Main content area */}
-          <Box
-            component="main"
-            sx={{
-              flexGrow: 1,
-              display: "flex",
-              flexDirection: "row",
-              overflow: "hidden",
-              backgroundColor: "background.default",
-            }}
-          >
-            <ElementPalette
-              setCanvasState={setCanvasState}
-              canvasState={canvasState}
-              mechanism={mechanism}
-              appMode={appMode}
-            />
-
-            <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
-              <MechanicalCanvas
-                ref={canvasRef}
+            {/* Main content area */}
+            <Box
+              component="main"
+              sx={{
+                flexGrow: 1,
+                display: "flex",
+                flexDirection: "row",
+                overflow: "hidden",
+                backgroundColor: "background.default",
+              }}
+            >
+              <ElementPalette
                 setCanvasState={setCanvasState}
                 canvasState={canvasState}
-                applyActions={applyActions}
-                changeViewport={changeViewport}
                 mechanism={mechanism}
-                setHoveredPart={setHoveredPart}
-                hoveredPart={hoveredPart}
-                undoMechanism={undoMechanism}
-                redoMechanism={redoMechanism}
                 appMode={appMode}
-                activeTab={activeTab}
-                constraintChangeRef={constraintChangeRef}
-                onSpaceKey={handleSpaceKey}
-                onEscapeKey={handleEscapeKey}
-                onSimulationGrab={handleSimulationGrab}
-                onSimulationGrabEnd={handleSimulationGrabEnd}
-                canSimulationGrab={canSimulationGrab}
-                snapToGrid={snapToGrid}
-                snapSettings={snapSettings}
-                showGrid={showGrid}
-                showContactPoints={showContactPoints}
-                beamStressLens={activeBeamStressLens}
-                trajectoryDotted={trajectoryDotted}
-                liveFrameRef={liveFrameRef}
-                highlight={highlight}
-                blockedMotors={blockedMotors}
-                modePreviewRef={modePreviewRef}
-                redundancySymbols={redundancySymbols}
-                hoveredAbscissa={hoveredAbscissa}
-                hoveredBalanceTerm={hoveredBalanceTerm}
-                momentBalancePoint={momentBalancePoint}
-                onMomentBalanceReferencePicked={setMomentBalanceReference}
-                momentBalanceReferenceHovered={momentBalanceReferenceHovered}
-                onSelectOverlay={setFocusedOverlay}
-                focusedOverlay={focusedOverlay}
-                librarySection={
-                  activeTab === "library"
-                    ? (librarySection ?? undefined)
-                    : undefined
-                }
-                hoveredLibraryEntryID={hoveredLibraryEntryID}
-                galleryOpen={galleryOpen}
               />
-            </Box>
 
-            <PropertiesPanel
-              setHighlight={setHighlight}
-              setRedundancySymbols={setRedundancySymbols}
-              modePreviewRef={modePreviewRef}
-              setCanvasState={setCanvasState}
-              clearSelectionKeepTab={clearSelectionKeepTab}
-              canvasState={canvasState}
-              applyActions={applyActions}
-              mechanism={mechanism}
-              hoveredPart={hoveredPart}
-              setHoveredPart={setHoveredPart}
-              updateMetadata={updateMetadata}
-              allTags={allTags}
-              setRuntimeState={setRuntimeState}
-              setSimulationConfig={setSimulationConfig}
-              simulationConfig={simulationConfig}
-              appMode={appMode}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              blockedMotors={blockedMotors}
-              setHoveredAbscissa={setHoveredAbscissa}
-              setHoveredBalanceTerm={setHoveredBalanceTerm}
-              momentBalanceReference={momentBalanceReference}
-              setMomentBalanceReference={setMomentBalanceReference}
-              setMomentBalanceReferenceHovered={setMomentBalanceReferenceHovered}
-              focusedOverlay={focusedOverlay}
-              setFocusedOverlay={setFocusedOverlay}
-              setLibrarySection={setLibrarySection}
-              hoveredLibraryEntryID={hoveredLibraryEntryID}
-              setHoveredLibraryEntryID={setHoveredLibraryEntryID}
-            />
+              <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
+                <MechanicalCanvas ref={canvasRef} {...canvasProps} />
+              </Box>
+
+              <PropertiesPanel {...panelProps} />
+            </Box>
           </Box>
-        </Box>
+        )}
         <MechanismsGallery
           open={galleryOpen}
           onClose={closeGallery}
@@ -1156,6 +1223,8 @@ const App: React.FC = () => {
           onExport={handleExportRecord}
           onExportAll={handleExportAllRecords}
           onRestoreExamples={handleRestoreExamples}
+          onUpdateMetadata={handleUpdateMetadataFromGallery}
+          currentId={mechanism.metadata.createdAt}
         />
         <AboutDialog open={infoOpen} onClose={handleInfoClose} />
         <Snackbar

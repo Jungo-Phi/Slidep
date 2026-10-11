@@ -29,7 +29,7 @@ import {
 } from "../../types";
 import {
   OVERLAY_LABEL_KEYS,
-  any_overlay_shown,
+  overlays_shown,
   overlay_count,
   overlay_label_count,
   overlay_targets,
@@ -43,6 +43,7 @@ import {
 } from "../properties-panel/element-readings";
 import { useNonModalPopup } from "../common/use-non-modal-popup";
 import { TOP_BAR_CONTROL_HEIGHT } from "./toolbar-metrics";
+import { usePhoneLayout } from "../phone/use-phone-layout";
 import { t, tn } from "../../i18n";
 
 const BEAM_STRESS_LENS_LABEL_KEYS = {
@@ -53,11 +54,10 @@ const BEAM_STRESS_LENS_LABEL_KEYS = {
   shear: "beam_stress_lens_shear",
 } as const;
 
-interface OverlaysMenuProps {
+export interface OverlaysMenuProps {
   mechanicalElements: MechanicalElement[];
   applyActions: (actions: Action[]) => void;
-  /** Which reading tints every beam's fill, mechanism-wide — see `BeamStressLens`'s own doc
-   * (docs/plan-efforts-interieurs.md phase 9).
+  /** Which reading tints every beam's fill, mechanism-wide — see `BeamStressLens`'s own doc (docs/plan-efforts-interieurs.md phase 9).
    * Lives here, not in `mechanicalElements`' own `OverlayFlags`: unlike trajectories/forces/velocities, the four readings share one physical slot (a beam's own fill), so this is a single choice, not a checkbox. */
   beamStressLens: BeamStressLens;
   onChangeBeamStressLens: (lens: BeamStressLens) => void;
@@ -73,6 +73,9 @@ interface OverlaysMenuProps {
   onChangeSupportReactions: (on: boolean) => void;
   /** Drops the button's label, keeping the eye and the caret. */
   condensed?: boolean;
+  /** Opens the menu from elsewhere, on that anchor, with no button of its own; `onClose` must then come with it. */
+  anchorEl?: HTMLElement | null;
+  onClose?: () => void;
 }
 
 interface OverlayMenuRowProps {
@@ -82,6 +85,8 @@ interface OverlayMenuRowProps {
   /** Passed to `tn` for the row's label — not `total`, see `overlay_label_count`. */
   labelCount: number;
   onSetAll: (show: boolean) => void;
+  /** Pads the commands for a finger. */
+  touch: boolean;
   /** Extra control rendered between the counter and the show/hide icons — the trajectory row's style toggle. */
   children?: React.ReactNode;
 }
@@ -93,6 +98,7 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
   total,
   labelCount,
   onSetAll,
+  touch,
   children,
 }) => (
   <CommandCountRow
@@ -101,6 +107,9 @@ const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
     on={shown}
     total={total}
     onSetAll={onSetAll}
+    px={2}
+    menu
+    touch={touch}
   >
     {children}
   </CommandCountRow>
@@ -123,16 +132,23 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
   supportReactions,
   onChangeSupportReactions,
   condensed = false,
+  anchorEl: outerAnchor,
+  onClose,
 }) => {
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [ownAnchor, setOwnAnchor] = React.useState<null | HTMLElement>(null);
+  const controlled = onClose !== undefined;
+  const anchorEl = controlled ? (outerAnchor ?? null) : ownAnchor;
   const popup = useNonModalPopup(!!anchorEl, anchorEl, () => {
     onPreviewBeamStressLens(null);
-    setAnchorEl(null);
+    if (controlled) onClose();
+    else setOwnAnchor(null);
   });
-  const anyShown =
-    any_overlay_shown(mechanicalElements) ||
-    beamStressLens !== "none" ||
-    supportReactions;
+  const phone = usePhoneLayout();
+  const anyShown = overlays_shown(
+    mechanicalElements,
+    beamStressLens,
+    supportReactions,
+  );
 
   const setAll = (kind: OverlayKind, show: boolean) => {
     const actions = set_all_overlays(mechanicalElements, kind, show);
@@ -141,43 +157,45 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
 
   return (
     <>
-      <Tooltip title={condensed ? t("show_tooltip") : ""}>
-        <Button
-          color="inherit"
-          size="small"
-          onClick={(e) => {
-            const button = e.currentTarget;
-            setAnchorEl((current) => (current ? null : button));
-          }}
-          startIcon={
-            anyShown ? (
-              <Visibility sx={{ fontSize: "18px !important" }} />
-            ) : (
-              <VisibilityOff sx={{ fontSize: "18px !important" }} />
-            )
-          }
-          endIcon={
-            <KeyboardArrowDown
-              sx={{ ml: -0.5, fontSize: "16px !important", opacity: 0.7 }}
-            />
-          }
-          sx={{
-            fontSize: "0.72rem",
-            fontWeight: 600,
-            textTransform: "none",
-            px: 0.75,
-            py: 0,
-            // Held explicitly because the label carries the height: dropping it in `condensed` would otherwise shrink the button.
-            minHeight: TOP_BAR_CONTROL_HEIGHT,
-            minWidth: 0,
-            letterSpacing: 0,
-            // Icon-only: the label's slot would otherwise keep its gap.
-            "& .MuiButton-startIcon": { mr: condensed ? 0 : undefined },
-          }}
-        >
-          {condensed ? null : t("show")}
-        </Button>
-      </Tooltip>
+      {!controlled && (
+        <Tooltip title={condensed ? t("show_tooltip") : ""}>
+          <Button
+            color="inherit"
+            size="small"
+            onClick={(e) => {
+              const button = e.currentTarget;
+              setOwnAnchor((current) => (current ? null : button));
+            }}
+            startIcon={
+              anyShown ? (
+                <Visibility sx={{ fontSize: "18px !important" }} />
+              ) : (
+                <VisibilityOff sx={{ fontSize: "18px !important" }} />
+              )
+            }
+            endIcon={
+              <KeyboardArrowDown
+                sx={{ ml: -0.5, fontSize: "16px !important", opacity: 0.7 }}
+              />
+            }
+            sx={{
+              fontSize: "0.72rem",
+              fontWeight: 600,
+              textTransform: "none",
+              px: 0.75,
+              py: 0,
+              // Held explicitly because the label carries the height: dropping it in `condensed` would otherwise shrink the button.
+              minHeight: TOP_BAR_CONTROL_HEIGHT,
+              minWidth: 0,
+              letterSpacing: 0,
+              // Icon-only: the label's slot would otherwise keep its gap.
+              "& .MuiButton-startIcon": { mr: condensed ? 0 : undefined },
+            }}
+          >
+            {condensed ? null : t("show")}
+          </Button>
+        </Tooltip>
+      )}
       <Menu
         {...popup}
         anchorEl={anchorEl}
@@ -206,6 +224,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
                 total={total}
                 labelCount={labelCount}
                 onSetAll={(show) => setAll(kind, show)}
+                touch={phone}
               >
                 {kind === "trajectory" && (
                   <ToggleButtonGroup
@@ -215,9 +234,11 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
                     onChange={(_e, value) => {
                       if (value) onChangeTrajectoryDotted(value === "dotted");
                     }}
+                    // For a finger, padded like the row's own eye buttons and pulled in by a margin so the row keeps its height.
                     sx={{
                       ml: 0.5,
-                      "& .MuiToggleButton-root": { p: 0 },
+                      ...(phone && { my: -0.5 }),
+                      "& .MuiToggleButton-root": { p: phone ? 0.75 : 0.25 },
                     }}
                   >
                     <Tooltip title={t("trajectory_style_continuous")}>
@@ -248,24 +269,25 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
               alignItems: "center",
               justifyContent: "space-between",
               width: "100%",
-              pl: 1.5,
-              pr: 3.9,
-              py: 0.5,
+              pl: 2,
+              pr: 4.4,
+              py: phone ? 1 : 0.5,
               border: 0,
+              font: "inherit",
               cursor: "pointer",
               color: supportReactions ? "text.primary" : "text.secondary",
               backgroundColor: "transparent",
               "&:hover": { backgroundColor: theme.palette.action.hover },
             })}
           >
-            <Box sx={{ display: "flex", direction: "row", gap: 0.5 }}>
+            <Box sx={{ display: "flex", direction: "row", gap: 1 }}>
               <Box
                 component="img"
                 src={reading_icon("reaction-support")}
                 alt=""
                 sx={{ width: OVERLAY_ICON_SIZE, height: OVERLAY_ICON_SIZE }}
               />
-              <Typography variant="body2">{t("support_reactions")}</Typography>
+              <Typography variant="body1">{t("support_reactions")}</Typography>
             </Box>
             {supportReactions ? (
               <Visibility fontSize="small" />
@@ -276,17 +298,17 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
         </Box>
         <Divider />
         <Box sx={{ py: 0.5 }}>
+          {/* Headed as the settings menu heads its own sections. */}
           <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ px: 1.5, display: "block" }}
+            variant="body2"
+            color="textDisabled"
+            sx={{ px: 2, py: 0.5, display: "block" }}
           >
             {t("beam_stress_lens")}
           </Typography>
           {BEAM_STRESS_LENS_ORDER.map((lens) => (
             <MenuItem
               key={lens}
-              dense
               selected={lens === beamStressLens}
               onClick={() => {
                 onPreviewBeamStressLens(null);
@@ -297,9 +319,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
               <ListItemIcon>
                 {lens === beamStressLens && <Check sx={{ fontSize: 18 }} />}
               </ListItemIcon>
-              <Typography variant="body2">
-                {t(BEAM_STRESS_LENS_LABEL_KEYS[lens])}
-              </Typography>
+              {t(BEAM_STRESS_LENS_LABEL_KEYS[lens])}
             </MenuItem>
           ))}
         </Box>

@@ -14,13 +14,9 @@ import { icon } from "./iconDataUris";
 
 import { AppMode, CanvasState } from "../../types";
 import { COLORS } from "../../theme/canvas-theme";
-import {
-  shortcut_label,
-  tool_state,
-  ToolStateType,
-} from "../../constants/shortcuts";
+import { shortcut_label, ToolStateType } from "../../constants/shortcuts";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
-import { armed_tool_state } from "../canvas/tools/arm-tool";
+import { palette_click_state } from "./palette-click";
 import { SIMULATION_TOOLS } from "../../constants/canvas-state-sim-effect";
 import { Mechanism } from "../../types";
 import { StringKey, t } from "../../i18n";
@@ -375,23 +371,10 @@ const ElementPaletteView: React.FC<ElementPaletteProps> = ({
   const handleElementClick = (
     element: PaletteElement,
     isHighlighted: boolean,
-  ) => {
-    // Clicking the armed tool disarms it, like Escape — minus Escape's effect on a running simulation, which a palette click has no business triggering.
-    if (isHighlighted && element.goToStateType !== "Selecting") {
-      setCanvasState(tool_state("Selecting"));
-      return;
-    }
+  ) =>
     setCanvasState(
-      armed_tool_state(
-        element.goToStateType,
-        canvasState,
-        mechanism.mechanicalElements,
-        mechanism.constraintElements,
-        mechanism.loads,
-        mechanism.viewport,
-      ),
+      palette_click_state(element, isHighlighted, canvasState, mechanism),
     );
-  };
 
   // Structural, not visual: the group sizes are the same under every theme.
   const maxIconsInGroup = Math.max(...palette.map((g) => g.elements.length), 1);

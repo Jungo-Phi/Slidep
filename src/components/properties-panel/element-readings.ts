@@ -25,7 +25,7 @@ import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
 import type { HoveredReading } from "../../types/hovered-part";
 
 /** Every list that shows an overlay glyph draws it at this size, the one the "Afficher" menu sets. */
-export const OVERLAY_ICON_SIZE = 18;
+export const OVERLAY_ICON_SIZE = 24;
 
 /**
  * The glyph that stands for a reading, tinted with the hue the canvas draws it in.

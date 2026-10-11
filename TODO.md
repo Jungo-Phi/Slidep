@@ -10,15 +10,16 @@
 
 **Mobile mode**
 
+Puis on devrait faire un tour sur les tooltips
+- Clarifier la double section de l'onglet "Analyse"
 - 🆕 Suivre le plan _plan-mobile.md_ pour téléphone
 - 🤔 Faire un nouveau plan pour tablette
-- 🆕 Ajouter la feature dans les points clés de "A propos"
 
 
-- Supprimer les *console.log()*
 - 🆕 Placer join à la jonction des Beams
 - 🆕 Ajouter un paramètre pour mettre des enroulements en édition
 - 🆕 Placer une courroie en traçant un chemin
+- Mettre en place un versionning
 
 **Terminer la physique**
 
@@ -161,6 +162,7 @@
 - 🔨 Les couleurs de la top-bar et du canvas ne sont pas assez différenciée
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)
+- 🆕 Cacher les joins qui ne sont connectés qu'à un segment
 - 🆕 Afficher des syboles au hover des numberInput start, end, longueur et angle
 - 🆕 Afficher des syboles au hover des connexion (ex. beam end = anneau)
 - 🔨 Hover une probe devrait hover l'élément aussi

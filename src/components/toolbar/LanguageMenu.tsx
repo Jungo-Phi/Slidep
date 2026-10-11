@@ -7,46 +7,55 @@ import { useNonModalPopup } from "../common/use-non-modal-popup";
 interface LanguageMenuProps {
   language: Lang;
   onSelectLang: (lang: Lang) => void;
+  /** Opens the menu from elsewhere, on that anchor, with no button of its own; `onClose` must then come with it. */
+  anchorEl?: HTMLElement | null;
+  onClose?: () => void;
 }
 
 /** The toolbar's language picker: current code as the button label, full names in the menu. */
 export const LanguageMenu: React.FC<LanguageMenuProps> = ({
   language,
   onSelectLang,
+  anchorEl: outerAnchor,
+  onClose,
 }) => {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [ownAnchor, setOwnAnchor] = useState<null | HTMLElement>(null);
+  const controlled = onClose !== undefined;
+  const anchorEl = controlled ? (outerAnchor ?? null) : ownAnchor;
+  const close = controlled ? onClose : () => setOwnAnchor(null);
   const open = !!anchorEl;
-  const popup = useNonModalPopup(open, anchorEl, () => setAnchorEl(null));
+  const popup = useNonModalPopup(open, anchorEl, close);
 
   return (
     <>
-      <Tooltip title={t("language")}>
-        <IconButton
-          color="inherit"
-          size="small"
-          aria-expanded={open}
-          onClick={(event) => {
-            const button = event.currentTarget;
-            setAnchorEl((current) => (current ? null : button));
-          }}
-          sx={{
-            gap: 0.4,
-            fontSize: "0.72rem",
-            fontWeight: 700,
-            px: 0.75,
-          }}
-        >
-          <Language sx={{ fontSize: 20 }} />
-          {language.toUpperCase()}
-        </IconButton>
-      </Tooltip>
+      {!controlled && (
+        <Tooltip title={t("language")}>
+          <IconButton
+            color="inherit"
+            size="small"
+            aria-expanded={open}
+            onClick={(event) => {
+              const button = event.currentTarget;
+              setOwnAnchor((current) => (current ? null : button));
+            }}
+            sx={{
+              gap: 0.4,
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              px: 0.75,
+            }}
+          >
+            <Language sx={{ fontSize: 20 }} />
+            {language.toUpperCase()}
+          </IconButton>
+        </Tooltip>
+      )}
       <Menu
         {...popup}
         anchorEl={anchorEl}
         open={open}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
-        slotProps={{ paper: { style: { maxHeight: 175 } } }}
       >
         {LANGUAGES.map((lang) => (
           <MenuItem
@@ -54,7 +63,7 @@ export const LanguageMenu: React.FC<LanguageMenuProps> = ({
             selected={lang === language}
             onClick={() => {
               onSelectLang(lang);
-              setAnchorEl(null);
+              close();
             }}
             disableRipple
           >

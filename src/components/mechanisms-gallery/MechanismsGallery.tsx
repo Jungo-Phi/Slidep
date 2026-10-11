@@ -1,4 +1,10 @@
-import React, { useDeferredValue, useMemo, useRef, useState } from "react";
+import React, {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAmbient } from "../common/use-ambient";
 import {
   Dialog,
@@ -23,11 +29,13 @@ import {
   Restore,
   Search,
 } from "@mui/icons-material";
-import { SerializedMechanism } from "../../types";
+import { MechanismMetadata, SerializedMechanism } from "../../types";
+import MechanismDetailsPanel from "./MechanismDetailsPanel";
 import { t } from "../../i18n";
 import { EXAMPLE_MECHANISMS } from "../../constants/example-mechanisms";
 import MechanismCard from "./MechanismCard";
 import { INLINE_INPUT_SX } from "./inline-input-sx";
+import { usePhoneLayout } from "../phone/use-phone-layout";
 
 interface MechanismsGalleryProps {
   open: boolean;
@@ -45,6 +53,12 @@ interface MechanismsGalleryProps {
   onExport: (mechanismRecord: SerializedMechanism) => void;
   onExportAll: () => void;
   onRestoreExamples: () => void;
+  onUpdateMetadata: (
+    createdAtId: number,
+    metadata: Pick<MechanismMetadata, "name" | "description" | "author" | "tags">,
+  ) => void;
+  /** The mechanism open in the app, marked among the others. */
+  currentId: number;
 }
 
 // Height of the "New mechanism" card when the library is empty, with no existing card to copy the height from.
@@ -56,6 +70,43 @@ const fold = (text: string) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
+
+/** One of the library's own actions: labelled, or its icon alone when `compact`, where the width runs short. */
+const LibraryAction: React.FC<{
+  compact: boolean;
+  icon: React.ReactNode;
+  label: string;
+  tooltip: string;
+  disabled?: boolean;
+  onClick: () => void;
+}> = ({ compact, icon, label, tooltip, disabled = false, onClick }) => (
+  <Tooltip title={tooltip}>
+    <span>
+      {compact ? (
+        <IconButton
+          size="small"
+          color="inherit"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {icon}
+        </IconButton>
+      ) : (
+        <Button
+          size="small"
+          color="inherit"
+          disabled={disabled}
+          startIcon={icon}
+          onClick={onClick}
+          sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
+        >
+          {label}
+        </Button>
+      )}
+    </span>
+  </Tooltip>
+);
 
 const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   open,
@@ -71,6 +122,8 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   onExport,
   onExportAll,
   onRestoreExamples,
+  onUpdateMetadata,
+  currentId,
 }) => {
   useAmbient();
   const [search, setSearch] = useState("");
@@ -83,9 +136,14 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   // Cleared on every fresh opening rather than on close, which covers every way the dialog closes (button, backdrop, Escape, loading a mechanism) from a single spot.
   // Adjusted during render rather than in an effect, so the dialog's first paint already shows the cleared search instead of a filtered list that then jumps to the full one.
   const [wasOpen, setWasOpen] = useState(open);
+  // The mechanism whose details are raised, on a phone.
+  const [detailsId, setDetailsId] = useState<number | null>(null);
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setSearch("");
+    if (open) {
+      setSearch("");
+      setDetailsId(null);
+    }
   }
 
   const presentIds = new Set(
@@ -99,7 +157,11 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   const [justDuplicatedId, setJustDuplicatedId] = useState<number | null>(null);
   const handleDuplicate = async (createdAtId: number) => {
     const duplicated = await onDuplicate(createdAtId);
-    if (duplicated) setJustDuplicatedId(duplicated.metadata.createdAt);
+    if (duplicated) {
+      setJustDuplicatedId(duplicated.metadata.createdAt);
+      // Raised on the copy, where it is renamed: a compact card has no name to edit in place.
+      if (detailsId !== null) setDetailsId(duplicated.metadata.createdAt);
+    }
     return duplicated;
   };
 
@@ -120,9 +182,28 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
     ]),
   ].sort();
 
-  // Sort by descending modification date.
+  const phone = usePhoneLayout();
+  // A phone's alone, and only for a mechanism still in the library: deleting one takes its details with it.
+  const detailsRecord = phone
+    ? mechanismRecords.find((r) => r.metadata.createdAt === detailsId)
+    : undefined;
+  // The card whose details are up stays in sight above them, though the panel has just taken the bottom of the gallery.
+  useEffect(() => {
+    if (detailsId === null) return;
+    contentRef.current
+      ?.querySelector(`[data-mechanism-id="${detailsId}"]`)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [detailsId]);
+
+  // Sort by descending modification date — on a phone, the mechanism open in the app first, the one whose details are its project.
   const sortedMechanismRecords = [...mechanismRecords]
-    .sort((a, b) => b.metadata.modifiedAt - a.metadata.modifiedAt)
+    .sort(
+      (a, b) =>
+        (phone
+          ? Number(b.metadata.createdAt === currentId) -
+            Number(a.metadata.createdAt === currentId)
+          : 0) || b.metadata.modifiedAt - a.metadata.modifiedAt,
+    )
     .filter((record) => {
       const needle = fold(deferredSearch.trim());
       if (!needle) return true;
@@ -134,20 +215,12 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
 
   // Number of columns actually shown at the current breakpoint, so cards can be distributed ourselves (see below) instead of letting CSS `columns` do it column by column, which would break reading order.
   const theme = useTheme();
-  const isSm = useMediaQuery(theme.breakpoints.up("sm"));
   const isMd = useMediaQuery(theme.breakpoints.up("md"));
   const isLg = useMediaQuery(theme.breakpoints.up("lg"));
   const isXl = useMediaQuery(theme.breakpoints.up("xl"));
   const manyMechanisms = mechanismRecords.length >= 16;
-  const columnCount = isLg
-    ? manyMechanisms && isXl
-      ? 5
-      : 4
-    : isMd
-      ? 3
-      : isSm
-        ? 2
-        : 1;
+  // Never fewer than two: one card a row reads as a list, and a phone has the width for two thumbnails.
+  const columnCount = isLg ? (manyMechanisms && isXl ? 5 : 4) : isMd ? 3 : 2;
 
   // Round-robin distribution (card i -> column i % columnCount): reads like text (row by row, left to right) while keeping the stack compact for a variable card height, unlike CSS `columns`, which fills one whole column before the next.
   const cardColumns = useMemo(() => {
@@ -223,19 +296,26 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
           },
         },
       }}
+      // A phone has no room to spare around a dialog.
+      fullScreen={phone}
       PaperProps={{
-        sx: {
-          height: "85vh",
-          maxWidth: 1320,
-          borderRadius: 2,
-        },
+        sx: phone
+          ? undefined
+          : {
+              height: "85vh",
+              maxWidth: 1320,
+              borderRadius: 2,
+            },
       }}
     >
       <DialogTitle
         sx={{
           display: "flex",
+          // On a phone the search takes a line of its own, under the title and the library's actions.
+          flexWrap: phone ? "wrap" : "nowrap",
           justifyContent: "space-between",
           alignItems: "center",
+          rowGap: 1,
           pt: 1.5,
           pb: 1,
           pr: 2,
@@ -283,7 +363,14 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
               ),
             },
           }}
-          sx={{ ...INLINE_INPUT_SX, px: -0.5, flexGrow: 1, maxWidth: 360 }}
+          sx={{
+            ...INLINE_INPUT_SX,
+            px: -0.5,
+            flexGrow: 1,
+            ...(phone
+              ? { order: 1, flexBasis: "100%", maxWidth: "none" }
+              : { maxWidth: 360 }),
+          }}
         />
 
         {/* Import and export-all act on the whole library; exporting *one* mechanism lives on its card. */}
@@ -295,62 +382,52 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
             flexShrink: 0,
           }}
         >
-          <Tooltip title={t("storage_notice")}>
+          {/* A tap shows it at once, and long enough to read: a finger has no hover to wait on. */}
+          <Tooltip
+            title={t("storage_notice")}
+            enterTouchDelay={0}
+            leaveTouchDelay={6000}
+          >
             <InfoOutlined
-              sx={{ fontSize: 20, color: "text.secondary", ml: -1, mr: 4 }}
+              sx={{
+                fontSize: 20,
+                color: "text.secondary",
+                ml: -1,
+                mr: phone ? 0.5 : 4,
+              }}
             />
           </Tooltip>
-          <Tooltip title={t("import_tooltip")}>
-            <Button
-              size="small"
-              color="inherit"
-              startIcon={<FileOpen fontSize="small" />}
-              onClick={onImport}
-              sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
-            >
-              {t("import")}
-            </Button>
-          </Tooltip>
-          <Tooltip
-            title={t(
+          <LibraryAction
+            compact={phone}
+            icon={<FileOpen fontSize="small" />}
+            label={t("import")}
+            tooltip={t("import_tooltip")}
+            onClick={onImport}
+          />
+          <LibraryAction
+            compact={phone}
+            icon={<Archive fontSize="small" />}
+            label={t("export_all")}
+            tooltip={t(
               mechanismRecords.length === 0
                 ? "export_all_empty"
                 : "export_all_tooltip",
             )}
-          >
-            <span>
-              <Button
-                size="small"
-                color="inherit"
-                disabled={mechanismRecords.length === 0}
-                startIcon={<Archive fontSize="small" />}
-                onClick={onExportAll}
-                sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
-              >
-                {t("export_all")}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip
-            title={t(
+            disabled={mechanismRecords.length === 0}
+            onClick={onExportAll}
+          />
+          <LibraryAction
+            compact={phone}
+            icon={<Restore fontSize="small" />}
+            label={t("restore_examples")}
+            tooltip={t(
               allExamplesPresent
                 ? "restore_examples_none_missing"
                 : "restore_examples_tooltip",
             )}
-          >
-            <span>
-              <Button
-                size="small"
-                color="inherit"
-                disabled={allExamplesPresent}
-                startIcon={<Restore fontSize="small" />}
-                onClick={onRestoreExamples}
-                sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
-              >
-                {t("restore_examples")}
-              </Button>
-            </span>
-          </Tooltip>
+            disabled={allExamplesPresent}
+            onClick={onRestoreExamples}
+          />
           <Divider orientation="vertical" flexItem sx={{ m: 0.5 }} />
           <Tooltip title={t("close")}>
             <IconButton onClick={onClose} size="small">
@@ -430,9 +507,21 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
                       onUpdateTags={onUpdateTags}
                       allTags={allTags}
                       startInNameEdit={
+                        !phone &&
                         mechanismRecord.metadata.createdAt === justDuplicatedId
                       }
                       onNameEditStarted={() => setJustDuplicatedId(null)}
+                      compact={phone}
+                      onShowDetails={() =>
+                        setDetailsId(mechanismRecord.metadata.createdAt)
+                      }
+                      isOpen={
+                        phone && mechanismRecord.metadata.createdAt === currentId
+                      }
+                      detailsShown={
+                        !!detailsRecord &&
+                        mechanismRecord.metadata.createdAt === detailsId
+                      }
                     />
                   );
                   // The first element of each column (first row) is measured to size the "New mechanism" card on the smallest one.
@@ -451,6 +540,25 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
           </Box>
         )}
       </DialogContent>
+      {detailsRecord && (
+        <MechanismDetailsPanel
+          record={detailsRecord}
+          onClose={() => setDetailsId(null)}
+          onLoad={onLoad}
+          onUpdateMetadata={(id, metadata) =>
+            onUpdateMetadata(id, {
+              name: metadata.name,
+              description: metadata.description,
+              author: metadata.author,
+              tags: metadata.tags,
+            })
+          }
+          onDuplicate={(id) => void handleDuplicate(id)}
+          onExport={onExport}
+          onDelete={onDelete}
+          allTags={allTags}
+        />
+      )}
     </Dialog>
   );
 };

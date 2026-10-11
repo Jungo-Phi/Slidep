@@ -3,6 +3,7 @@ import { Box, IconButton, Tooltip, Typography, alpha } from "@mui/material";
 import { Gif } from "@mui/icons-material";
 import { AppMode, is_simulating } from "../../types";
 import { useAmbient } from "../common/use-ambient";
+import { useTouchScrub } from "../common/use-touch-scrub";
 import { format_sim_time } from "../../utils";
 import { t } from "../../i18n";
 import { at_recording_end } from "../solver/dynamics/simulation-engine";
@@ -53,6 +54,10 @@ const MARK_MERGE_RATIO = 0.012;
 interface SimulationTimelineProps {
   appMode: AppMode;
   timelineTrackRef: React.RefObject<HTMLDivElement | null>;
+  /** The rail's height (px): a finger asks for more than a mouse. */
+  height?: number;
+  /** The rule above the rail, for when it is a row of the top bar; a host that draws its own leaves it out. */
+  divider?: boolean;
 }
 
 /**
@@ -64,6 +69,8 @@ interface SimulationTimelineProps {
 const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
   appMode,
   timelineTrackRef,
+  height = 24,
+  divider = true,
 }) => {
   useAmbient();
   const runtimeState = useSimClock(CLOCK_MIRROR_MS);
@@ -80,6 +87,30 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
    * The marks sit inside the track, which therefore stays hovered under them: without this the time bubble and the mark's label open on top of one another, and the one the pointer is actually on is the one that loses.
    */
   const [markHovered, setMarkHovered] = useState(false);
+
+  /** Moves the instant on screen to the one under `clientX` on the rail. */
+  const seek_at = (clientX: number) => {
+    const track = timelineTrackRef.current;
+    if (!track || disabled) return;
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const rs = sim_clock();
+    const maxTime =
+      is_simulating(appMode) && rs.simulationSnapshots.length > 0
+        ? rs.simulationSnapshots[rs.simulationSnapshots.length - 1].t
+        : 0;
+    setRuntimeState((prev) => {
+      const t = ratio * maxTime;
+      return {
+        ...prev,
+        time: t,
+        isPlaying: false,
+        // Dropped ON the end is not scrubbing: playing from there extends the recording instead of replaying nothing.
+        scrubbed: !at_recording_end(prev.simulationSnapshots, t),
+      };
+    });
+  };
+  const touchScrub = useTouchScrub<HTMLDivElement>(seek_at);
 
   /**
    * Instants where a belt changed pulleys, grouped by the frame that carries them.
@@ -154,9 +185,9 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
         gap: 1.5,
         pl: 1,
         pr: 1.5,
-        height: 24,
+        height,
         // The same rule as the top bar's own dividers: it splits the bar in two rows without cutting the bar off.
-        borderTop: "1px solid",
+        borderTop: divider ? "1px solid" : "none",
         borderColor: "dividers.toolbar",
       }}
     >
@@ -203,6 +234,7 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
           alignItems: "center",
           position: "relative",
           cursor: disabled ? "default" : "pointer",
+          touchAction: "none",
         }}
         onMouseEnter={() => setTimelineHovered(true)}
         onMouseLeave={() => {
@@ -210,34 +242,13 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
           // Also cleared here: a mark unmounting under the pointer — the recording grows and regroups them — never fires its own leave, and would hold the rail's tooltip shut for good.
           setMarkHovered(false);
         }}
+        {...touchScrub}
         onMouseDown={(e) => {
           if (disabled) return;
           e.preventDefault();
           setTimelineDragging(true);
-          const rect = timelineTrackRef.current!.getBoundingClientRect();
-          const seek = (clientX: number) => {
-            const ratio = Math.max(
-              0,
-              Math.min(1, (clientX - rect.left) / rect.width),
-            );
-            const rs = sim_clock();
-            const maxTime =
-              is_simulating(appMode) && rs.simulationSnapshots.length > 0
-                ? rs.simulationSnapshots[rs.simulationSnapshots.length - 1].t
-                : 0;
-            setRuntimeState((prev) => {
-              const t = ratio * maxTime;
-              return {
-                ...prev,
-                time: t,
-                isPlaying: false,
-                // Dropped ON the end is not scrubbing: playing from there extends the recording instead of replaying nothing.
-                scrubbed: !at_recording_end(prev.simulationSnapshots, t),
-              };
-            });
-          };
-          seek(e.clientX);
-          const onMove = (ev: MouseEvent) => seek(ev.clientX);
+          seek_at(e.clientX);
+          const onMove = (ev: MouseEvent) => seek_at(ev.clientX);
           const onUp = () => {
             setTimelineDragging(false);
             document.removeEventListener("mousemove", onMove);

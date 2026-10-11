@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { useTouchScrub } from "../../common/use-touch-scrub";
 import { Box, Typography, useTheme } from "@mui/material";
 import { ProbeCurveKey } from "../../solver/recording/probe-series";
 import { NEGLIGIBLE_RATIO } from "../../solver/recording/negligibility-pool";
@@ -45,8 +46,7 @@ const PAD_TOP = 4;
 const PAD_BOTTOM = 4;
 const PAD_RIGHT = 6;
 const FONT_SIZE = 9;
-/** Max fraction of the flat band's height a "flat" curve (one label, see `ownFlat`) may
- * visually fill.
+/** Max fraction of the flat band's height a "flat" curve (one label, see `ownFlat`) may visually fill.
  * Without this, the band's half-height is only floored at `ownFloor`, which doesn't grow with the curve's own excursion — so a curve whose spread sneaks up on `ownFloor` from below fills up to half the band while still reading as flat and getting a single label, then jumps straight to a tightly-padded two-label range the instant it crosses.
  * Keeping the fill bounded well below "looks like a real range" makes that jump land where the chart actually changes look, not well before it. */
 const FLAT_FILL_TARGET = 0.25;
@@ -60,11 +60,9 @@ interface ProbeChartProps {
   /** This metric's own floor (`NegligibilityPool.ownFloors`' field for its kind, from `own_floors` in `negligibility-pool.ts`) — a curve whose own excursion (`dataMax - dataMin`) sits under this is flat on its own terms, not just small next to the rest of the mechanism, so a single reading is drawn instead of the two extremes either side of it.
    * Independent of `poolMax`/`showZero`: those decide how to draw the axis, this alone decides whether there is a real spread to draw two numbers for in the first place. */
   ownFloor: number;
-  /** The unit the caller is already showing above this chart (its own SI-prefix pick, e.g.
-   * "mN" for a chart full of small forces) — dividing by this before formatting a label is what keeps every number in this chart consistent with that one header, instead of a fixed-decimals formatter rounding a real but small value away to "0.00". */
+  /** The unit the caller is already showing above this chart (its own SI-prefix pick, e.g. "mN" for a chart full of small forces) — dividing by this before formatting a label is what keeps every number in this chart consistent with that one header, instead of a fixed-decimals formatter rounding a real but small value away to "0.00". */
   unitFactor: number;
-  /** Whether `0` is a meaningful reading for this metric (a force, a velocity — "at rest",
-   * "no load") rather than an arbitrary reference (a position, an angle) — see `metric_shows_zero`.
+  /** Whether `0` is a meaningful reading for this metric (a force, a velocity — "at rest", "no load") rather than an arbitrary reference (a position, an angle) — see `metric_shows_zero`.
    * Forces the axis to always include it when true; left to the natural range otherwise, since forcing it there could squash a real reading that sits far from an arbitrary origin. */
   showZero: boolean;
   /** Shown when no curve has data. */
@@ -103,6 +101,11 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
   onSeek,
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  // Set while the plot can be seeked: the scale it seeks along is only known once the curves are laid out below.
+  const seekRef = useRef<((clientX: number) => void) | null>(null);
+  const touchSeek = useTouchScrub<SVGSVGElement>((clientX) =>
+    seekRef.current?.(clientX),
+  );
   // SVG paints through presentation attributes, not `sx`, so the theme tokens have to be resolved to values here rather than passed as role names.
   const { palette } = useTheme();
   const plotted = curves.filter((c) => c.t.length >= 2);
@@ -169,8 +172,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
       topLabel: string;
       bottomLabel: string;
       centerLabel: string | null;
-      /** A second, "0" label — only set alongside `centerLabel`: the two-label plans below
-       * already print zero as one of their own two extremes. */
+      /** A second, "0" label — only set alongside `centerLabel`: the two-label plans below already print zero as one of their own two extremes. */
       zeroLabel: string | null;
       /** Whether 0 is a meaningful reference to draw a gridline for. */
       zeroLine: boolean;
@@ -305,6 +307,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
       const ratio = Math.max(0, Math.min(1, (xView - GUTTER) / plotW));
       onSeek(t0 + ratio * tSpan);
     };
+    seekRef.current = onSeek ? seekFromClientX : null;
 
     content = (
       <svg
@@ -315,7 +318,9 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           height: "auto",
           display: "block",
           cursor: onSeek ? "crosshair" : "default",
+          touchAction: onSeek ? "pan-y" : undefined,
         }}
+        {...(onSeek && touchSeek)}
         onMouseMove={onHover ? (e) => onHover(insidePlot(e.clientX)) : undefined}
         onMouseLeave={onHover ? () => onHover(false) : undefined}
         onMouseDown={
@@ -343,9 +348,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           stroke={palette.divider}
           strokeWidth={0.5}
         />
-        {/* Zero line — drawn from `zeroLine` (decided alongside the bounds), not re-derived
-         * from `yMin`/`yMax`: those can dip past 0 as incidental geometry (see `zeroLine`'s
-         *  own comments) without 0 being a meaningful reference for this metric. */}
+        {/* Zero line — drawn from `zeroLine` (decided alongside the bounds), not re-derived from `yMin`/`yMax`: those can dip past 0 as incidental geometry (see `zeroLine`'s own comments) without 0 being a meaningful reference for this metric. */}
         {zeroLine && (
           <line
             x1={GUTTER - 2}
@@ -356,8 +359,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
             strokeWidth={0.5}
           />
         )}
-        {/* Reference line: dashed, and labelled at its own height rather than in the gutter,
-         * which already carries the curve's own min/max. */}
+        {/* Reference line: dashed, and labelled at its own height rather than in the gutter, which already carries the curve's own min/max. */}
         {reference && (
           <>
             <line
@@ -414,9 +416,7 @@ export const ProbeChart: React.FC<ProbeChartProps> = ({
           strokeWidth={0.8}
           opacity={0.6}
         />
-        {/* Y label(s), in the left gutter: min/max either side, or — when there is no real
-         * spread to report two numbers for — one reading (`centerLabel`) plus, when the
-         *  axis was pulled open to fit a meaningful zero in, that zero too. */}
+        {/* Y label(s), in the left gutter: min/max either side, or — when there is no real spread to report two numbers for — one reading (`centerLabel`) plus, when the axis was pulled open to fit a meaningful zero in, that zero too. */}
         {centerLabel !== null ? (
           <>
             <text

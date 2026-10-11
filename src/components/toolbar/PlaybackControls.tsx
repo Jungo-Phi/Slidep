@@ -29,10 +29,7 @@ import {
 } from "../../types";
 import { icon, icon_inked } from "../element-palette/iconDataUris";
 import { useAmbient } from "../common/use-ambient";
-import {
-  apply_parameter_snapshot_to_mechanism,
-  at_recording_end,
-} from "../solver/dynamics/simulation-engine";
+import { at_recording_end } from "../solver/dynamics/simulation-engine";
 import {
   set_sim_clock as setRuntimeState,
   useSimClockSelector,
@@ -40,12 +37,15 @@ import {
 import {
   CLOCK_MIRROR_MS,
   TimelineState,
-  shown_parameters,
-  simulationResetPatch,
   timeline_state,
 } from "../solver/recording/use-simulation-playback";
 import { OverlaysMenu } from "./OverlaysMenu";
 import { ProjectHeader } from "./ProjectHeader";
+import {
+  change_app_mode,
+  SPEEDS,
+  useShownSimulation,
+} from "./playback-actions";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
 import {
   TOP_BAR_CONTROL_HEIGHT,
@@ -55,63 +55,109 @@ import {
   TOP_BAR_SLIM_BUTTON_SX,
 } from "./toolbar-metrics";
 
-// Simulation speed steps, slowest to fastest.
-const SPEEDS: SimulationSpeed[] = [0.1, 0.25, 0.5, 1, 2, 4, 10];
 
 interface PhysicsToggleProps {
   on: boolean;
   /** The palette icon's basename: the off state is its `-off` sibling. */
   iconName: "gravity" | "collision" | "floor";
-  tooltip: string;
-  onToggle: () => void;
+  tooltip?: string;
+  /** Absent, the chip only shows the state: whatever holds it takes the click. */
+  onToggle?: () => void;
+  /** Diameter (px). */
+  size?: number;
 }
 
 /** One simulation switch (gravity, collisions, floor): icon only, filled when on. */
-const PhysicsToggle: React.FC<PhysicsToggleProps> = ({
+export const PhysicsToggle: React.FC<PhysicsToggleProps> = ({
   on,
   iconName,
   tooltip,
   onToggle,
+  size = 22,
 }) => {
   const theme = useTheme();
-  return (
-    <Tooltip title={tooltip}>
-      <Chip
-        icon={
-          <Box
-            component="img"
-            src={
-              on
-                ? icon_inked(iconName, theme.palette.primary.contrastText)
-                : icon(`${iconName}-off`)
-            }
-            alt=""
-            sx={{ width: 18, height: 18 }}
-          />
-        }
-        size="small"
-        clickable
-        onClick={onToggle}
-        variant="outlined"
-        sx={{
-          width: 22,
-          height: 22,
-          borderRadius: "50%",
-          borderColor: on ? "primary.main" : "text.primary",
-          backgroundColor: on ? "primary.main" : "transparent",
+  const chip = (
+    <Chip
+      icon={
+        <Box
+          component="img"
+          src={
+            on
+              ? icon_inked(iconName, theme.palette.primary.contrastText)
+              : icon(`${iconName}-off`)
+          }
+          alt=""
+          sx={{ width: (size * 18) / 22, height: (size * 18) / 22 }}
+        />
+      }
+      size="small"
+      clickable={!!onToggle}
+      onClick={onToggle}
+      variant="outlined"
+      sx={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        borderColor: on ? "primary.main" : "text.primary",
+        backgroundColor: on ? "primary.main" : "transparent",
+        color: on ? "primary.contrastText" : "inherit",
+        // The label's slot is what makes a chip a pill: dropped, the icon centres on its own.
+        "& .MuiChip-label": { display: "none" },
+        "& .MuiChip-icon": {
+          margin: 0,
           color: on ? "primary.contrastText" : "inherit",
-          // The label's slot is what makes a chip a pill: dropped, the icon centres on its own.
-          "& .MuiChip-label": { display: "none" },
-          "& .MuiChip-icon": {
-            margin: 0,
-            color: on ? "primary.contrastText" : "inherit",
-          },
-          "&.MuiChip-clickable:hover": {
-            backgroundColor: on ? "primary.dark" : "action.hover",
-          },
-        }}
+        },
+        "&.MuiChip-clickable:hover": {
+          backgroundColor: on ? "primary.dark" : "action.hover",
+        },
+      }}
+    />
+  );
+  return tooltip ? <Tooltip title={tooltip}>{chip}</Tooltip> : chip;
+};
+
+interface PhysicsTogglesProps {
+  appMode: AppMode;
+  mechanism: Mechanism;
+  applyActions: (actions: Action[]) => void;
+}
+
+/** Gravity, collisions and floor, as they stand at the instant on screen: what they show is what they flip. */
+export const PhysicsToggles: React.FC<PhysicsTogglesProps> = ({
+  appMode,
+  mechanism,
+  applyActions,
+}) => {
+  const shown = useShownSimulation(appMode, mechanism);
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: TOP_BAR_GROUP_GAP }}>
+      <PhysicsToggle
+        on={shown.gravity}
+        iconName="gravity"
+        tooltip={t(shown.gravity ? "gravity_on" : "gravity_off")}
+        onToggle={() =>
+          applyActions([{ type: "SetGravity", enabled: !shown.gravity }])
+        }
       />
-    </Tooltip>
+      <PhysicsToggle
+        on={shown.collisions}
+        iconName="collision"
+        tooltip={t(shown.collisions ? "collisions_on" : "collisions_off")}
+        onToggle={() =>
+          applyActions([{ type: "SetCollisions", enabled: !shown.collisions }])
+        }
+      />
+      <PhysicsToggle
+        on={shown.floor.enabled}
+        iconName="floor"
+        tooltip={t(shown.floor.enabled ? "floor_on" : "floor_off")}
+        onToggle={() =>
+          applyActions([
+            { type: "SetFloorEnabled", enabled: !shown.floor.enabled },
+          ])
+        }
+      />
+    </Box>
   );
 };
 
@@ -166,18 +212,6 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
     CLOCK_MIRROR_MS,
     same_scrub_limits,
   );
-  const shownParameters = useSimClockSelector(
-    (clock) => shown_parameters(appMode, clock),
-    CLOCK_MIRROR_MS,
-  );
-  // The settings in effect at the instant on screen: what the physics toggles show, and what they flip.
-  const shownSimulation = React.useMemo(
-    () =>
-      shownParameters
-        ? apply_parameter_snapshot_to_mechanism(mechanism, shownParameters).simulation
-        : mechanism.simulation,
-    [mechanism, shownParameters],
-  );
   return (
     <>
       <Box
@@ -210,20 +244,8 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           exclusive
           size="small"
           onChange={(_e, newMode: AppMode) => {
-            if (!newMode) return;
-            setAppMode(newMode);
-            // Same tick as `setAppMode`, not left to the hook's own effect: switching directly between kinematic and dynamic (no edition in between) otherwise leaves a render where `appMode` already reads the new mode but `runtimeState.simulationSnapshots` still holds the other mode's snapshot shape — see `simulationResetPatch`.
-            setRuntimeState((prev) => ({
-              ...prev,
-              ...simulationResetPatch(newMode, mechanism),
-              isPlaying: false,
-            }));
-            if (newMode !== "edition")
-              // Remembering the last mode is a preference, not a content edit — it must not bump `modifiedAt` and surface the mechanism as "recently modified" in the gallery just for having been tried in simulation.
-              updateMetadata(
-                { ...mechanism.metadata, lastSimulationMode: newMode },
-                false,
-              );
+            if (newMode)
+              change_app_mode(newMode, setAppMode, mechanism, updateMetadata);
           }}
           sx={{
             mr: TOP_BAR_SECTION_GAP,
@@ -427,52 +449,11 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
         {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
         {/* Gravity / collisions / floor — reachable in edition too: these are settings of the mechanism, not of the run. */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: TOP_BAR_GROUP_GAP,
-          }}
-        >
-          <PhysicsToggle
-            on={shownSimulation.gravity}
-            iconName="gravity"
-            tooltip={t(shownSimulation.gravity ? "gravity_on" : "gravity_off")}
-            onToggle={() =>
-              applyActions([
-                { type: "SetGravity", enabled: !shownSimulation.gravity },
-              ])
-            }
-          />
-          <PhysicsToggle
-            on={shownSimulation.collisions}
-            iconName="collision"
-            tooltip={t(
-              shownSimulation.collisions ? "collisions_on" : "collisions_off",
-            )}
-            onToggle={() =>
-              applyActions([
-                {
-                  type: "SetCollisions",
-                  enabled: !shownSimulation.collisions,
-                },
-              ])
-            }
-          />
-          <PhysicsToggle
-            on={shownSimulation.floor.enabled}
-            iconName="floor"
-            tooltip={t(shownSimulation.floor.enabled ? "floor_on" : "floor_off")}
-            onToggle={() =>
-              applyActions([
-                {
-                  type: "SetFloorEnabled",
-                  enabled: !shownSimulation.floor.enabled,
-                },
-              ])
-            }
-          />
-        </Box>
+        <PhysicsToggles
+          appMode={appMode}
+          mechanism={mechanism}
+          applyActions={applyActions}
+        />
 
         <Divider
           flexItem

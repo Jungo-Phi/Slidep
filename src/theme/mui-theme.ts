@@ -838,6 +838,15 @@ const components: ThemeOptions["components"] = {
       },
     },
   },
+  MuiDialog: {
+    styleOverrides: {
+      // A dialog that takes the whole screen has no edge to frame: the border and the rounding every paper gets would only eat into it.
+      paperFullScreen: {
+        border: "none",
+        borderRadius: 0,
+      },
+    },
+  },
   MuiTooltip: {
     defaultProps: {
       arrow: true,

@@ -1,7 +1,7 @@
 # Plan UI/UX — slidep sur téléphone et tablette
 
 Objectif : **concevoir sur téléphone**, en portrait — **toutes** les capacités de slidep, pas une
-version consultation. La tablette garde le layout desktop, adapté au doigt (§8).
+version consultation. La tablette garde le layout desktop, adapté au doigt (§7).
 
 Principe fondateur : **le canvas est l'application ; tout le reste est invoqué et disparaît.**
 Sur desktop la palette et le panneau sont permanents parce qu'il y a la place. Ici, rien n'est
@@ -108,10 +108,20 @@ Une partie du panneau **agit sur le canvas au survol**, sans clic. Au doigt, tou
 - Bilan des forces : le terme survolé est marqué sur le canvas.
 - Bibliothèque matériaux/profils : survoler une section teinte le canvas, une ligne accentue ses poutres.
 
-Règle proposée : **au doigt, le tap sur la ligne fait ce que faisait le survol, et ça tient** jusqu'au
-tap suivant ou à la fermeture de la feuille. La feuille à mi-écran garde le canvas visible au-dessus —
-c'est ce qui rend cette règle praticable. Là où la ligne a déjà une action au clic, il faudra choisir au
-cas par cas : à inventorier.
+Règle : **au doigt, le tap sur la ligne fait ce que faisait le survol, et ça tient** jusqu'au tap
+suivant. La feuille à mi-écran garde le canvas visible au-dessus — c'est ce qui rend cette règle
+praticable.
+
+Elle tient **sans code** : après un tap, les navigateurs émulent les événements souris, et le
+`mouseleave` n'arrive qu'au tap suivant ailleurs. Vérifié sous Firefox (Surface et téléphone) ; Safari
+iOS reste à vérifier. Le reste de l'inventaire :
+
+- Une ligne déjà cliquable (cartes d'élément, groupes, termes du bilan) : le tap sélectionne, et la
+  sélection montre l'élément — rien à faire.
+- Diagrammes N/T/Mf et courbes de sonde : un glisser n'émule rien, le panneau défilait. Ils suivent
+  maintenant le doigt à l'horizontale (`useTouchScrub`, `touch-action: pan-y`) ; la marque tient après
+  le lever, jusqu'à un toucher ailleurs.
+- Aperçus de suppression et aperçus des menus (lentille, thème) : perdus au doigt, assumé — tout s'annule.
 
 ### Infobulles
 
@@ -131,10 +141,10 @@ doit trouver une place visible (libellé, ligne d'aide, bouton « ? » qui l'ouv
 Le panneau latéral du desktop bascule en bas de l'écran, ses onglets deviennent une **barre
 permanente**, et la palette en devient un onglet de plus. Tout ce qui n'est pas le canvas passe par là.
 
-**Cinq onglets au plus**, c'est le maximum d'une barre basse. Le panneau en a déjà cinq
-(projet, éléments, contraintes, bibliothèque, analyse) ; avec la palette, six. Proposition : **projet
-part dans le menu ☰** de la barre haute, qui le contient déjà. Reste **palette · élément · contraintes ·
-bibliothèque · analyse** — et plus rien ne pourra s'y ajouter.
+**Cinq onglets au plus**, c'est le maximum d'une barre basse. Le panneau en a cinq (projet, éléments,
+contraintes, bibliothèque, analyse) ; avec la palette, six. **Projet part dans le menu ☰** de la barre
+haute. Restent **palette · élément · contraintes · bibliothèque · analyse** — et plus rien ne pourra s'y
+ajouter.
 
 Taper un onglet **lève la feuille à mi-écran**, défilement vertical, canvas visible et vivant
 au-dessus. Trois hauteurs :
@@ -144,8 +154,16 @@ au-dessus. Trois hauteurs :
 3. **Plein écran** — quand le contenu le demande : saisie d'une valeur, graphe de sonde, liste
    longue. C'est une extension, pas un écran séparé.
 
-**Fermeture** : taper le canvas referme la feuille. Un glissement sur le canvas ne la referme pas —
-manipuler le mécanisme en surveillant une sonde est un usage légitime. *(à confirmer à l'usage)*
+**Fermeture**, feuille ouverte :
+
+- **Taper le vide** referme la feuille.
+- **Taper un élément** le sélectionne et **garde la feuille ouverte sur son onglet** : l'élément qu'on
+  inspecte, la poutre dont on lit l'analyse ou le matériau, la contrainte qu'on regarde changent de
+  sujet sans qu'on perde sa place. L'onglet ne bascule pas vers « élément » comme sur desktop.
+  Seule exception, l'**onglet palette** : il sert à choisir un outil, et taper le canvas, c'est avoir
+  fini de choisir — il se ferme.
+- **Un glissement** sur le canvas ne referme jamais la feuille — manipuler le mécanisme en surveillant
+  une sonde est un usage légitime.
 
 **Recentrage** : lever la feuille recentre la vue pour garder l'élément concerné visible au-dessus.
 Éditer un objet qu'on ne voit pas est inutilisable.
@@ -183,24 +201,54 @@ dessin, les déporter dans la feuille casserait ce lien. Elles doivent en revanc
 
 ## 3. Barre haute
 
-Permanente, 6 éléments au plus : menu ☰ (galerie de mécanismes, projet, réglages, langue, export,
-à propos), nom du projet, annuler, rétablir, recentrer, sélecteur de mode.
+Permanente : **☰ ⟷ ( Afficher ▾ │ physique ▾ │ mode ▾ ) ⟷ recentrer · annuler · rétablir**, les trois
+blocs répartis sur la largeur. Sept éléments de largeur fixe, qui tiennent dès 360 px.
 
-Le mode est le contrôle le plus structurant : il change le contenu de la barre d'onglets, celui de la
-palette et le sens des gestes. Il mérite la place la plus visible. **Trois états** désormais —
-édition, cinématique, dynamique (la statique reste désactivée) : un interrupteur ne suffit plus,
-il faut un sélecteur segmenté compact ou une pastille qui ouvre un choix.
+- **Pas de nom de projet** dans la barre : tronqué à trois lettres, il ne se lisait pas. Le projet se
+  consulte et s'édite dans la galerie (ci-dessous), où le mécanisme ouvert est en tête.
+- **Pas de point d'état de sauvegarde** sur téléphone : la sauvegarde automatique y est attendue, et
+  sans survol rien n'expliquerait ce point.
+- **Menu ☰** : galerie de mécanismes, réglages (grille, snap, thème), langue, à propos. Pas d'entrée
+  « projet ».
+- **Afficher, physique et mode** forment **un seul groupe**, un contour coupé en trois segments portant
+  chacun la flèche d'un menu : les réglages de la course, que le desktop rassemble aussi au centre de sa
+  barre. L'œil et le mode disent leur état (ouvert ou barré, accent en simulation) ; la physique a une
+  icône fixe, ses trois états se lisent dans son menu.
+- **Pas de boutons de zoom** : on pince ; seul « recentrer » reste.
+- **Mode** : le contrôle le plus structurant — il change la barre basse, la palette et le sens des
+  gestes. Trois états (la statique reste désactivée).
+- **Physique** (gravité, collisions, sol) : les ronds du desktop en grand, chacun nommé. Réglages du
+  mécanisme et non de la course : accessibles en édition aussi, comme sur desktop.
+- **Afficher** : le menu des couches du desktop (relevés, lentille de contrainte, trajectoires).
+- **Rien de foncé dans la barre**, que des contours : l'accent seul signale ce qui est actif.
+
+### Galerie de mécanismes
+
+Plein écran, recherche sur sa propre ligne, au moins deux colonnes.
+
+- **Une carte = la vignette et le titre**, rien d'autre : description, dates, nombre de pièces et tags
+  n'ont pas la place.
+- **Taper la carte ouvre le mécanisme** — l'action la plus fréquente, en un geste.
+- **Un bouton ⋮ sur la carte révèle ses détails au pied de la galerie**, sans la recouvrir : les cartes
+  restent visibles et accessibles au-dessus, celle concernée surlignée et ramenée en vue. Vignette,
+  titre, description, auteur et tags éditables sur place, dates, nombre de pièces, actions (ouvrir,
+  dupliquer, exporter, supprimer). Une seule zone pour les détails, le reste de la carte ouvre : pas de
+  zones de clic à deviner.
+- **Le mécanisme ouvert** est marqué en tête de la galerie ; **ses détails remplacent entièrement
+  l'onglet projet** sur téléphone. Les alertes de validité de l'onglet projet n'y figurent pas.
 
 ---
 
 ## 4. Le transport, en simulation
 
-Lecture/pause, début, fin, vitesse et timeline. **Ils remplacent le contenu de la barre d'onglets,
-ils ne s'empilent pas au-dessus** : deux barres basses feraient ~110 px de chrome, et l'édition n'a
-de toute façon plus cours. Restent accessibles pendant la simulation les onglets d'observation
-(élément, analyse) et la palette filtrée.
-
-Les trois boutons de vitesse deviennent une pastille « ×1 » qui ouvre un sélecteur.
+- **Une rangée de transport** au-dessus de la barre basse, en simulation seulement : **▶/⏸ · timeline ·
+  ×1**. La timeline s'y balaie au doigt ; taper ses bouts remplace « début » et « fin ». Les trois
+  boutons de vitesse deviennent une pastille « ×1 » qui ouvre un sélecteur.
+- **En édition**, la rangée est repliée ; lecture est un **bouton flottant** dans le coin bas gauche du
+  canvas, discret comme celui de la règle en face. Il lance la simulation dans le dernier mode utilisé.
+- **La barre basse** perd la cotation, rien ne se cote en simulation, au profit d'**arrêter** (retour en
+  édition, en accent), à sa place au milieu : aucun onglet ne bouge quand une simulation démarre.
+  **palette filtrée · élément · arrêter · matériaux · analyse**.
 
 ---
 
@@ -212,8 +260,14 @@ Les trois boutons de vitesse deviennent une pastille « ×1 » qui ouvre un sél
 - **Espace** (lecture/pause) → transport.
 - **Suppr** → dans le bandeau de sélection.
 - **Annuler / rétablir** → barre haute.
-- **Maj** (ajout à la sélection) → bouton dans le bandeau de sélection.
+- **Maj** (ajout à la sélection) → le rectangle suffit ; pas de bouton dans la première version.
 - **Raccourcis d'outils** → la palette, rien de plus.
+
+**Hors de la première version** : l'appui long (rien à mettre dans un menu contextuel tant que le
+bandeau porte la sélection — le geste reste non attribué) et les infobulles des `NumberInput` (étape à
+part, juste après le layout).
+
+**Seuil** : layout téléphone quand la plus petite dimension de l'écran est sous 600 px (constante).
 
 ---
 
@@ -230,19 +284,7 @@ Le clavier système suffit — `inputMode` est déjà en place. Ce qui reste à 
 
 ---
 
-## 7. Performance
-
-La dynamique est active, et c'est elle qui coûte. Sur desktop : le solveur direct tourne autour de
-90 ms/frame sur Pendulum clock, et React plafonne l'affichage autour de 8 fps en simulation.
-Un téléphone est plus lent — de combien, on ne le sait pas.
-
-On ne promet pas la simulation temps réel sur téléphone avant de l'avoir **mesurée sur un appareil
-réel**, sur les mécanismes de la galerie. Si elle ne tient pas, la conception (édition, cinématique)
-reste l'objectif ; la dynamique peut ralentir le temps simulé sans casser l'usage.
-
----
-
-## 8. Tablette
+## 7. Tablette
 
 Le **layout desktop** (barre haute, palette à gauche, canvas, panneau à droite), en **densité tactile**.
 
@@ -263,32 +305,32 @@ Le **layout desktop** (barre haute, palette à gauche, canvas, panneau à droite
 
 ---
 
-## 9. Phases
+## 8. Phases
 
 1. ~~**Couche d'entrée tactile, sur le layout desktop.**~~ Fait : deux doigts (pan + zoom), seuils par
    `pointerType`, validation au lever pour les outils qui écrivent, annulation par second doigt, et
    placement en un geste.
-2. **Survol du panneau au doigt** : appliquer la règle du tap qui tient, ligne par ligne. Toujours sur
-   le layout desktop.
-3. **Mesure de perf sur téléphone.** Peut se faire à tout moment, au plus tôt sera le mieux.
-4. **Layout téléphone** : barre haute, barre d'onglets, feuille, bandeau, transport. Commence par
-   l'inventaire des gestes ci-dessous. Se teste sur PC en mode appareil des devtools, qui simule aussi
-   le toucher et `pointer: coarse`.
-5. **Tablette** (§8) : densité tactile, panneau repliable, surimpression en portrait.
+2. ~~**Survol du panneau au doigt.**~~ Fait (§1) : le tap tient par l'émulation souris des navigateurs,
+   les diagrammes se balaient au doigt.
+3. **Layout téléphone** : barre haute, barre d'onglets, feuille, bandeau, transport. Se teste sur PC en
+   mode appareil des devtools, qui simule aussi le toucher et `pointer: coarse`.
+4. **Tablette** (§7) : densité tactile, panneau repliable, surimpression en portrait.
 
-### Inventaire des gestes (avant la phase 4)
+La performance sur téléphone est un chantier séparé : mesurée, elle ne bloque pas.
 
-Lister les 15 à 20 opérations réelles (poser un pivot, allonger une barre, coter, lancer la simulation,
-lire une sonde) et écrire pour chacune la séquence tactile complète. Si les trois plus fréquentes
-tiennent en 3 gestes sans lever la feuille, le modèle est bon.
+### Les trois parcours les plus fréquents
+
+Le modèle tient s'ils se font en 3 gestes sans lever la feuille :
+
+- **Poser une barre** : onglet palette → outil (la feuille redescend) → glisser. 3 gestes.
+- **Corriger une cote** : taper la cote sur le canvas → saisir. 2 gestes, l'éditeur est sur le dessin.
+- **Lancer la simulation** : pastille de mode → dynamique → ▶. 3 gestes.
 
 ---
 
 ## Non tranché
 
-- **Projet dans le ☰** pour tenir à cinq onglets — à confirmer.
 - **Contenu du menu contextuel** à l'appui long : rien de tel n'existe encore sur desktop.
-- La fermeture au tap canvas : le glissement doit-il vraiment préserver la feuille ?
 - Que devient l'aide au premier lancement — l'app perd les infobulles au survol.
 - **Tracer une courroie en suivant un chemin** (doigt et souris) : chaque engrenage traversé pendant le
   glisser s'enroule. À définir : ce que « traverser » veut dire, le sens d'enroulement, et comment se

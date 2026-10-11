@@ -33,6 +33,7 @@ import {
   set_pointer_kind,
 } from "../../utils/pointer-kind";
 import { aims_until_lift } from "./tools/touch-press";
+import { names_element } from "../../types/hovered-part";
 import { COLORS } from "../../theme/canvas-theme";
 import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION } from "../../constants/interaction-specs";
 import { Box, Tooltip } from "@mui/material";
@@ -163,7 +164,7 @@ export interface ConstraintChangeSignal {
   seq: number;
 }
 
-interface MechanicalCanvasProps {
+export interface MechanicalCanvasProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
   applyActions: (actions: Action[]) => void;
@@ -239,6 +240,8 @@ interface MechanicalCanvasProps {
   hoveredLibraryEntryID?: ID | null;
   /** Whether the mechanisms gallery is open — keyboard shortcuts are disabled when it is, except Escape. */
   galleryOpen: boolean;
+  /** A press released without dragging — a tap or a click — with whether it landed on an element. */
+  onTap?: (onElement: boolean) => void;
 }
 
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
@@ -265,8 +268,7 @@ export interface LiveFrame {
   /** The `bending` lens' shared scale (`StressScaleCache.maxBending`) — the highest `|Mf·v/I|` ever recorded, Pa, floored like `normalStressScale`.
    * `0` outside dynamic mode or before anything has been recorded yet. */
   bendingStressScale: number;
-  /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`)
-   * — the highest `|σ|max` ever recorded, Pa, floored like `normalStressScale`.
+  /** The `utilization` lens' shared ramp top (`StressScaleCache.maxStress`, `cohesion-field.ts`) — the highest `|σ|max` ever recorded, Pa, floored like `normalStressScale`.
    * `0` outside dynamic mode or before anything has been recorded yet. */
   stressScale: number;
   /** The `shear` lens' shared ramp top (`StressScaleCache.maxShear`) — the highest `τ_max` ever recorded, Pa, floored like `normalStressScale` against its own `τ_adm` reference.
@@ -320,6 +322,7 @@ const MechanicalCanvasView = forwardRef<
       onSelectOverlay,
       focusedOverlay,
       galleryOpen,
+      onTap,
     },
     ref,
   ) => {
@@ -350,6 +353,8 @@ const MechanicalCanvasView = forwardRef<
     // Where the left press landed, and whether the pointer has since travelled past the drag threshold — once past, a press stays a drag even if it comes back.
     const pressOriginRef = useRef<ScreenPoint>(ZERO);
     const pressDraggedRef = useRef(false);
+    // Whether the left press landed on an element, for `onTap` to say so once it turns out to be one.
+    const pressOnElementRef = useRef(false);
     // What a one-finger gesture started from, for a second finger landing to take it back.
     const gestureStartRef = useRef<{
       canvasState: CanvasState;
@@ -396,6 +401,8 @@ const MechanicalCanvasView = forwardRef<
       onMomentBalanceReferencePicked,
     );
     onMomentBalanceReferencePickedRef.current = onMomentBalanceReferencePicked;
+    const onTapRef = useRef(onTap);
+    onTapRef.current = onTap;
     const onSelectOverlayRef = useRef(onSelectOverlay);
     onSelectOverlayRef.current = onSelectOverlay;
     const focusedOverlayRef = useRef(focusedOverlay);
@@ -1031,12 +1038,15 @@ const MechanicalCanvasView = forwardRef<
     // Idempotent out of necessity: some browsers fire pointercancel right behind a pointerup handled for that same release (around releasePointerCapture in particular).
     // Without this guard, the second call is read as the release of another press: it seals the gesture twice, or puts down the second step of a placement a second time.
     const onMouseUpHandler = useCallback(() => {
-      if (mouseButtonDownRef.current === "none") return;
+      const button = mouseButtonDownRef.current;
+      if (button === "none") return;
       handleEventRef.current({
         type: "MouseButtonUp",
         dragged: pressDraggedRef.current,
       });
       mouseButtonDownRef.current = "none";
+      if (button === "left" && !pressDraggedRef.current)
+        onTapRef.current?.(pressOnElementRef.current);
     }, []);
 
     // Opens a left press at the pointer's current position: its release will tell how far it travelled.
@@ -1480,6 +1490,8 @@ const MechanicalCanvasView = forwardRef<
           snapFeedback,
         } = computeHover();
         refreshRevealFromHover(newHoveredPart);
+        if (event.type === "MouseLeftButtonDown")
+          pressOnElementRef.current = names_element(newHoveredPart);
 
         snapFeedbackRef.current = snapFeedback;
         setHoveredPart(newHoveredPart);

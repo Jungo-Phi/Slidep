@@ -1,12 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  AlertTitle,
-  Box,
-  Divider,
-  TextField,
-  Typography,
-} from "@mui/material";
+import React, { useMemo } from "react";
+import { Alert, AlertTitle, Box, Divider } from "@mui/material";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
@@ -20,14 +13,13 @@ import {
 import {
   compute_constraint_violations,
   ConstraintViolationCategory,
-  format_date,
   validate_mechanism,
   ValidationErrorCode,
 } from "../../../utils";
 import { HoveredPart } from "../../../types/hovered-part";
 import ElementDisplay from "../components/ElementDisplay";
-import TagChipsEditor from "../../mechanisms-gallery/TagChipsEditor";
-import { t, tn } from "../../../i18n";
+import MechanismMetadataFields from "../../mechanisms-gallery/MechanismMetadataFields";
+import { tn } from "../../../i18n";
 
 /**
  * Categorical badge colors: they exist to tell the codes apart at a glance, not to carry a semantic role, so they are their own palette rather than theme tokens (the badges sit inside an Alert that already conveys error/warning).
@@ -137,168 +129,15 @@ export const ProjectInfoSection: React.FC<ProjectInfoSectionProps> = ({
     [mechanism.mechanicalElements, mechanism.constraintElements],
   );
 
-  const [projectInfo, setProjectInfo] = useState<MechanismMetadata>({
-    name: mechanism.metadata.name,
-    description: mechanism.metadata.description,
-    author: mechanism.metadata.author,
-    createdAt: mechanism.metadata.createdAt,
-    modifiedAt: mechanism.metadata.modifiedAt,
-    tags: mechanism.metadata.tags,
-    lastSimulationMode: mechanism.metadata.lastSimulationMode,
-  });
-
-  useEffect(() => {
-    setProjectInfo({
-      name: mechanism.metadata.name,
-      description: mechanism.metadata.description,
-      author: mechanism.metadata.author,
-      createdAt: mechanism.metadata.createdAt,
-      modifiedAt: mechanism.metadata.modifiedAt,
-      tags: mechanism.metadata.tags,
-      lastSimulationMode: mechanism.metadata.lastSimulationMode,
-    });
-  }, [mechanism.metadata]);
-
-  const handleInfoChange = (field: keyof MechanismMetadata, value: string) => {
-    setProjectInfo((previous) => ({ ...previous, [field]: value }));
-  };
-
-  // Set by Escape so the blur it triggers discards instead of committing.
-  const discardRef = useRef(false);
-
-  // Leaving a field validates it.
-  // Metadata does not go through the history, so Escape is the only way back from an edit and has to restore rather than merely leave.
-  const commitInfo = () => {
-    if (discardRef.current) {
-      discardRef.current = false;
-      setProjectInfo({ ...mechanism.metadata });
-      return;
-    }
-    const { name, description, author } = mechanism.metadata;
-    if (
-      projectInfo.name === name &&
-      projectInfo.description === description &&
-      projectInfo.author === author
-    )
-      return;
-    updateMetadata({ ...projectInfo });
-  };
-
-  const handleTagsChange = (tags: string[]) => {
-    updateMetadata({ ...projectInfo, tags });
-  };
-
-  /** `enterCommits` is off for the description, where Enter is a line break. */
-  const handleFieldKeyDown = (
-    e: React.KeyboardEvent,
-    enterCommits: boolean,
-  ) => {
-    if (e.key === "Escape") {
-      discardRef.current = true;
-      (e.target as HTMLElement).blur();
-    } else if (e.key === "Enter" && enterCommits) {
-      (e.target as HTMLElement).blur();
-    }
-  };
-
   return (
     <Box sx={{ my: 2 }}>
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 1.5,
-          mx: 2,
-        }}
-      >
-        <TextField
-          fullWidth
-          label={t("project_title")}
-          value={projectInfo.name}
-          onChange={(e) => handleInfoChange("name", e.target.value)}
-          onKeyDown={(e) => handleFieldKeyDown(e, true)}
-          onBlur={commitInfo}
-          size="small"
+      <Box sx={{ mx: 2 }}>
+        <MechanismMetadataFields
+          metadata={mechanism.metadata}
+          onChange={updateMetadata}
+          allTags={allTags}
+          mechanismLength={mechanism.mechanicalElements.length}
         />
-
-        <TextField
-          fullWidth
-          label={t("project_description")}
-          multiline
-          rows={4.6}
-          value={projectInfo.description}
-          onChange={(e) => handleInfoChange("description", e.target.value)}
-          onKeyDown={(e) => handleFieldKeyDown(e, false)}
-          onBlur={commitInfo}
-          size="small"
-          sx={{
-            "& .MuiOutlinedInput-root": {
-              paddingRight: 0,
-            },
-            "& .MuiInputBase-input": {
-              fontSize: "0.86rem",
-              paddingRight: "10px",
-            },
-          }}
-        />
-
-        <TextField
-          fullWidth
-          label={t("project_author")}
-          value={projectInfo.author}
-          onChange={(e) => handleInfoChange("author", e.target.value)}
-          onKeyDown={(e) => handleFieldKeyDown(e, true)}
-          onBlur={commitInfo}
-          size="small"
-        />
-
-        <Box
-          sx={{
-            display: "flex",
-            gap: 5,
-          }}
-        >
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: "block" }}
-            >
-              {t("project_created")}
-            </Typography>
-            <Typography variant="body2">
-              {format_date(projectInfo.createdAt)}
-            </Typography>
-          </Box>
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: "block" }}
-            >
-              {t("project_modified")}
-            </Typography>
-            <Typography variant="body2">
-              {format_date(projectInfo.modifiedAt)}
-            </Typography>
-          </Box>
-        </Box>
-
-        <Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: "block", mb: 0.5 }}
-          >
-            {t("project_tags")}
-          </Typography>
-          <TagChipsEditor
-            tags={projectInfo.tags}
-            allTags={allTags}
-            onChange={handleTagsChange}
-            mechanismLength={mechanism.mechanicalElements.length}
-          />
-        </Box>
       </Box>
 
       {validationErrors !== null && (

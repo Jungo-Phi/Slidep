@@ -7,7 +7,7 @@ import {
   TextField,
   Divider,
 } from "@mui/material";
-import { AddToPhotos, Delete, Download } from "@mui/icons-material";
+import { AddToPhotos, Delete, Download, MoreVert } from "@mui/icons-material";
 import { SerializedMechanism } from "../../types";
 import { t } from "../../i18n";
 import MechanismThumbnail from "./MechanismThumbnail";
@@ -28,6 +28,13 @@ interface MechanismCardProps {
   allTags: string[];
   startInNameEdit?: boolean;
   onNameEditStarted?: () => void;
+  /** The thumbnail and the title alone, for a narrow screen: the rest is behind `onShowDetails`, and tapping anywhere else opens the mechanism. */
+  compact?: boolean;
+  onShowDetails?: () => void;
+  /** Whether it is the mechanism open in the app. */
+  isOpen?: boolean;
+  /** Whether its details are the ones raised. */
+  detailsShown?: boolean;
 }
 
 export const MechanismCard: React.FC<MechanismCardProps> = ({
@@ -41,13 +48,15 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
   allTags,
   startInNameEdit,
   onNameEditStarted,
+  compact = false,
+  onShowDetails,
+  isOpen = false,
+  detailsShown = false,
 }) => {
   const [hovered, setHovered] = useState(false);
   const description = mechanismRecord.metadata.description;
 
-  // The duplicate/export/delete buttons stay collapsed to zero width until hovered — mounting them
-  // is invisible either way, so it's deferred like a thumbnail's drawing, off of the batch that
-  // mounts every other card in the gallery at once.
+  // The duplicate/export/delete buttons stay collapsed to zero width until hovered — mounting them is invisible either way, so it's deferred like a thumbnail's drawing, off of the batch that mounts every other card in the gallery at once.
   const [actionsReady, setActionsReady] = useState(false);
   useEffect(() => {
     const handle = schedule_idle(() => setActionsReady(true));
@@ -109,6 +118,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
 
   return (
     <Box
+      data-mechanism-id={mechanismRecord.metadata.createdAt}
       onClick={() => onLoad(mechanismRecord)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -117,9 +127,9 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
         flexDirection: "column",
         cursor: "pointer",
         border: "1px solid",
-        borderColor: "dividers.ground",
+        borderColor: isOpen ? "primary.main" : "dividers.ground",
         borderRadius: 2,
-        bgcolor: "background.default",
+        bgcolor: detailsShown ? "action.selected" : "background.default",
         overflow: "hidden",
         transition: "border-color 0.15s, background-color 0.15s",
         "&:hover": {
@@ -128,7 +138,6 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
         },
       }}
     >
-      {/* Miniature, redessinée au thème courant */}
       <MechanismThumbnail record={mechanismRecord} hovered={hovered} />
 
       <Divider sx={{ borderColor: "dividers.ground" }} />
@@ -193,74 +202,94 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                       : "text.disabled"
                   }
                   marginLeft={0.5}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingName(true);
-                  }}
-                  sx={{ cursor: "text" }}
+                  // Compact, the title is the card like the rest of it: it opens; the name is edited in the details.
+                  onClick={
+                    compact
+                      ? undefined
+                      : (e) => {
+                          e.stopPropagation();
+                          setEditingName(true);
+                        }
+                  }
+                  sx={{ cursor: compact ? "pointer" : "text" }}
                 >
                   {mechanismRecord.metadata.name || t("untitled")}
                 </Typography>
               </Tooltip>
 
-              <Box
-                sx={{
-                  display: "flex",
-                  flexShrink: 0,
-                  ml: 0.5,
-                  mr: -0.5,
-                  width: hovered ? 96 : 0,
-                  opacity: hovered ? 1 : 0,
-                  overflow: "hidden",
-                  transition: "width 0.15s, opacity 0.15s, margin-left 0.15s",
-                }}
-              >
-                {actionsReady && (
-                  <>
-                    <Tooltip title={t("duplicate")}>
-                      <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDuplicate(mechanismRecord.metadata.createdAt);
-                        }}
-                      >
-                        <AddToPhotos fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t("export")}>
-                      <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onExport(mechanismRecord);
-                        }}
-                      >
-                        <Download fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t("delete")}>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(mechanismRecord.metadata.createdAt);
-                        }}
-                      >
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </>
-                )}
-              </Box>
+              {compact ? (
+                <IconButton
+                  size="small"
+                  color="inherit"
+                  aria-label={t("mechanism_details")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowDetails?.();
+                  }}
+                  sx={{ flexShrink: 0, mr: -1 }}
+                >
+                  <MoreVert fontSize="small" />
+                </IconButton>
+              ) : (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexShrink: 0,
+                    ml: 0.5,
+                    mr: -0.5,
+                    width: hovered ? 96 : 0,
+                    opacity: hovered ? 1 : 0,
+                    overflow: "hidden",
+                    transition: "width 0.15s, opacity 0.15s, margin-left 0.15s",
+                  }}
+                >
+                  {actionsReady && (
+                    <>
+                      <Tooltip title={t("duplicate")}>
+                        <IconButton
+                          size="small"
+                          color="inherit"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDuplicate(mechanismRecord.metadata.createdAt);
+                          }}
+                        >
+                          <AddToPhotos fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t("export")}>
+                        <IconButton
+                          size="small"
+                          color="inherit"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onExport(mechanismRecord);
+                          }}
+                        >
+                          <Download fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t("delete")}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(mechanismRecord.metadata.createdAt);
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </>
+                  )}
+                </Box>
+              )}
             </>
           )}
         </Box>
 
-        {description && (
+        {!compact && description && (
           <Typography
             variant="body2"
             color="text.secondary"
@@ -276,15 +305,17 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
           </Typography>
         )}
 
-        <TagChipsEditor
-          tags={mechanismRecord.metadata.tags}
-          allTags={allTags}
-          onChange={(tags) =>
-            onUpdateTags(mechanismRecord.metadata.createdAt, tags)
-          }
-          mechanismLength={mechanismRecord.mechanicalElements.length}
-          modifiedAt={mechanismRecord.metadata.modifiedAt}
-        />
+        {!compact && (
+          <TagChipsEditor
+            tags={mechanismRecord.metadata.tags}
+            allTags={allTags}
+            onChange={(tags) =>
+              onUpdateTags(mechanismRecord.metadata.createdAt, tags)
+            }
+            mechanismLength={mechanismRecord.mechanicalElements.length}
+            modifiedAt={mechanismRecord.metadata.modifiedAt}
+          />
+        )}
       </Box>
     </Box>
   );

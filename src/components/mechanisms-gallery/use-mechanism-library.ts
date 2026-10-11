@@ -12,6 +12,7 @@ import {
   DEFAULT_METADATA,
   DEFAULT_SIMULATION,
   Mechanism,
+  MechanismMetadata,
   SerializedMechanism,
   SlidepDB,
   ViewportState,
@@ -250,13 +251,19 @@ export function useMechanismLibrary({
   );
 
   // Renaming a record that happens to be the one currently open must also update the live mechanism — otherwise the next autosave would silently overwrite it.
-  const handleRenameFromGallery = useCallback(
-    async (createdAtId: number, name: string) => {
+  // The currently open mechanism is kept in sync with its stored record, so the next autosave doesn't overwrite the edit.
+  const handleUpdateMetadataFromGallery = useCallback(
+    async (
+      createdAtId: number,
+      patch: Partial<
+        Pick<MechanismMetadata, "name" | "description" | "author" | "tags">
+      >,
+    ) => {
       const db = await openMechanismsDB();
       const record = await db.get("mechanisms", createdAtId);
       if (!record) return;
 
-      const updated = { ...record, metadata: { ...record.metadata, name } };
+      const updated = { ...record, metadata: { ...record.metadata, ...patch } };
       await db.put("mechanisms", updated);
 
       setSavedMechanisms((prev) =>
@@ -266,38 +273,23 @@ export function useMechanismLibrary({
       if (mechanismRef.current.metadata.createdAt === createdAtId) {
         setMechanism({
           ...mechanismRef.current,
-          metadata: { ...mechanismRef.current.metadata, name },
+          metadata: { ...mechanismRef.current.metadata, ...patch },
         });
       }
     },
     [mechanismRef, setMechanism],
   );
 
-  // Same rationale as handleRenameFromGallery: the currently open mechanism must stay in sync so the next autosave doesn't overwrite the tag change.
+  const handleRenameFromGallery = useCallback(
+    (createdAtId: number, name: string) =>
+      handleUpdateMetadataFromGallery(createdAtId, { name }),
+    [handleUpdateMetadataFromGallery],
+  );
+
   const handleUpdateTagsFromGallery = useCallback(
-    async (createdAtId: number, tags: string[]) => {
-      const db = await openMechanismsDB();
-      const record = await db.get("mechanisms", createdAtId);
-      if (!record) return;
-
-      const updated = {
-        ...record,
-        metadata: { ...record.metadata, tags },
-      };
-      await db.put("mechanisms", updated);
-
-      setSavedMechanisms((prev) =>
-        prev.map((r) => (r.metadata.createdAt === createdAtId ? updated : r)),
-      );
-
-      if (mechanismRef.current.metadata.createdAt === createdAtId) {
-        setMechanism({
-          ...mechanismRef.current,
-          metadata: { ...mechanismRef.current.metadata, tags },
-        });
-      }
-    },
-    [mechanismRef, setMechanism],
+    (createdAtId: number, tags: string[]) =>
+      handleUpdateMetadataFromGallery(createdAtId, { tags }),
+    [handleUpdateMetadataFromGallery],
   );
 
   const handleDeleteFromGallery = useCallback(
@@ -548,6 +540,7 @@ export function useMechanismLibrary({
     handleLoadFromGallery,
     handleRenameFromGallery,
     handleUpdateTagsFromGallery,
+    handleUpdateMetadataFromGallery,
     handleDeleteFromGallery,
     handleDuplicateFromGallery,
     handleNewFromGallery,

@@ -81,41 +81,47 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         {projectName || t("untitled")}
       </Typography>
 
-      {saveStatus === "saving" ? (
-        <Tooltip title={t("save_saving")}>
-          <CircularProgress size={8} color="inherit" sx={{ flexShrink: 0, opacity: 0.7 }} />
-        </Tooltip>
-      ) : (
-        <Tooltip
-          title={
-            saveStatus === "saved"
-              ? t("save_saved")
-              : saveStatus === "error"
-                ? t("save_error")
-                : ""
-          }
-        >
-          <Box
-            sx={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              flexShrink: 0,
-              backgroundColor:
-                saveStatus === "saved"
-                  ? "success.main"
-                  : saveStatus === "error"
-                    ? "error.main"
-                    : "transparent",
-              transition: "background-color 0.3s ease",
-              boxShadow: (t) =>
-                saveStatus === "saved"
-                  ? `0 0 4px ${alpha(t.palette.success.light, 0.7)}`
-                  : "none",
-            }}
-          />
-        </Tooltip>
-      )}
+      <SaveStatusDot saveStatus={saveStatus} />
     </Box>
   </Box>
 );
+
+/** The dot beside the project name: saving, saved, or failed to save. */
+export const SaveStatusDot: React.FC<{ saveStatus: SaveStatus }> = ({
+  saveStatus,
+}) =>
+  saveStatus === "saving" ? (
+    <Tooltip title={t("save_saving")}>
+      <CircularProgress size={8} color="inherit" sx={{ flexShrink: 0, opacity: 0.7 }} />
+    </Tooltip>
+  ) : (
+    <Tooltip
+      title={
+        saveStatus === "saved"
+          ? t("save_saved")
+          : saveStatus === "error"
+            ? t("save_error")
+            : ""
+      }
+    >
+      <Box
+        sx={{
+          width: 7,
+          height: 7,
+          borderRadius: "50%",
+          flexShrink: 0,
+          backgroundColor:
+            saveStatus === "saved"
+              ? "success.main"
+              : saveStatus === "error"
+                ? "error.main"
+                : "transparent",
+          transition: "background-color 0.3s ease",
+          boxShadow: (t) =>
+            saveStatus === "saved"
+              ? `0 0 4px ${alpha(t.palette.success.light, 0.7)}`
+              : "none",
+        }}
+      />
+    </Tooltip>
+  );

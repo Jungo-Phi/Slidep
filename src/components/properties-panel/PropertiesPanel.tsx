@@ -107,6 +107,8 @@ interface PropertiesPanelViewProps {
   /** A library row hovered there, for the canvas to accentuate its beams and fade the rest. */
   hoveredLibraryEntryID: ID | null;
   setHoveredLibraryEntryID: (id: ID | null) => void;
+  /** `"sheet"`: the contents alone, full width, for the phone's sheet — whose tabs live in the bottom bar. */
+  variant?: "side" | "sheet";
 }
 
 /** The tab bar: it changes only with the active tab, so it skips the renders the panel takes at every instant of a simulation. */
@@ -273,6 +275,7 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
   setLibrarySection,
   hoveredLibraryEntryID,
   setHoveredLibraryEntryID,
+  variant = "side",
 }) => {
   const handleProjectInfoChange = (info: MechanismMetadata) => {
     updateMetadata({
@@ -341,7 +344,7 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
       <LibraryNavigationContext.Provider value={focusLibraryEntry}>
       <Paper
         sx={{
-          width: 300,
+          width: variant === "side" ? 300 : "100%",
           flexShrink: 0,
           height: "100%",
           display: "flex",
@@ -349,15 +352,18 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
           overflow: "hidden",
           border: "none",
           borderRadius: 0,
-          borderLeft: `2px solid ${COLORS.ACCENT}`,
+          borderLeft: variant === "side" ? `2px solid ${COLORS.ACCENT}` : "none",
           boxShadow: "none",
+          backgroundColor: variant === "side" ? undefined : "transparent",
         }}
       >
-        <PanelTabs
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          clearSelectionKeepTab={clearSelectionKeepTab}
-        />
+        {variant === "side" && (
+          <PanelTabs
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            clearSelectionKeepTab={clearSelectionKeepTab}
+          />
+        )}
 
         {/* The regions and nothing else: the splitter measures the share against this, so a tab bar inside it would offset every drag by its own height. */}
         <Box
