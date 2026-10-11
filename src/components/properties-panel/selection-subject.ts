@@ -4,11 +4,8 @@ import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
 import type { CanvasState } from "../../types/canvas-state";
 
 /**
- * What the simulation panel is currently reading: one element, one applied load, or one overlay reading.
+ * What the elements tab shows the page of: one element, one applied load, or one overlay reading — read on the page of the element it is read from, unfolded there.
  * A reading is not a selection in `CanvasState`'s sense — naming one on the canvas leaves the selection alone (see `App`'s own `focusedOverlay`) — so it is resolved first, and stands in for whatever happens to be selected underneath it.
- *
- * To the reader, though, the subject IS what they selected: they clicked an arrow, and its panel came up.
- * "The selected thing appears at the top" therefore means the SUBJECT appears at the top, whatever `CanvasState` holds — the element for an element, the load for a load, and the reading's own row for a reading, not the element it happens to be read from.
  */
 export type InspectedSubject =
   | { kind: "element"; element: MechanicalElement }
@@ -16,8 +13,7 @@ export type InspectedSubject =
   | { kind: "reading"; reading: Reading; element: MechanicalElement };
 
 /**
- * The subject `SelectionInspector` shows, or `undefined` when the selection names nothing it can read: nothing selected, several things at once, or a constraint.
- * Reads the mechanism in the pose on screen, so every value it leads to is the one being displayed rather than the one being edited.
+ * The subject the elements tab shows, or `undefined` when the selection names nothing it has a page for: nothing selected, several things at once, or a constraint.
  */
 export function inspected_subject(
   selectedIds: ID[],

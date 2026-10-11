@@ -14,7 +14,6 @@
 - Appuis long ?
 - 🤔 Faire un nouveau plan pour tablette
 
-
 - 🆕 Placer join à la jonction des Beams
 - 🆕 Ajouter un paramètre pour mettre des enroulements en édition
 - 🆕 Placer une courroie en traçant un chemin
@@ -82,6 +81,7 @@
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
 - 🔨 Faire apparaitre les contraintes à l'écran même si on est zoomé
 - 🔨 Ne pas arrondir les petites valeurs de dimension
+- 🔨 Le ressort de grab n'est pas aligné sur la force de hover, son texte est mal placé, et le dessin n'est pas raccord entre proche et éloigné.
 
 **Qwick fixes :**
 
@@ -179,6 +179,7 @@
 - 🔨 OnCanvasValueEditor trop large avec des points "."
 - 🆕 Afficher le ratio avec une autre gear dans les connections de l'élément
 - 🔨 Donner des couleurs aux tags
+- 🔨 Ajouter un tag "exemple"
 - 🆕 Scroll dans NumberInput
 - 🆕 Rendre TRAJECTORY_DOT_STEP éditable
 - 🆕 Ajouter des réglages généraux pour les types d'unités affichées (Tr/min VS s-1) ?

@@ -257,7 +257,7 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
             );
           })}
           <Divider sx={{ my: 0.5 }} />
-          {/* A fourth layer, but one switch for the whole mechanism rather than a bulk pair over a set — so it reads as an element's own overlay switch does (`ProbesSection`), not as the rows above. */}
+          {/* A fourth layer, but one switch for the whole mechanism rather than a bulk pair over a set — so it reads as an element's own overlay switch does (`ElementReadings`), not as the rows above. */}
           <Box
             component="button"
             type="button"

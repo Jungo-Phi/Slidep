@@ -12,12 +12,15 @@ interface VectorInputProps {
   value: Point2;
   onChange: (vector: Point2) => void;
   label?: string;
+  /** The pose on screen, read-only (see `NumberInput`'s own `live`). */
+  live?: boolean;
 }
 
 export const VectorInput: React.FC<VectorInputProps> = ({
   value,
   onChange,
   label = "",
+  live = false,
 }) => {
   return (
     <Box
@@ -39,6 +42,7 @@ export const VectorInput: React.FC<VectorInputProps> = ({
         kind={LENGTH}
         value={value.x}
         onChange={(newX) => onChange(new Point2(newX, value.y))}
+        live={live}
       />
       <NumberInput
         label="Y"
@@ -46,6 +50,7 @@ export const VectorInput: React.FC<VectorInputProps> = ({
         kind={LENGTH}
         value={value.y}
         onChange={(newY) => onChange(new Point2(value.x, newY))}
+        live={live}
       />
     </Box>
   );

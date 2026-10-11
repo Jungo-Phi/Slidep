@@ -206,8 +206,13 @@ const SCHEMA_DIM_OFFSET = 20;
  * `MAX_ASPECT` and `MIN_THICKNESS` are what let a section stay readable when its own proportions would make it unreadable — the cotes keep carrying the true values whatever those two do.
  */
 export const SECTION_SCHEMA = {
-  /** Drawn size of the section's largest extent. Everything else is annotation around it, so this is what sets how big the schema reads. */
+  /**
+   * Drawn size of the section's largest extent, in the materials library.
+   * Everything else is annotation around it, so this is what sets how big the schema reads.
+   */
   SECTION_SIZE: 72,
+  /** The same on an element's page, where the drawing sits beside the material's values and only says which shape it is. */
+  PAGE_SECTION_SIZE: 40,
   /** Uniform border kept around everything the drawing covers, labels included. */
   PAD: 6,
   FONT: 10,

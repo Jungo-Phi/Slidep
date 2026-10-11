@@ -65,11 +65,19 @@ const Cote: React.FC<CoteProps> = ({ cote, color }) => (
 
 interface SectionSchemaProps {
   shape: ProfileShape;
+  /** Drawn size of the section itself, the cotes keeping theirs — `SECTION_SCHEMA.SECTION_SIZE` unless told otherwise. */
+  size?: number;
 }
 
-export const SectionSchema: React.FC<SectionSchemaProps> = ({ shape }) => {
+export const SectionSchema: React.FC<SectionSchemaProps> = ({
+  shape,
+  size = SECTION_SCHEMA.SECTION_SIZE,
+}) => {
   const { palette } = useTheme();
-  const { viewBox, path, cotes, neutralAxis } = layout_section_schema(shape);
+  const { viewBox, path, cotes, neutralAxis } = layout_section_schema(
+    shape,
+    size,
+  );
 
   return (
     <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -91,8 +99,7 @@ export const SectionSchema: React.FC<SectionSchemaProps> = ({ shape }) => {
           strokeWidth={SECTION_SCHEMA.OUTLINE_WIDTH}
           strokeLinejoin="round"
         />
-        {/* The bending axis: horizontal, through the centroid — the neutral fibre a technical
-         *  drawing's own centerline convention marks, not a cote to measure. */}
+        {/* The bending axis: horizontal, through the centroid — the neutral fibre a technical drawing's own centerline convention marks, not a cote to measure. */}
         <line
           {...line_props(neutralAxis)}
           stroke={palette.primary.main}

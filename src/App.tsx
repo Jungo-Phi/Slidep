@@ -328,6 +328,23 @@ const App: React.FC = () => {
       sheet && sheet.tab !== "palette" ? { ...sheet, tab } : sheet,
     );
   }, []);
+  // In a simulation, a click names an element, where a drag takes hold of it: the click opens the element's tab, the drag leaves the analysis being read where it is.
+  // A click on empty space goes back to the analysis — a click, not any deselection.
+  const handleCanvasTap = useCallback(
+    (onElement: boolean, state: CanvasState) => {
+      if (appMode === "edition") return;
+      if (onElement && state.type === "SelectedElement")
+        setActiveTab("elements");
+      else if (!onElement && state.type === "Selecting")
+        setActiveTab("analysis");
+    },
+    [appMode],
+  );
+  // A reading's arrow clicked on the canvas is read on its element's own page.
+  const selectOverlayFromCanvas = useCallback((overlay: FocusedOverlay) => {
+    setFocusedOverlay(overlay);
+    setActiveTab("elements");
+  }, []);
   const [prevCanvasState, setPrevCanvasState] =
     useState<CanvasState>(canvasState);
   const skipTabSyncStateRef = useRef<CanvasState | null>(null);
@@ -380,8 +397,6 @@ const App: React.FC = () => {
       } else if (!is_armed_tool_waiting(prevCanvasState, mechanism)) {
         setActiveTab("project");
       }
-    } else if (canvasState.type === "Selecting") {
-      setActiveTab("analysis");
     }
   }
 
@@ -399,8 +414,16 @@ const App: React.FC = () => {
     canvasStateRef.current = canvasState;
   }, [canvasState]);
 
+  // A simulation opens on the mechanism's analysis, unless an element or a load is selected: its page is where the reader already was, and it stays.
   useEffect(() => {
-    if (appMode !== "edition") setActiveTab("analysis");
+    if (appMode === "edition") return;
+    const mech = mechanismRef.current;
+    const elementSelected = selected_ids(canvasStateRef.current).some(
+      (id) =>
+        mech.mechanicalElements.some((el) => el.id === id) ||
+        mech.loads.some((load) => load.id === id),
+    );
+    setActiveTab(elementSelected ? "elements" : "analysis");
   }, [appMode]);
 
   const {
@@ -989,7 +1012,7 @@ const App: React.FC = () => {
     momentBalancePoint,
     onMomentBalanceReferencePicked: setMomentBalanceReference,
     momentBalanceReferenceHovered,
-    onSelectOverlay: setFocusedOverlay,
+    onSelectOverlay: selectOverlayFromCanvas,
     focusedOverlay,
     librarySection:
       shownTab === "library" ? (librarySection ?? undefined) : undefined,
@@ -1126,7 +1149,14 @@ const App: React.FC = () => {
         {phone ? (
           <PhoneLayout
             renderCanvas={(onTap) => (
-              <MechanicalCanvas ref={canvasRef} {...canvasProps} onTap={onTap} />
+              <MechanicalCanvas
+                ref={canvasRef}
+                {...canvasProps}
+                onTap={(onElement, state) => {
+                  onTap(onElement);
+                  handleCanvasTap(onElement, state);
+                }}
+              />
             )}
             topBar={{
               mechanism,
@@ -1245,7 +1275,11 @@ const App: React.FC = () => {
               />
 
               <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
-                <MechanicalCanvas ref={canvasRef} {...canvasProps} />
+                <MechanicalCanvas
+                  ref={canvasRef}
+                  {...canvasProps}
+                  onTap={handleCanvasTap}
+                />
               </Box>
 
               <PropertiesPanel {...panelProps} />

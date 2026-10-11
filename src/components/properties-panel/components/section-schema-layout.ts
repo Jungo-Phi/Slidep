@@ -105,13 +105,17 @@ const seg = (from: Point, to: Point): Segment => ({ from, to });
 const add = (p: Point, q: Point): Point => ({ x: p.x + q.x, y: p.y + q.y });
 const scale = (p: Point, k: number): Point => ({ x: p.x * k, y: p.y * k });
 
-export function layout_section_schema(shape: ProfileShape): SchemaLayout {
+/** `sectionSize` sets the drawn size of the section alone: its cotes keep their own sizes, so a smaller drawing stays as legible. */
+export function layout_section_schema(
+  shape: ProfileShape,
+  sectionSize: number = SECTION_SIZE,
+): SchemaLayout {
   const desc = describe_shape(shape);
 
   const ratio = desc.extent.w / desc.extent.h;
   const drawn_ratio = clamp(ratio, 1 / MAX_ASPECT, MAX_ASPECT);
-  const w = drawn_ratio >= 1 ? SECTION_SIZE : SECTION_SIZE * drawn_ratio;
-  const h = drawn_ratio >= 1 ? SECTION_SIZE / drawn_ratio : SECTION_SIZE;
+  const w = drawn_ratio >= 1 ? sectionSize : sectionSize * drawn_ratio;
+  const h = drawn_ratio >= 1 ? sectionSize / drawn_ratio : sectionSize;
 
   // Thicknesses take one scalar scale rather than their own axis: a single parameter has to come out as a single drawn width, whatever the aspect clamp did to the two axes.
   const thickness_scale = Math.min(w / desc.extent.w, h / desc.extent.h);

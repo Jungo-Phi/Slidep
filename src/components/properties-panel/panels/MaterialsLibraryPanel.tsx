@@ -37,7 +37,7 @@ import { unique_copy_name } from "../../../utils/unique-name";
 import NumberInput from "../components/NumberInput";
 import SectionSchema from "../components/SectionSchema";
 import ElementDisplay from "../components/ElementDisplay";
-import { PROBE_ELEMENT_COLORS } from "../components/ProbeChart";
+import { PROBE_ELEMENT_COLORS } from "../probe-colors";
 import { INLINE_INPUT_SX } from "../../mechanisms-gallery/inline-input-sx";
 import { DENSITY, LENGTH, STRESS } from "../../../utils/quantity-format";
 import { t, tn } from "../../../i18n";

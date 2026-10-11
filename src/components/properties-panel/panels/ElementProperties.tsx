@@ -1,5 +1,6 @@
 /**
- * ElementProperties component Displays properties for element elements
+ * The page of one mechanical element, in every mode: one order, which the mode fills differently (docs/plan-onglet-element.md).
+ * What lives through a simulation comes first — motor, physics, readings, loads — and the structure it freezes last: the geometry, shown in the pose on screen, then the connections.
  */
 
 import {
@@ -7,15 +8,9 @@ import {
   IconButton,
   Divider,
   Tooltip,
-  Typography,
 } from "@mui/material";
 import { Delete, Lock, LockOpen, Replay } from "@mui/icons-material";
-import {
-  ID,
-  LoadElement,
-  MechanicalElement,
-  UnionElement,
-} from "../../../types/element";
+import { ID, MechanicalElement } from "../../../types/element";
 import VectorInput from "../components/VectorInput";
 import {
   BeamElement,
@@ -32,15 +27,29 @@ import {
   delete_element,
   delete_elements,
 } from "../../mechanism/connect-actions";
-import { HoveredPart } from "../../../types/hovered-part";
+import {
+  HoveredAbscissaSource,
+  HoveredPart,
+  is_hovered,
+} from "../../../types/hovered-part";
 import NumberInput from "../components/NumberInput";
 import SignedNumberInput from "../components/SignedNumberInput";
 import ElementDisplay from "../components/ElementDisplay";
 import ElementsOverview from "../components/ElementsOverview";
+import ElementReadings from "../components/ElementReadings";
+import LoadDetails, { LoadValueInput } from "../components/LoadDetails";
+import { MetricRow, ValueRow } from "../components/MetricRow";
+import ReadingRow from "../components/ReadingRow";
+import { ROW_CONTROL_CLASS, ROW_ICON_BUTTON_SX } from "../inspector-metrics";
+import { format_scalar } from "../metric-display";
+import { get_element_icon } from "../../element-palette/elementIcon";
+import { shown_element_name } from "../../../utils";
+import ProbeMetricsButton from "../components/ProbeMetricsButton";
 import {
   CanvasHighlight,
   NO_HIGHLIGHT,
 } from "../../canvas/drawing/draw-canvas";
+import type { FocusedOverlay } from "../../canvas/drawing/drawing-functions";
 import { t } from "../../../i18n";
 import { element_to_hovered_part, linked_constraint } from "../../canvas/utils";
 import { measure_belt_length } from "../../../utils/belt-geom";
@@ -50,8 +59,6 @@ import ToggleIcon from "../components/ToggleIcon";
 import React from "react";
 import { icon } from "../../element-palette/iconDataUris";
 import StructureOnly from "../components/StructureOnly";
-import ProbesSection from "../components/ProbesSection";
-import LoadsSection from "../components/LoadsSection";
 import {
   create_length_dimension,
   create_radius_dimension,
@@ -71,7 +78,6 @@ import {
   SURFACE_MASS,
   DAMPING,
   ANGULAR_DAMPING,
-  format_quantity,
   wrap_angle_rad,
 } from "../../../utils/quantity-format";
 import {
@@ -79,7 +85,10 @@ import {
   surface_mass_for_inertia,
 } from "../../../utils/gear-mass";
 import { motor_available_power } from "../../solver/dynamics/motor-model";
-import { snapshot_index_at } from "../../solver/dynamics/simulation-engine";
+import {
+  snapshot_index_at,
+} from "../../solver/dynamics/simulation-engine";
+import { get_dynamic_metric_at } from "../../solver/recording/probe-series";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 
 /** The ground/unground button's icon, reused as the ElementPicker "world" option so a motor's anchor reads with the same visual language as the ground toggle. */
@@ -88,7 +97,8 @@ const GroundIcon: React.FC<{ sx?: object }> = ({ sx }) => (
 );
 
 interface ElementPropertiesProps {
-  element: MechanicalElement | LoadElement | undefined;
+  /** The element whose page this is; none, and the page is the overview of them all. */
+  element: MechanicalElement | undefined;
   hoveredPart: HoveredPart;
   setHoveredPart: (hoveredPart: HoveredPart) => void;
   selectedIds: ID[];
@@ -104,10 +114,17 @@ interface ElementPropertiesProps {
   runtimeState: RuntimeState;
   /** Names what the canvas should pick out, and why — see the same prop on `PropertiesPanel`. */
   setHighlight: (highlight: CanvasHighlight) => void;
+  /** See `App`'s own `focusedOverlay`: one of this element's readings, if it names one, is unfolded in place. */
+  focusedOverlay: FocusedOverlay | null;
+  setFocusedOverlay: (overlay: FocusedOverlay | null) => void;
+  /** Publishes the abscissa hovered on a beam's own N/T/Mf diagrams, for the canvas to mark. */
+  setHoveredAbscissa: (hovered: HoveredAbscissaSource | null) => void;
+  /** The load selected among this element's own, unfolded under its row. */
+  unfoldedLoadID?: ID;
 }
 
 export const ElementProperties: React.FC<ElementPropertiesProps> = ({
-  element: selectedElement,
+  element,
   hoveredPart,
   setHoveredPart,
   selectedIds,
@@ -118,26 +135,25 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
   appMode,
   runtimeState,
   setHighlight,
+  focusedOverlay,
+  setFocusedOverlay,
+  setHoveredAbscissa,
+  unfoldedLoadID,
 }) => {
-  const element: MechanicalElement | undefined =
-    selectedElement &&
-    (selectedElement.type === "force" ||
-      selectedElement.type === "moment" ||
-      selectedElement.type === "distributed-force")
-      ? mechanism.mechanicalElements.find(
-          (e) => e.id === selectedElement.targetID,
-        )
-      : selectedElement;
+  // The unfolded load is brought into view: it may sit well down the page, and a click on it out on the canvas is what unfolded it.
+  const unfoldedLoadRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (unfoldedLoadID)
+      unfoldedLoadRef.current?.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
+  }, [unfoldedLoadID]);
 
-  const selectedLoadID: ID | undefined =
-    selectedElement &&
-    (selectedElement.type === "force" ||
-      selectedElement.type === "moment" ||
-      selectedElement.type === "distributed-force")
-      ? selectedElement.id
-      : undefined;
-
-  const handleMouseEnter = (el: UnionElement, deleting: boolean) => {
+  const handleMouseEnter = (
+    el: Parameters<typeof element_to_hovered_part>[0],
+    deleting: boolean,
+  ) => {
     setHoveredPart(element_to_hovered_part(el, deleting));
   };
 
@@ -177,6 +193,10 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
     (analysedMechanism.mechanicalElements.find((e) => e.id === el.id) as
       | T
       | undefined) ?? el;
+
+  // Under a simulation the geometry is the pose on screen, read rather than set.
+  const live = appMode !== "edition";
+  const geometry = live ? shown_as(element) : element;
 
   // A spring with no rest length of its own takes the drawn one, and follows it.
   const restLengthIsDrawn =
@@ -222,6 +242,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           .filter((e): e is BeamElement => e?.type === "beam")
       : [];
 
+  const hasPhysics =
+    "rotatingEdgesIDs" in element ||
+    "parentBeamID" in element ||
+    element.type === "gear" ||
+    element.type === "beam" ||
+    element.type === "mass" ||
+    element.type === "spring" ||
+    element.type === "damper";
+
   return (
     <Box sx={{ mb: 1 }}>
       <Box margin={1}>
@@ -243,48 +272,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 sx={{ padding: 0.2, border: 1, borderColor: "divider" }}
               />
 
-              <StructureOnly actions={["SetMotorConfig", "GroundNode"]} row>
-                {element.type === "pivot" && (
-                  <Tooltip
-                    title={t(element.motor ? "motor_revert" : "motor_convert")}
-                  >
-                    <IconButton
-                      color="inherit"
-                      size="small"
-                      onClick={() => {
-                        const actions: Action[] = [
-                          {
-                            type: "SetMotorConfig",
-                            id: element.id,
-                            newConfig: element.motor
-                              ? undefined
-                              : {
-                                  speed: DEFAULT.MOTOR_SPEED,
-                                  torque: DEFAULT.MOTOR_TORQUE,
-                                },
-                            oldConfig: element.motor,
-                          },
-                        ];
-                        if (!element.motor && !element.isGrounded) {
-                          actions.push({
-                            type: "GroundNode",
-                            id: element.id,
-                            grounded: true,
-                          });
-                        }
-                        applyActions(actions);
-                      }}
-                      sx={{ padding: 0.2, border: 1, borderColor: "divider" }}
-                    >
-                      <Box
-                        component="img"
-                        style={{ width: 28, height: 28 }}
-                        src={icon(element.motor ? "motor" : "motor-off")}
-                      />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </StructureOnly>
+              <ProbeMetricsButton element={element} applyActions={applyActions} />
 
               <StructureOnly actions={["DeleteElement"]} row>
                 <Tooltip title={t("delete")}>
@@ -313,297 +301,16 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         />
       </Box>
 
-      <Divider sx={{ mt: 1, mb: 1.5 }} />
-
-      {"position" in element && (
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            m: 1,
-          }}
-        >
-          <StructureOnly
-            actions={[
-              "MoveNode",
-              "SetMotorConfig",
-              "GroundNode",
-              "ChangeGearRadius",
-              "CreateElement",
-              "DeleteElement",
-            ]}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 2,
-              }}
-            >
-              <VectorInput
-                value={element.position}
-                onChange={(pos) =>
-                  applyActions([
-                    {
-                      type: "MoveNode",
-                      id: element.id,
-                      newPosition: pos,
-                      oldPosition: element.position,
-                      committed: true,
-                    },
-                  ])
-                }
-              />
-              {is_groundable(element) && (
-                <Tooltip title={t(element.isGrounded ? "release" : "anchor")}>
-                  <IconButton
-                    color="inherit"
-                    size="small"
-                    onClick={() =>
-                      applyActions([
-                        {
-                          type: "GroundNode",
-                          id: element.id,
-                          grounded: !element.isGrounded,
-                        },
-                      ])
-                    }
-                    sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
-                  >
-                    <ToggleIcon
-                      on={element.isGrounded}
-                      onName="ground"
-                      offName="ground-off"
-                      size={24}
-                    />
-                  </IconButton>
-                </Tooltip>
-              )}
-              {element.type === "pivot" && element.motor && motorConfig && (
-                <ElementPicker
-                  label="Ancrage moteur"
-                  options={motorBeams}
-                  extraOption={{
-                    label: t("ground"),
-                    icon: GroundIcon,
-                    selected: motorConfig.parentBeamID === undefined,
-                  }}
-                  selected={motorBeams.find(
-                    (beam) => beam.id === motorConfig.parentBeamID,
-                  )}
-                  onSelectExtra={() =>
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: {
-                          ...motorConfig,
-                          parentBeamID: undefined,
-                        },
-                        oldConfig: motorConfig,
-                      },
-                      ...(element.isGrounded
-                        ? []
-                        : ([
-                            {
-                              type: "GroundNode",
-                              id: element.id,
-                              grounded: true,
-                            },
-                          ] satisfies Action[])),
-                    ])
-                  }
-                  onSelectElement={(beam) =>
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: { ...motorConfig, parentBeamID: beam.id },
-                        oldConfig: motorConfig,
-                      },
-                      ...(element.isGrounded
-                        ? ([
-                            {
-                              type: "GroundNode",
-                              id: element.id,
-                              grounded: false,
-                            },
-                          ] satisfies Action[])
-                        : []),
-                    ])
-                  }
-                  onHoverElement={(beam) =>
-                    setHoveredPart(element_to_hovered_part(beam, false))
-                  }
-                  onHoverEnd={() =>
-                    setHoveredPart({ type: "Void", position: ZERO })
-                  }
-                  hoveredPart={hoveredPart}
-                  setHoveredPart={setHoveredPart}
-                  selectedIds={selectedIds}
-                  setCanvasState={setCanvasState}
-                  applyActions={applyActions}
-                  large
-                />
-              )}
-              {element.type === "gear" && (
-                <NumberInput
-                  label="R"
-                  title={t("radius")}
-                  kind={LENGTH}
-                  value={element.radius}
-                  onChange={(radius) => {
-                    applyActions([
-                      {
-                        type: "ChangeGearRadius",
-                        id: element.id,
-                        newRadius: radius,
-                        oldRadius: element.radius,
-                        target: new Point2(
-                          element.position.x + radius,
-                          element.position.y,
-                        ),
-                        committed: true,
-                      },
-                    ]);
-                  }}
-                  large
-                  unsigned
-                  adornment={
-                    linkedConstraint
-                      ? {
-                          icon: Lock,
-                          title: t("length_unlock"),
-                          color: "secondary",
-                          onMouseEnter: () =>
-                            handleMouseEnter(linkedConstraint, true),
-                          onMouseLeave: handleMouseLeave,
-                          onClick: () =>
-                            applyActions([
-                              {
-                                type: "DeleteElement",
-                                element: linkedConstraint,
-                              },
-                            ]),
-                        }
-                      : {
-                          icon: LockOpen,
-                          title: t("length_lock"),
-                          onClick: () =>
-                            applyActions([
-                              {
-                                type: "CreateElement",
-                                element: create_radius_dimension(
-                                  element,
-                                  mechanism.viewport,
-                                ),
-                              },
-                            ]),
-                        }
-                  }
-                />
-              )}
-            </Box>
-          </StructureOnly>
-          {element.type === "pivot" && element.motor && (
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 1,
-              }}
-            >
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 1,
-                }}
-              >
-                <NumberInput
-                  label="C"
-                  title={t(motorSaturated ? "motor_torque_saturated_hint" : "motor_torque_label")}
-                  kind={MOMENT}
-                  value={(displayMotorConfig ?? element.motor).torque}
-                  onChange={(torque) => {
-                    const motor = element.motor!;
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        // Replaced whole, so built from what is shown: a later edit of the other field must not ride along.
-                        newConfig: { ...(displayMotorConfig ?? motor), torque },
-                        oldConfig: motor,
-                      },
-                    ]);
-                  }}
-                  unsigned
-                  large
-                  atLimit={motorSaturated}
-                />
-                <SignedNumberInput
-                  label="ω"
-                  title={t("motor_speed_label")}
-                  kind={ANGULAR_VELOCITY()}
-                  value={(displayMotorConfig ?? element.motor).speed}
-                  onChange={(speed) => {
-                    const motor = element.motor!;
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: { ...(displayMotorConfig ?? motor), speed },
-                        oldConfig: motor,
-                      },
-                    ]);
-                  }}
-                  large
-                  accent
-                />
-              </Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", textAlign: "center", mb: -0.5 }}
-              >
-                {t("motor_power_available")} :{" "}
-                {availablePower > 0 ? format_quantity(availablePower, POWER) : "—"}
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      )}
-
-      {"positionStart" in element && (
-        <StructureOnly
-          actions={[
-            "MoveEdgeStart",
-            "MoveEdgeEnd",
-            "ChangeEdgeLength",
-            "ChangeBeltLength",
-            "ChangeDimensionEdgeValue",
-            "ChangeDimensionBeltValue",
-            "ChangeEdgeAngle",
-            "CreateElement",
-            "DeleteElement",
-          ]}
-        >
+      {element.type === "pivot" && element.motor && motorConfig && (
+        <>
+          <Divider sx={{ my: 1 }} />
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 2,
+              gap: 1,
               m: 1,
             }}
           >
@@ -613,183 +320,78 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 2,
-              }}
-            >
-              <VectorInput
-                value={element.positionStart}
-                onChange={(pos) =>
-                  applyActions([
-                    {
-                      type: "MoveEdgeStart",
-                      id: element.id,
-                      newPosition: pos,
-                      oldPosition: element.positionStart,
-                      committed: true,
-                    },
-                  ])
-                }
-              />
-              <VectorInput
-                value={element.positionEnd}
-                onChange={(pos) =>
-                  applyActions([
-                    {
-                      type: "MoveEdgeEnd",
-                      id: element.id,
-                      newPosition: pos,
-                      oldPosition: element.positionEnd,
-                      committed: true,
-                    },
-                  ])
-                }
-              />
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
                 gap: 1,
               }}
             >
               <NumberInput
-                label="L"
-                title={t("length")}
-                kind={LENGTH}
-                value={
-                  element.type === "belt"
-                    ? measure_belt_length(element, mechanism.mechanicalElements)
-                    : element.positionStart.distance_to(element.positionEnd)
-                }
-                onChange={(length) => {
-                  if (element.type === "belt") {
-                    const beltDim = mechanism.constraintElements.find(
-                      (c) =>
-                        c.type === "dimension-belt" && c.beltID === element.id,
-                    );
-                    if (beltDim && beltDim.type === "dimension-belt") {
-                      // Persistent dimension: update its value.
-                      applyActions([
-                        {
-                          type: "ChangeDimensionBeltValue",
-                          id: beltDim.id,
-                          newValue: length,
-                          oldValue: beltDim.value,
-                        },
-                      ]);
-                    } else {
-                      applyActions([
-                        {
-                          type: "ChangeBeltLength",
-                          id: element.id,
-                          newLength: length,
-                          oldLength: measure_belt_length(
-                            element,
-                            mechanism.mechanicalElements,
-                          ),
-                        },
-                      ]);
-                    }
-                    return;
-                  }
-                  const linkedDim = mechanism.constraintElements.find(
-                    (c) =>
-                      c.type === "dimension-edge" && c.edgeID === element.id,
-                  );
-                  if (linkedDim && linkedDim.type === "dimension-edge") {
-                    applyActions([
-                      {
-                        type: "ChangeDimensionEdgeValue",
-                        id: linkedDim.id,
-                        newValue: length,
-                        oldValue: linkedDim.value,
-                      },
-                    ]);
-                  } else {
-                    applyActions([
-                      {
-                        type: "ChangeEdgeLength",
-                        id: element.id,
-                        newLength: length,
-                        oldLength: element.positionStart.distance_to(
-                          element.positionEnd,
-                        ),
-                      },
-                    ]);
-                  }
+                label="C"
+                title={t(motorSaturated ? "motor_torque_saturated_hint" : "motor_torque_label")}
+                kind={MOMENT}
+                value={(displayMotorConfig ?? element.motor).torque}
+                onChange={(torque) => {
+                  const motor = element.motor!;
+                  applyActions([
+                    {
+                      type: "SetMotorConfig",
+                      id: element.id,
+                      // Replaced whole, so built from what is shown: a later edit of the other field must not ride along.
+                      newConfig: { ...(displayMotorConfig ?? motor), torque },
+                      oldConfig: motor,
+                    },
+                  ]);
+                }}
+                unsigned
+                large
+                atLimit={motorSaturated}
+              />
+              <SignedNumberInput
+                label="ω"
+                title={t("motor_speed_label")}
+                kind={ANGULAR_VELOCITY()}
+                value={(displayMotorConfig ?? element.motor).speed}
+                onChange={(speed) => {
+                  const motor = element.motor!;
+                  applyActions([
+                    {
+                      type: "SetMotorConfig",
+                      id: element.id,
+                      newConfig: { ...(displayMotorConfig ?? motor), speed },
+                      oldConfig: motor,
+                    },
+                  ]);
                 }}
                 large
-                unsigned
-                adornment={
-                  linkedConstraint
-                    ? {
-                        icon: Lock,
-                        title: t("length_unlock"),
-                        color: "secondary",
-                        onMouseEnter: () =>
-                          handleMouseEnter(linkedConstraint, true),
-                        onMouseLeave: handleMouseLeave,
-                        onClick: () =>
-                          applyActions([
-                            {
-                              type: "DeleteElement",
-                              element: linkedConstraint,
-                            },
-                          ]),
-                      }
-                    : {
-                        icon: LockOpen,
-                        title: "Bloquer la longueur",
-                        onClick: () =>
-                          applyActions([
-                            {
-                              type: "CreateElement",
-                              element: create_length_dimension(
-                                element,
-                                mechanism.mechanicalElements,
-                                mechanism.viewport,
-                              ),
-                            },
-                          ]),
-                      }
+                accent
+              />
+            </Box>
+            {/* What it can give, and in dynamics what it gives right now under it, to read how much of it is used. */}
+            <Box sx={{ alignSelf: "stretch", px: 1 }}>
+              <ValueRow
+                label={t("motor_power_available")}
+                formatted={
+                  availablePower > 0
+                    ? format_scalar(availablePower, POWER)
+                    : undefined
                 }
               />
-              {element.type !== "belt" && (
-                <NumberInput
-                  label="α"
-                  title={t("angle")}
-                  kind={ANGLE}
-                  value={wrap_angle_rad(
-                    element.positionEnd.sub(element.positionStart).angle(),
+              {appMode === "dynamic" && (
+                <MetricRow
+                  metric="motor-power"
+                  sample={get_dynamic_metric_at(
+                    element,
+                    "motor-power",
+                    dynamicSnapshots,
+                    runtimeState.time,
                   )}
-                  onChange={(newAngle) =>
-                    applyActions([
-                      {
-                        type: "ChangeEdgeAngle",
-                        id: element.id,
-                        newAngle,
-                        oldAngle: element.positionEnd
-                          .sub(element.positionStart)
-                          .angle(),
-                      },
-                    ])
-                  }
-                  large
+                  label={t("motor_power_instant")}
                 />
               )}
             </Box>
           </Box>
-        </StructureOnly>
+        </>
       )}
 
-      {("rotatingEdgesIDs" in element ||
-        "parentBeamID" in element ||
-        element.type === "gear" ||
-        element.type === "beam" ||
-        element.type === "mass" ||
-        element.type === "spring" ||
-        element.type === "damper") && (
+      {hasPhysics && (
         <>
           <Divider sx={{ my: 1 }} />
           <Box
@@ -997,23 +599,544 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           </Box>
         </>
       )}
+
+      <Divider sx={{ my: 1 }} />
+      <ElementReadings
+        element={element}
+        mechanism={mechanism}
+        analysedMechanism={analysedMechanism}
+        runtimeState={runtimeState}
+        appMode={appMode}
+        applyActions={applyActions}
+        focusedOverlay={focusedOverlay}
+        setFocusedOverlay={setFocusedOverlay}
+        hoveredPart={hoveredPart}
+        setHoveredPart={setHoveredPart}
+        setHoveredAbscissa={setHoveredAbscissa}
+      />
+
+      {/* Read the way the readings above are: a row says what the load is worth, and selecting it — here or on the canvas — unfolds it in place. */}
       {elementLoads.length > 0 && (
-        <Box>
+        <>
           <Divider sx={{ my: 1 }} />
-          <LoadsSection
-            element={element}
-            mechanicalElements={mechanism.mechanicalElements}
-            loads={elementLoads}
-            displayLoads={displayLoads}
-            selectedLoadID={selectedLoadID}
-            hoveredPart={hoveredPart}
-            setHoveredPart={setHoveredPart}
-            selectedIds={selectedIds}
-            setCanvasState={setCanvasState}
-            applyActions={applyActions}
-          />
-        </Box>
+          <Box sx={{ px: 2, display: "flex", flexDirection: "column", gap: 0.25 }}>
+            {elementLoads.map((load) => {
+              const shownLoad =
+                displayLoads.find((l) => l.id === load.id) ?? load;
+              const unfolded = load.id === unfoldedLoadID;
+              return (
+                <React.Fragment key={load.id}>
+                  <ReadingRow
+                    icon={get_element_icon(load)}
+                    label={shown_element_name(load)}
+                    onRename={(newName) =>
+                      applyActions([
+                        {
+                          type: "UpdateElementName",
+                          id: load.id,
+                          newName,
+                          oldName: load.name,
+                        },
+                      ])
+                    }
+                    // Its own controls stop there: a click on them is an edit, never a fold.
+                    value={
+                      <Box
+                        className={ROW_CONTROL_CLASS}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <LoadValueInput
+                          load={load}
+                          host={element}
+                          shownLoad={shownLoad}
+                          applyActions={applyActions}
+                        />
+                      </Box>
+                    }
+                    trailing={
+                      <Tooltip title={t("delete")}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onMouseEnter={() =>
+                            setHoveredPart(element_to_hovered_part(load, true))
+                          }
+                          onMouseLeave={handleMouseLeave}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            applyActions([{ type: "DeleteElement", element: load }]);
+                          }}
+                          sx={ROW_ICON_BUTTON_SX}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    }
+                    selected={unfolded}
+                    pointed={is_hovered(hoveredPart, load.id)}
+                    // A second click folds it back, the element staying selected.
+                    onClick={() =>
+                      setCanvasState({
+                        type: "SelectedElement",
+                        elementID: unfolded ? element.id : load.id,
+                      })
+                    }
+                    onHoverChange={(hovered) =>
+                      setHoveredPart(
+                        hovered
+                          ? element_to_hovered_part(load)
+                          : { type: "Void", position: ZERO },
+                      )
+                    }
+                  />
+                  {unfolded && (
+                    <LoadDetails
+                      ref={unfoldedLoadRef}
+                      load={load}
+                      host={element}
+                      mechanicalElements={mechanism.mechanicalElements}
+                      shownLoad={shownLoad}
+                      hoveredPart={hoveredPart}
+                      setHoveredPart={setHoveredPart}
+                      selectedIds={selectedIds}
+                      setCanvasState={setCanvasState}
+                      applyActions={applyActions}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </Box>
+        </>
       )}
+
+      {"position" in geometry && (
+        <>
+          <Divider sx={{ my: 1 }} />
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              m: 1,
+            }}
+          >
+            <VectorInput
+              value={geometry.position}
+              live={live}
+              onChange={(pos) =>
+                applyActions([
+                  {
+                    type: "MoveNode",
+                    id: element.id,
+                    newPosition: pos,
+                    oldPosition: geometry.position,
+                    committed: true,
+                  },
+                ])
+              }
+            />
+            {is_groundable(element) && (
+              <StructureOnly actions={["GroundNode"]}>
+                <Tooltip title={t(element.isGrounded ? "release" : "anchor")}>
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={() =>
+                      applyActions([
+                        {
+                          type: "GroundNode",
+                          id: element.id,
+                          grounded: !element.isGrounded,
+                        },
+                      ])
+                    }
+                    sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
+                  >
+                    <ToggleIcon
+                      on={element.isGrounded}
+                      onName="ground"
+                      offName="ground-off"
+                      size={24}
+                    />
+                  </IconButton>
+                </Tooltip>
+              </StructureOnly>
+            )}
+            {/* What the motor pushes against, beside what holds the pivot itself. */}
+            {element.type === "pivot" && element.motor && motorConfig && (
+              <StructureOnly actions={["SetMotorConfig", "GroundNode"]}>
+                <ElementPicker
+                  label={t("motor_anchor")}
+                  options={motorBeams}
+                  extraOption={{
+                    label: t("ground"),
+                    icon: GroundIcon,
+                    selected: motorConfig.parentBeamID === undefined,
+                  }}
+                  selected={motorBeams.find(
+                    (beam) => beam.id === motorConfig.parentBeamID,
+                  )}
+                  onSelectExtra={() =>
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: {
+                          ...motorConfig,
+                          parentBeamID: undefined,
+                        },
+                        oldConfig: motorConfig,
+                      },
+                      ...(element.isGrounded
+                        ? []
+                        : ([
+                            {
+                              type: "GroundNode",
+                              id: element.id,
+                              grounded: true,
+                            },
+                          ] satisfies Action[])),
+                    ])
+                  }
+                  onSelectElement={(beam) =>
+                    applyActions([
+                      {
+                        type: "SetMotorConfig",
+                        id: element.id,
+                        newConfig: { ...motorConfig, parentBeamID: beam.id },
+                        oldConfig: motorConfig,
+                      },
+                      ...(element.isGrounded
+                        ? ([
+                            {
+                              type: "GroundNode",
+                              id: element.id,
+                              grounded: false,
+                            },
+                          ] satisfies Action[])
+                        : []),
+                    ])
+                  }
+                  onHoverElement={(beam) =>
+                    setHoveredPart(element_to_hovered_part(beam, false))
+                  }
+                  onHoverEnd={() =>
+                    setHoveredPart({ type: "Void", position: ZERO })
+                  }
+                  hoveredPart={hoveredPart}
+                  setHoveredPart={setHoveredPart}
+                  selectedIds={selectedIds}
+                  setCanvasState={setCanvasState}
+                  applyActions={applyActions}
+                  large
+                />
+              </StructureOnly>
+            )}
+            {element.type === "pivot" && (
+              <StructureOnly actions={["SetMotorConfig", "GroundNode"]}>
+                <Tooltip
+                  title={t(element.motor ? "motor_revert" : "motor_convert")}
+                >
+                  <IconButton
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      const actions: Action[] = [
+                        {
+                          type: "SetMotorConfig",
+                          id: element.id,
+                          newConfig: element.motor
+                            ? undefined
+                            : {
+                                speed: DEFAULT.MOTOR_SPEED,
+                                torque: DEFAULT.MOTOR_TORQUE,
+                              },
+                          oldConfig: element.motor,
+                        },
+                      ];
+                      if (!element.motor && !element.isGrounded) {
+                        actions.push({
+                          type: "GroundNode",
+                          id: element.id,
+                          grounded: true,
+                        });
+                      }
+                      applyActions(actions);
+                    }}
+                    sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
+                  >
+                    <Box
+                      component="img"
+                      style={{ width: 24, height: 24 }}
+                      src={icon(element.motor ? "motor" : "motor-off")}
+                    />
+                  </IconButton>
+                </Tooltip>
+              </StructureOnly>
+            )}
+            {element.type === "gear" && (
+              <NumberInput
+                label="R"
+                title={t("radius")}
+                kind={LENGTH}
+                value={element.radius}
+                live={live}
+                onChange={(radius) => {
+                  applyActions([
+                    {
+                      type: "ChangeGearRadius",
+                      id: element.id,
+                      newRadius: radius,
+                      oldRadius: element.radius,
+                      target: new Point2(
+                        element.position.x + radius,
+                        element.position.y,
+                      ),
+                      committed: true,
+                    },
+                  ]);
+                }}
+                large
+                unsigned
+                adornment={
+                  linkedConstraint
+                    ? {
+                        icon: Lock,
+                        title: t("length_unlock"),
+                        color: "secondary",
+                        onMouseEnter: () =>
+                          handleMouseEnter(linkedConstraint, true),
+                        onMouseLeave: handleMouseLeave,
+                        onClick: () =>
+                          applyActions([
+                            {
+                              type: "DeleteElement",
+                              element: linkedConstraint,
+                            },
+                          ]),
+                      }
+                    : {
+                        icon: LockOpen,
+                        title: t("length_lock"),
+                        onClick: () =>
+                          applyActions([
+                            {
+                              type: "CreateElement",
+                              element: create_radius_dimension(
+                                element,
+                                mechanism.viewport,
+                              ),
+                            },
+                          ]),
+                      }
+                }
+              />
+            )}
+          </Box>
+        </>
+      )}
+
+      {"positionStart" in geometry && "positionStart" in element && (
+        <>
+          <Divider sx={{ my: 1 }} />
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              m: 1,
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+              }}
+            >
+              <VectorInput
+                value={geometry.positionStart}
+                live={live}
+                onChange={(pos) =>
+                  applyActions([
+                    {
+                      type: "MoveEdgeStart",
+                      id: element.id,
+                      newPosition: pos,
+                      oldPosition: element.positionStart,
+                      committed: true,
+                    },
+                  ])
+                }
+              />
+              <VectorInput
+                value={geometry.positionEnd}
+                live={live}
+                onChange={(pos) =>
+                  applyActions([
+                    {
+                      type: "MoveEdgeEnd",
+                      id: element.id,
+                      newPosition: pos,
+                      oldPosition: element.positionEnd,
+                      committed: true,
+                    },
+                  ])
+                }
+              />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 1,
+              }}
+            >
+              <NumberInput
+                label="L"
+                title={t("length")}
+                kind={LENGTH}
+                value={
+                  geometry.type === "belt"
+                    ? measure_belt_length(
+                        geometry,
+                        live
+                          ? analysedMechanism.mechanicalElements
+                          : mechanism.mechanicalElements,
+                      )
+                    : geometry.positionStart.distance_to(geometry.positionEnd)
+                }
+                live={live}
+                onChange={(length) => {
+                  if (element.type === "belt") {
+                    const beltDim = mechanism.constraintElements.find(
+                      (c) =>
+                        c.type === "dimension-belt" && c.beltID === element.id,
+                    );
+                    if (beltDim && beltDim.type === "dimension-belt") {
+                      // Persistent dimension: update its value.
+                      applyActions([
+                        {
+                          type: "ChangeDimensionBeltValue",
+                          id: beltDim.id,
+                          newValue: length,
+                          oldValue: beltDim.value,
+                        },
+                      ]);
+                    } else {
+                      applyActions([
+                        {
+                          type: "ChangeBeltLength",
+                          id: element.id,
+                          newLength: length,
+                          oldLength: measure_belt_length(
+                            element,
+                            mechanism.mechanicalElements,
+                          ),
+                        },
+                      ]);
+                    }
+                    return;
+                  }
+                  const linkedDim = mechanism.constraintElements.find(
+                    (c) =>
+                      c.type === "dimension-edge" && c.edgeID === element.id,
+                  );
+                  if (linkedDim && linkedDim.type === "dimension-edge") {
+                    applyActions([
+                      {
+                        type: "ChangeDimensionEdgeValue",
+                        id: linkedDim.id,
+                        newValue: length,
+                        oldValue: linkedDim.value,
+                      },
+                    ]);
+                  } else {
+                    applyActions([
+                      {
+                        type: "ChangeEdgeLength",
+                        id: element.id,
+                        newLength: length,
+                        oldLength: element.positionStart.distance_to(
+                          element.positionEnd,
+                        ),
+                      },
+                    ]);
+                  }
+                }}
+                large
+                unsigned
+                adornment={
+                  linkedConstraint
+                    ? {
+                        icon: Lock,
+                        title: t("length_unlock"),
+                        color: "secondary",
+                        onMouseEnter: () =>
+                          handleMouseEnter(linkedConstraint, true),
+                        onMouseLeave: handleMouseLeave,
+                        onClick: () =>
+                          applyActions([
+                            {
+                              type: "DeleteElement",
+                              element: linkedConstraint,
+                            },
+                          ]),
+                      }
+                    : {
+                        icon: LockOpen,
+                        title: t("length_lock"),
+                        onClick: () =>
+                          applyActions([
+                            {
+                              type: "CreateElement",
+                              element: create_length_dimension(
+                                element,
+                                mechanism.mechanicalElements,
+                                mechanism.viewport,
+                              ),
+                            },
+                          ]),
+                      }
+                }
+              />
+              {element.type !== "belt" && (
+                <NumberInput
+                  label="α"
+                  title={t("angle")}
+                  kind={ANGLE}
+                  value={wrap_angle_rad(
+                    geometry.positionEnd.sub(geometry.positionStart).angle(),
+                  )}
+                  live={live}
+                  onChange={(newAngle) =>
+                    applyActions([
+                      {
+                        type: "ChangeEdgeAngle",
+                        id: element.id,
+                        newAngle,
+                        oldAngle: element.positionEnd
+                          .sub(element.positionStart)
+                          .angle(),
+                      },
+                    ])
+                  }
+                  large
+                />
+              )}
+            </Box>
+          </Box>
+        </>
+      )}
+
       <Divider sx={{ my: 1 }} />
       <ConnectionsProperties
         element={element}
@@ -1024,9 +1147,6 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
         applyActions={applyActions}
         mechanism={mechanism}
       />
-      <Divider sx={{ my: 1 }} />
-      <ProbesSection element={element} applyActions={applyActions} />
-
     </Box>
   );
 };

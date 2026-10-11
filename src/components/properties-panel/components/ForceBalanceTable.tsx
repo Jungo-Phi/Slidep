@@ -3,6 +3,7 @@ import { Box, Popover, Tooltip, Typography, useTheme } from "@mui/material";
 import { WorldPoint } from "../../../types";
 import { BARE_VECTOR_SX, BareVector } from "../../common/Vector";
 import VectorInput from "./VectorInput";
+import CollapsibleSection from "./CollapsibleSection";
 import { useNonModalPopup } from "../../common/use-non-modal-popup";
 import { balance_term_color } from "../../../constants/physics-display-specs";
 import { readable_on } from "../../../theme/mui-theme";
@@ -419,79 +420,78 @@ const ForceBalanceTable: React.FC<ForceBalanceTableProps> = ({
 
   return (
     <Box sx={TABLE_SX}>
-      <Typography variant="subtitle2" fontWeight={600}>
-        {t("force_balance")}
-      </Typography>
-      <Box>
-        <LawRow
-          left={
-            <Member
-              label={t("balance_sum")}
-              onHoverChange={hover_member("total", "force")}
-            >
-              <Pair value={sum} unit={forceUnit} />
-            </Member>
-          }
-          right={
-            <Member
-              label={t("balance_inertia")}
-              onHoverChange={hover_member("inertia", "force")}
-            >
-              <Pair value={inertia} unit={forceUnit} color={inertiaColor} />
-            </Member>
-          }
-          unit={forceUnit}
-          gap={<Pair value={gap} unit={forceUnit} />}
-          closed={closed(gap.x, forceUnit) && closed(gap.y, forceUnit)}
-        />
-        <TermsRow
-          terms={actions}
-          quantity="force"
-          render={(term, color) => (
-            <Pair value={term.force} unit={forceUnit} color={color} />
-          )}
-          onHoverTerm={onHoverTerm}
-          onClickTerm={onClickTerm}
-        />
-      </Box>
+      <CollapsibleSection storageKey="analysisSection.forceBalance" title={t("force_balance")}>
+        <Box>
+          <LawRow
+            left={
+              <Member
+                label={t("balance_sum")}
+                onHoverChange={hover_member("total", "force")}
+              >
+                <Pair value={sum} unit={forceUnit} />
+              </Member>
+            }
+            right={
+              <Member
+                label={t("balance_inertia")}
+                onHoverChange={hover_member("inertia", "force")}
+              >
+                <Pair value={inertia} unit={forceUnit} color={inertiaColor} />
+              </Member>
+            }
+            unit={forceUnit}
+            gap={<Pair value={gap} unit={forceUnit} />}
+            closed={closed(gap.x, forceUnit) && closed(gap.y, forceUnit)}
+          />
+          <TermsRow
+            terms={actions}
+            quantity="force"
+            render={(term, color) => (
+              <Pair value={term.force} unit={forceUnit} color={color} />
+            )}
+            onHoverTerm={onHoverTerm}
+            onClickTerm={onClickTerm}
+          />
+        </Box>
 
-      <Box>
-        <LawRow
-          left={
-            <Member
-              label={reference}
-              onHoverChange={hover_member("total", "moment")}
-              labelHoversToo={false}
-            >
-              <Scalar value={sumMoment} unit={momentUnit} />
-            </Member>
-          }
-          right={
-            <Member
-              label={t("balance_inertia_moment")}
-              onHoverChange={hover_member("inertia", "moment")}
-            >
-              <Scalar
-                value={inertiaMoment}
-                unit={momentUnit}
-                color={inertiaColor}
-              />
-            </Member>
-          }
-          unit={momentUnit}
-          gap={<Scalar value={gapMoment} unit={momentUnit} />}
-          closed={closed(gapMoment, momentUnit)}
-        />
-        <TermsRow
-          terms={actions}
-          quantity="moment"
-          render={(term, color) => (
-            <Scalar value={term.moment} unit={momentUnit} color={color} />
-          )}
-          onHoverTerm={onHoverTerm}
-          onClickTerm={onClickTerm}
-        />
-      </Box>
+        <Box>
+          <LawRow
+            left={
+              <Member
+                label={reference}
+                onHoverChange={hover_member("total", "moment")}
+                labelHoversToo={false}
+              >
+                <Scalar value={sumMoment} unit={momentUnit} />
+              </Member>
+            }
+            right={
+              <Member
+                label={t("balance_inertia_moment")}
+                onHoverChange={hover_member("inertia", "moment")}
+              >
+                <Scalar
+                  value={inertiaMoment}
+                  unit={momentUnit}
+                  color={inertiaColor}
+                />
+              </Member>
+            }
+            unit={momentUnit}
+            gap={<Scalar value={gapMoment} unit={momentUnit} />}
+            closed={closed(gapMoment, momentUnit)}
+          />
+          <TermsRow
+            terms={actions}
+            quantity="moment"
+            render={(term, color) => (
+              <Scalar value={term.moment} unit={momentUnit} color={color} />
+            )}
+            onHoverTerm={onHoverTerm}
+            onClickTerm={onClickTerm}
+          />
+        </Box>
+      </CollapsibleSection>
     </Box>
   );
 };

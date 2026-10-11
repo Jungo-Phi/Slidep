@@ -41,13 +41,13 @@ export function metric_shape(metric: ProbeMetric): MetricShape {
     case "elongation-velocity":
     case "axial-force":
     case "shear-force":
-    // A bending moment is signed by whether the beam smiles or frowns, not by a sense of rotation — "turn" would decode that sign into a clockwise arrow that means nothing here.
     case "bending-moment":
     case "stress":
     case "shear-stress":
     case "belt-tension":
     case "slide-abscissa":
     case "slide-velocity":
+      // A bending moment is among these: it is signed by whether the beam smiles or frowns, not by a sense of rotation — "turn" would decode that sign into a clockwise arrow that means nothing here.
       return "scalar";
     case "moment":
     case "moment-start":

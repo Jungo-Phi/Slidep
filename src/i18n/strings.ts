@@ -2063,12 +2063,6 @@ export const STRINGS = {
     de: "Gemessen an",
     es: "Leído en",
   },
-  deselect: {
-    fr: "Désélectionner",
-    en: "Deselect",
-    de: "Auswahl aufheben",
-    es: "Deseleccionar",
-  },
   frame_world: { fr: "Monde", en: "World", de: "Welt", es: "Mundo" },
   closed: {
     fr: "Fermée",
@@ -2486,12 +2480,6 @@ export const STRINGS = {
     es: "Este movimiento no arrastra ninguna masa: su velocidad no significa nada mientras las piezas que mueve no tengan una.",
   },
 
-  mass_no_inertia_hint: {
-    fr: "Sans masse ici, un mouvement du mécanisme n'emporte aucune inertie : la simulation lui donne alors une vitesse qui ne veut rien dire.",
-    en: "With no mass here, a motion of the mechanism carries no inertia: the simulation then gives it a speed that means nothing.",
-    de: "Ohne Masse hier trägt eine Bewegung des Mechanismus keine Trägheit: die Simulation gibt ihr dann eine Geschwindigkeit ohne Aussage.",
-    es: "Sin masa aquí, un movimiento del mecanismo no arrastra ninguna inercia: la simulación le da entonces una velocidad que no significa nada.",
-  },
 
   choose_metrics: {
     fr: "Choisir les mesures",
@@ -2686,12 +2674,6 @@ export const STRINGS = {
     de: "Auflagerreaktionen",
     es: "Reacciones en los apoyos",
   },
-  measures_select_element: {
-    fr: "Sélectionnez un élément pour voir ses grandeurs",
-    en: "Select an element to see its quantities",
-    de: "Wählen Sie ein Element, um seine Größen zu sehen",
-    es: "Selecciona un elemento para ver sus magnitudes",
-  },
 
   metric_position: {
     fr: "Position",
@@ -2734,6 +2716,24 @@ export const STRINGS = {
     en: "Instantaneous power",
     de: "Momentanleistung",
     es: "Potencia instantánea",
+  },
+  superpose: {
+    fr: "Superposer",
+    en: "Overlay",
+    de: "Überlagern",
+    es: "Superponer",
+  },
+  add_measurement: {
+    fr: "Ajouter une mesure",
+    en: "Add a measurement",
+    de: "Messung hinzufügen",
+    es: "Añadir una medida",
+  },
+  motor_anchor: {
+    fr: "Ancrage moteur",
+    en: "Motor anchor",
+    de: "Motorverankerung",
+    es: "Anclaje del motor",
   },
   metric_elongation: {
     fr: "Allongement",

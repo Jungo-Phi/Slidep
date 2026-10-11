@@ -13,8 +13,7 @@ import {
 } from "../../utils/load-frame";
 
 /**
- * What editing one load writes, shared by the two panels that offer those edits: the elements tab's own list (`LoadsSection`) and the analysis panel's single-load card (`LoadInspector`).
- * Here rather than in either of them because the two show the same load differently, and only what they write has to stay the same.
+ * What editing one load from the panel writes (`LoadDetails`): the actions alone, built apart from the fields that offer them.
  */
 
 /** Build a SetDistributedForce action from partial new values (rest kept). */
@@ -94,3 +93,11 @@ export const frame_current_edge = (
       | undefined)
   );
 };
+
+/** The length a distributed load spreads over, which its resultant is read against: its host's, when that is an edge. */
+export const host_length = (host: MechanicalElement): number =>
+  "positionStart" in host
+    ? (host as EdgeElement).positionStart.distance_to(
+        (host as EdgeElement).positionEnd,
+      )
+    : 0;

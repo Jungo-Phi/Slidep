@@ -23,7 +23,7 @@ import {
   ViewportState,
 } from "../../../types";
 import { HoveredPart, names_element } from "../../../types/hovered-part";
-import { PROBE_ELEMENT_COLORS } from "../../properties-panel/components/ProbeChart";
+import { PROBE_ELEMENT_COLORS } from "../../properties-panel/probe-colors";
 import { nodes_under_segment } from "../picking/body-crossings";
 import { CanvasState } from "../../../types/canvas-state";
 import { has_dangling_ref } from "../../../types/element-refs";

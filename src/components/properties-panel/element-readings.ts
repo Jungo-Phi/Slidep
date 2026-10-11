@@ -309,8 +309,8 @@ export function is_series_value(value: InspectorValue): value is ProbeMetric {
 }
 
 /**
- * What `SelectionInspector` shows of one element, decided per element type rather than by what a probe can measure.
- * Everything an element has to say is on screen at once: there is no folded view, and so no line a reader has to go looking for.
+ * What an element's page reads of it (`ElementReadings`), decided per element type rather than by what a probe can measure.
+ * The page leaves out what its other sections already show — the pose in its geometry, a mass in its physics, a motor's power under its motor.
  * A value never repeats what a layer already reads, which is why an element with a velocity layer lists no velocity of its own, in either mode.
  */
 export interface InspectorLayout {

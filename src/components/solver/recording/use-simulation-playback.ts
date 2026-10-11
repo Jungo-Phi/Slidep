@@ -69,7 +69,7 @@ import {
   element_mass,
 } from "../../../utils/element-mass";
 import { body_centre } from "../analysis/force-balance";
-import { PROBE_ELEMENT_COLORS } from "../../properties-panel/components/ProbeChart";
+import { PROBE_ELEMENT_COLORS } from "../../properties-panel/probe-colors";
 import {
   CohesionField,
   compute_cohesion_field,

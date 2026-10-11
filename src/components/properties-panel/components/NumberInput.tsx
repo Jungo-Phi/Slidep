@@ -59,6 +59,9 @@ interface NumberInputProps {
   /** A read-only view of `value` — the catalogue's own entries, never a mechanism's own. No
    * focus, no stepper, no edits reach `onChange`. */
   disabled?: boolean;
+  /** `value` is the pose on screen rather than a setting — a simulation's geometry.
+   * Read-only like `disabled`, but drawn in full: it is there to be read, not to say it cannot be edited. */
+  live?: boolean;
   /** `value` is not stored on the element: it is derived from something else the panel already
    * shows, and the element follows that as long as nothing is typed here.
    * Shown in italics, so a field standing for a default reads as one. */
@@ -88,12 +91,14 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   precision = 1,
   fineStep,
   kind,
-  disabled = false,
+  disabled: shownDisabled = false,
+  live = false,
   implicit = false,
   mixed = false,
   alert = false,
   atLimit = false,
 }) => {
+  const disabled = shownDisabled || live;
   const unit = kind ? display_unit(value, kind, precision) : RAW_UNIT;
   const format = (v: number) => {
     const mantissa = to_mantissa(v, unit, precision).toString();
@@ -357,6 +362,20 @@ export const NumberInput: React.FC<NumberInputProps> = ({
               "& .MuiOutlinedInput-notchedOutline": {
                 borderTopRightRadius: adornmentRadius,
                 borderBottomRightRadius: adornmentRadius,
+              },
+            }),
+            ...(live && {
+              "& .MuiInputBase-input.Mui-disabled": {
+                color: "text.primary",
+                WebkitTextFillColor: "currentColor",
+              },
+              "& .MuiInputLabel-root.Mui-disabled": { color: "text.secondary" },
+              // Sunken rather than outlined, as the app shows every value it reads without offering to edit it.
+              "& .MuiInputBase-root.Mui-disabled": {
+                backgroundColor: "background.sunken",
+              },
+              "& .Mui-disabled .MuiOutlinedInput-notchedOutline": {
+                border: "none",
               },
             }),
             "& .MuiInputLabel-root": {

@@ -19,7 +19,9 @@ import { shear_admissible_stress } from "../../solver/recording/cohesion-field";
 import { beam_strength } from "../../../utils/section-properties";
 import { PERCENT, STRESS, display_unit } from "../../../utils/quantity-format";
 import { getStorageItem, setStorageItem } from "../../../utils/storage";
-import ProbeChart, { ChartCurve, PROBE_ELEMENT_COLORS } from "./ProbeChart";
+import ProbeChart, { ChartCurve } from "./ProbeChart";
+import CollapsibleSection from "./CollapsibleSection";
+import { PROBE_ELEMENT_COLORS } from "../probe-colors";
 import { StringKey, t } from "../../../i18n";
 
 const MODES = ["stress", "shear"] as const;
@@ -119,7 +121,7 @@ export const WorstStress: React.FC<{
   profiles: ProfileDef[];
   currentTime: number;
   onSeek: (time: number) => void;
-  /** Where the worst reading of the instant ON SCREEN was taken, for the canvas to mark while this chart is being read — the same channel the selection inspector's own diagrams use. */
+  /** Where the worst reading of the instant ON SCREEN was taken, for the canvas to mark while this chart is being read — the same channel a beam's own diagrams use. */
   setHoveredAbscissa: (hovered: HoveredAbscissaSource | null) => void;
 }> = ({
   cache,
@@ -203,58 +205,64 @@ export const WorstStress: React.FC<{
 
   return (
     <Box sx={{ px: 2 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1, minWidth: 0 }} noWrap>
-          {t("worst_stress_heading")}
-          <Typography component="span" variant="subtitle2" color="text.secondary">
-            {` (${unit.symbol})`}
-          </Typography>
-        </Typography>
-        {anyIndeterminate && (
-          <Tooltip title={t("worst_stress_indeterminate_hint")}>
-            <Chip
-              label={t("worst_stress_indeterminate")}
-              size="small"
-              color="warning"
-              variant="outlined"
-              sx={{ height: 18, "& .MuiChip-label": { px: 0.75 }, fontSize: "0.65rem" }}
-            />
-          </Tooltip>
-        )}
-      </Box>
-      <Box sx={{ display: "flex", justifyContent: "center", my: 0.5 }}>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={mode}
-          onChange={(_e, value: Mode | null) => {
-            if (value) setMode(value);
-          }}
-        >
-          {MODES.map((candidate) => (
-            <Tooltip key={candidate} title={t(MODE_HINT_KEYS[candidate])}>
-              <ToggleButton
-                value={candidate}
-                sx={{ py: 0, px: 1, fontSize: "0.7rem", textTransform: "none" }}
-              >
-                {t(MODE_LABEL_KEYS[candidate])}
-              </ToggleButton>
+      <CollapsibleSection
+        storageKey="analysisSection.worstStress"
+        title={
+          <>
+            {t("worst_stress_heading")}
+            <Typography component="span" variant="subtitle2" color="text.secondary">
+              {` (${unit.symbol})`}
+            </Typography>
+          </>
+        }
+        trailing={
+          anyIndeterminate && (
+            <Tooltip title={t("worst_stress_indeterminate_hint")}>
+              <Chip
+                label={t("worst_stress_indeterminate")}
+                size="small"
+                color="warning"
+                variant="outlined"
+                sx={{ height: 18, "& .MuiChip-label": { px: 0.75 }, fontSize: "0.65rem" }}
+              />
             </Tooltip>
-          ))}
-        </ToggleButtonGroup>
-      </Box>
-      <ProbeChart
-        curves={curves}
-        currentTime={currentTime}
-        poolMax={0}
-        ownFloor={0}
-        unitFactor={unit.factor}
-        showZero
-        reference={reference}
-        emptyMessage={t("chart_waiting")}
-        onSeek={onSeek}
-        onHover={(inside) => setHoveredAbscissa(inside ? worst_mark : null)}
-      />
+          )
+        }
+      >
+        <Box sx={{ display: "flex", justifyContent: "center", my: 0.5 }}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={mode}
+            onChange={(_e, value: Mode | null) => {
+              if (value) setMode(value);
+            }}
+          >
+            {MODES.map((candidate) => (
+              <Tooltip key={candidate} title={t(MODE_HINT_KEYS[candidate])}>
+                <ToggleButton
+                  value={candidate}
+                  sx={{ py: 0, px: 1, fontSize: "0.7rem", textTransform: "none" }}
+                >
+                  {t(MODE_LABEL_KEYS[candidate])}
+                </ToggleButton>
+              </Tooltip>
+            ))}
+          </ToggleButtonGroup>
+        </Box>
+        <ProbeChart
+          curves={curves}
+          currentTime={currentTime}
+          poolMax={0}
+          ownFloor={0}
+          unitFactor={unit.factor}
+          showZero
+          reference={reference}
+          emptyMessage={t("chart_waiting")}
+          onSeek={onSeek}
+          onHover={(inside) => setHoveredAbscissa(inside ? worst_mark : null)}
+        />
+      </CollapsibleSection>
     </Box>
   );
 };

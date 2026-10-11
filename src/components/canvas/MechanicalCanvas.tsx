@@ -240,8 +240,8 @@ export interface MechanicalCanvasProps {
   hoveredLibraryEntryID?: ID | null;
   /** Whether the mechanisms gallery is open — keyboard shortcuts are disabled when it is, except Escape. */
   galleryOpen: boolean;
-  /** A press released without dragging — a tap or a click — with whether it landed on an element. */
-  onTap?: (onElement: boolean) => void;
+  /** A press released without dragging — a tap or a click — with whether it landed on an element, and the state it left the canvas in. */
+  onTap?: (onElement: boolean, state: CanvasState) => void;
 }
 
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
@@ -1046,7 +1046,7 @@ const MechanicalCanvasView = forwardRef<
       });
       mouseButtonDownRef.current = "none";
       if (button === "left" && !pressDraggedRef.current)
-        onTapRef.current?.(pressOnElementRef.current);
+        onTapRef.current?.(pressOnElementRef.current, canvasStateRef.current);
     }, []);
 
     // Opens a left press at the pointer's current position: its release will tell how far it travelled.
@@ -1472,14 +1472,18 @@ const MechanicalCanvasView = forwardRef<
           onSpaceKeyRef.current();
           return;
         }
+        // Reset the running simulation, or exit to edition — decided in App.
+        // A selection under a simulation survives it: Escape leaves the run, not the element being read.
         if (
           event.type === "KeyDown" &&
           event.key === "Escape" &&
-          canvasStateRef.current.type === "Selecting"
+          (canvasStateRef.current.type === "Selecting" ||
+            (appModeRef.current !== "edition" &&
+              canvasStateRef.current.type === "SelectedElement"))
         ) {
-          // Reset the running simulation, or exit to edition — decided in App.
           onEscapeKeyRef.current();
-          setCanvasStateNow({ type: "Selecting" });
+          if (canvasStateRef.current.type === "Selecting")
+            setCanvasStateNow({ type: "Selecting" });
           return;
         }
         const currMech = mechanismRef.current;

@@ -8,11 +8,9 @@ import {
 } from "../../solver/analysis/energy-balance";
 import { ENERGY, display_unit } from "../../../utils/quantity-format";
 import { getStorageItem, setStorageItem } from "../../../utils/storage";
-import ProbeChart, {
-  ChartCurve,
-  PROBE_ELEMENT_COLORS,
-  probe_curve_colors,
-} from "./ProbeChart";
+import ProbeChart, { ChartCurve } from "./ProbeChart";
+import CollapsibleSection from "./CollapsibleSection";
+import { PROBE_ELEMENT_COLORS, probe_curve_colors } from "../probe-colors";
 import { StringKey, t } from "../../../i18n";
 import { useAmbient } from "../../common/use-ambient";
 
@@ -187,30 +185,36 @@ export const EnergyBalance: React.FC<{
 
   return (
     <Box sx={{ px: 2 }}>
-      <Typography variant="subtitle2" fontWeight={600}>
-        {t("energy_balance_heading")}
-        <Typography component="span" variant="subtitle2" color="text.secondary">
-          {` (${unit.symbol})`}
-        </Typography>
-      </Typography>
-      <EnergyChips
-        components={components}
-        colors={componentColors}
-        setComponents={setComponents}
-      />
-      <ProbeChart
-        curves={curves}
-        currentTime={currentTime}
-        poolMax={0}
-        ownFloor={0}
-        unitFactor={unit.factor}
-        // Never forced: `potential`/`mechanical` are anchored to the recording's first frame, not to a physical rest state (see `EnergyBalanceSeries`) — the same exceptions as `metric_shows_zero`.
-        showZero={false}
-        emptyMessage={
-          curves.length === 0 ? t("chart_no_component") : t("chart_waiting")
+      <CollapsibleSection
+        storageKey="analysisSection.energy"
+        title={
+          <>
+            {t("energy_balance_heading")}
+            <Typography component="span" variant="subtitle2" color="text.secondary">
+              {` (${unit.symbol})`}
+            </Typography>
+          </>
         }
-        onSeek={onSeek}
-      />
+      >
+        <EnergyChips
+          components={components}
+          colors={componentColors}
+          setComponents={setComponents}
+        />
+        <ProbeChart
+          curves={curves}
+          currentTime={currentTime}
+          poolMax={0}
+          ownFloor={0}
+          unitFactor={unit.factor}
+          // Never forced: `potential`/`mechanical` are anchored to the recording's first frame, not to a physical rest state (see `EnergyBalanceSeries`) — the same exceptions as `metric_shows_zero`.
+          showZero={false}
+          emptyMessage={
+            curves.length === 0 ? t("chart_no_component") : t("chart_waiting")
+          }
+          onSeek={onSeek}
+        />
+      </CollapsibleSection>
     </Box>
   );
 };

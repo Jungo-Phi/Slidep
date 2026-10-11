@@ -69,11 +69,9 @@ import {
 } from "../../canvas/ProbeMetricSelector";
 import SignedNumberInput from "../components/SignedNumberInput";
 import ElementDisplay from "../components/ElementDisplay";
-import ProbeChart, {
-  ChartCurve,
-  probe_curve_colors,
-  PROBE_ELEMENT_COLORS,
-} from "../components/ProbeChart";
+import ProbeChart, { ChartCurve } from "../components/ProbeChart";
+import CollapsibleSection from "../components/CollapsibleSection";
+import { probe_curve_colors, PROBE_ELEMENT_COLORS } from "../probe-colors";
 import ForceBalanceTable from "../components/ForceBalanceTable";
 import { useDismissOnShortcut } from "../../common/dismiss-popups";
 import { useAmbient } from "../../common/use-ambient";
@@ -185,13 +183,11 @@ interface AnalysisPanelProps {
   setHighlight: (highlight: CanvasHighlight) => void;
   /** How a redundant constraint the panel is naming right now would yield; empty clears it. */
   setRedundancySymbols: (symbols: RedundancySymbol[]) => void;
-  /** Publishes the elements a freedom carrying no inertia moves, for the inspector above to paint the mass they are missing. */
-  setInertiaFreeElements: (elements: ReadonlySet<ID>) => void;
   /** Where the pose the panel is animating is published, for the canvas to draw. */
   modePreviewRef: React.MutableRefObject<Mechanism | null>;
   /** See `App`'s own `hoveredBalanceTerm`. */
   setHoveredBalanceTerm: (hovered: HoveredBalanceTerm | null) => void;
-  /** Where along the selected beam a hovered chart's value was found, for the canvas to tick — the same channel the selection inspector's own N/T/Mf diagrams use (`HoveredAbscissaSource`). */
+  /** Where along the selected beam a hovered chart's value was found, for the canvas to tick — the same channel a beam's own N/T/Mf diagrams use (`HoveredAbscissaSource`). */
   setHoveredAbscissa: (hovered: HoveredAbscissaSource | null) => void;
   /** See `App`'s own `momentBalanceReference`. */
   momentBalanceReference: MomentBalanceReference;
@@ -239,9 +235,6 @@ const redundancy_kinds = (group: RedundancyGroup): string => {
     .map(([noun, count]) => (count > 1 ? `${count} × ${noun}` : noun))
     .join(", ");
 };
-
-/** What the panel publishes once it has nothing to say about inertia any more. */
-const NO_ELEMENTS: ReadonlySet<ID> = new Set();
 
 /** Point the canvas at these elements: something to look at, not something wrong with them. */
 const focus = (elements: Iterable<ID>): CanvasHighlight => ({
@@ -794,7 +787,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   seekTime,
   setHighlight,
   setRedundancySymbols,
-  setInertiaFreeElements,
   modePreviewRef,
   setHoveredBalanceTerm,
   setHoveredAbscissa,
@@ -1033,30 +1025,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     modesPlayable,
   );
 
-  // A freedom nothing weighs, and everything it moves: the mass those parts are missing is what leaves it without inertia, and the inspector above says so on their own row.
-  // Dynamics only, and never a freedom a motor drives — the same reading the mode rows show.
-  const inertiaFreeElements = React.useMemo(() => {
-    const ids = new Set<ID>();
-    if (appMode !== "dynamic") return ids;
-    for (const { modes } of analysis.chains)
-      for (const mode of modes)
-        if (mode.inertiaFree && !mode.drivenByMotor)
-          for (const id of mode.moves) ids.add(id);
-    return ids;
-  }, [analysis.chains, appMode]);
-
-  React.useEffect(() => {
-    setInertiaFreeElements(inertiaFreeElements);
-  }, [inertiaFreeElements, setInertiaFreeElements]);
-
   // Leaving the tab unmounts the panel without a mouse-leave, which would strand the highlight — and a redundancy symbol — on a canvas nothing is pointing at any more.
   React.useEffect(
     () => () => {
       setHighlight(NO_HIGHLIGHT);
       setRedundancySymbols(EMPTY_SYMBOLS);
-      setInertiaFreeElements(NO_ELEMENTS);
     },
-    [setHighlight, setRedundancySymbols, setInertiaFreeElements],
+    [setHighlight, setRedundancySymbols],
   );
 
   /** The element a mode is named after, for its row's `ElementDisplay`. */
@@ -1217,379 +1192,381 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
       {/* DDL Indicator — one block per kinematic chain */}
       <Box sx={{ mx: 2 }}>
-        <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-          {t("ddl_heading")}
-        </Typography>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {analysis.chains.map((chainAnalysis, index) => (
-            <ChainCard
-              key={chainAnalysis.chain.id}
-              analysis={chainAnalysis}
-              index={index}
-              appMode={appMode}
-              setHighlight={setHighlight}
-              setRedundancySymbols={setRedundancySymbols}
-              symbolsFor={symbolsFor}
-              elementOf={elementOf}
-              shownMotors={shownMotors}
-              animated={animated}
-              setAnimated={setAnimated}
-              hoveredPart={hoveredPart}
-              setHoveredPart={setHoveredPart}
-              selectedIds={selectedIds}
-              setCanvasState={setCanvasState}
-              applyActions={applyActions}
-              modesPlayable={modesPlayable}
-              blockedMotors={blockedMotors}
-              audit={audits.get(chainAnalysis.chain.id)}
-              auditing={auditing === chainAnalysis.chain.id}
-              onAudit={runAudit}
-            />
-          ))}
-          {/* Only once measured: an empty list before the first pass means "not
-              yet", which is not the same statement as "nothing moves". */}
-          {analysis.ready && analysis.chains.length === 0 && (
-            <Typography variant="body2" color="text.disabled" sx={{ p: 1 }}>
-              {t("ddl_rigid_zero")}
-            </Typography>
-          )}
-        </Box>
-      </Box>
-
-      <Divider />
-
-      {/* Measurements: active probes and their charts */}
-      <Box sx={{ mx: 2, display: "flex", flexDirection: "column", gap: 1 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>
-            {t("measurements")}
-          </Typography>
-          {probedElements.length >= 2 && (
-            <FormControlLabel
-              control={
-                <Switch
-                  size="small"
-                  checked={superpose}
-                  onChange={() => setSuperpose((prev) => !prev)}
-                />
-              }
-              label={<Typography variant="caption">Superposer</Typography>}
-              sx={{ mr: 0 }}
-            />
-          )}
-        </Box>
-
-        {!superposed &&
-          probedElements.map((element) => (
-            <Box
-              key={element.id}
-              sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
-            >
-              {/* Element header + metric edit menu */}
-              <ElementDisplay
-                element={element}
+        <CollapsibleSection storageKey="analysisSection.mobility" title={t("ddl_heading")}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            {analysis.chains.map((chainAnalysis, index) => (
+              <ChainCard
+                key={chainAnalysis.chain.id}
+                analysis={chainAnalysis}
+                index={index}
+                appMode={appMode}
+                setHighlight={setHighlight}
+                setRedundancySymbols={setRedundancySymbols}
+                symbolsFor={symbolsFor}
+                elementOf={elementOf}
+                shownMotors={shownMotors}
+                animated={animated}
+                setAnimated={setAnimated}
                 hoveredPart={hoveredPart}
                 setHoveredPart={setHoveredPart}
                 selectedIds={selectedIds}
                 setCanvasState={setCanvasState}
                 applyActions={applyActions}
-                size={"small"}
-                editable={false}
-                trailingControls={
-                  <Tooltip title={t("choose_metrics")}>
-                    <IconButton
-                      size="small"
-                      onClick={(e) =>
-                        setMetricMenu({
-                          elementID: element.id,
-                          anchorEl: e.currentTarget,
-                        })
-                      }
-                      sx={{ borderRadius: 3 }}
-                    >
-                      <Tune fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                }
+                modesPlayable={modesPlayable}
+                blockedMotors={blockedMotors}
+                audit={audits.get(chainAnalysis.chain.id)}
+                auditing={auditing === chainAnalysis.chain.id}
+                onAudit={runAudit}
               />
+            ))}
+            {/* Only once measured: an empty list before the first pass means "not yet", which is not the same statement as "nothing moves". */}
+            {analysis.ready && analysis.chains.length === 0 && (
+              <Typography variant="body2" color="text.disabled" sx={{ p: 1 }}>
+                {t("ddl_rigid_zero")}
+              </Typography>
+            )}
+          </Box>
+        </CollapsibleSection>
+      </Box>
 
-              {element.probes.map((probe) => {
-                const { series, abscissa } = probe_readout(element, probe.metric);
-                const chartKey = `${element.id}:${probe.metric}`;
-                if (abscissa && hoveredChartRef.current?.key === chartKey)
-                  hoveredChartRef.current = {
-                    ...hoveredChartRef.current,
-                    series,
-                    abscissa,
-                  };
-                const reference = stress_reference(element, probe.metric);
-                const isVector = is_vector_metric(probe.metric);
-                const curves: ChartCurve[] = series.curves
-                  .filter((c) =>
-                    isVector
-                      ? probe.components[c.key as "x" | "y" | "norm"]
-                      : true,
-                  )
-                  .map((c) => ({
-                    id: c.key,
-                    color: curveColors[c.key],
-                    t: series.t,
-                    values: c.values,
-                  }));
-                // Data exists but every component toggle is off
-                const noComponentSelected =
-                  series.t.length >= 2 && curves.length === 0;
-                // The chart's own SI prefix (mN, µN, kN…), picked from what it actually shows rather than the metric's bare base unit — named once here, in the header, so every label inside the chart can stay a bare mantissa in the same unit instead of repeating it.
+      <Divider />
+
+      {/* Measurements: active probes and their charts */}
+      <Box sx={{ mx: 2 }}>
+        <CollapsibleSection
+          storageKey="analysisSection.measurements"
+          title={t("measurements")}
+          trailing={
+            probedElements.length >= 2 && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={superpose}
+                    onChange={() => setSuperpose((prev) => !prev)}
+                  />
+                }
+                label={<Typography variant="caption">{t("superpose")}</Typography>}
+                sx={{ mr: 0 }}
+              />
+            )
+          }
+        >
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+
+            {!superposed &&
+              probedElements.map((element) => (
+                <Box
+                  key={element.id}
+                  sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                >
+                  {/* Element header + metric edit menu */}
+                  <ElementDisplay
+                    element={element}
+                    hoveredPart={hoveredPart}
+                    setHoveredPart={setHoveredPart}
+                    selectedIds={selectedIds}
+                    setCanvasState={setCanvasState}
+                    applyActions={applyActions}
+                    size={"small"}
+                    editable={false}
+                    trailingControls={
+                      <Tooltip title={t("choose_metrics")}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) =>
+                            setMetricMenu({
+                              elementID: element.id,
+                              anchorEl: e.currentTarget,
+                            })
+                          }
+                          sx={{ borderRadius: 3 }}
+                        >
+                          <Tune fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    }
+                  />
+
+                  {element.probes.map((probe) => {
+                    const { series, abscissa } = probe_readout(element, probe.metric);
+                    const chartKey = `${element.id}:${probe.metric}`;
+                    if (abscissa && hoveredChartRef.current?.key === chartKey)
+                      hoveredChartRef.current = {
+                        ...hoveredChartRef.current,
+                        series,
+                        abscissa,
+                      };
+                    const reference = stress_reference(element, probe.metric);
+                    const isVector = is_vector_metric(probe.metric);
+                    const curves: ChartCurve[] = series.curves
+                      .filter((c) =>
+                        isVector
+                          ? probe.components[c.key as "x" | "y" | "norm"]
+                          : true,
+                      )
+                      .map((c) => ({
+                        id: c.key,
+                        color: curveColors[c.key],
+                        t: series.t,
+                        values: c.values,
+                      }));
+                    // Data exists but every component toggle is off
+                    const noComponentSelected =
+                      series.t.length >= 2 && curves.length === 0;
+                    // The chart's own SI prefix (mN, µN, kN…), picked from what it actually shows rather than the metric's bare base unit — named once here, in the header, so every label inside the chart can stay a bare mantissa in the same unit instead of repeating it.
+                    const peak = curves.reduce(
+                      (m, c) =>
+                        c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
+                      0,
+                    );
+                    const unit = display_unit(
+                      peak,
+                      quantity_kind_for_metric(probe.metric),
+                    );
+                    return (
+                      <Box
+                        key={probe.metric}
+                        onMouseEnter={() =>
+                          setHoveredPart(element_to_hovered_part(element))
+                        }
+                        onMouseLeave={() =>
+                          setHoveredPart({ type: "Void", position: ZERO })
+                        }
+                      >
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                            mb: 0.25,
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            fontWeight={600}
+                            noWrap
+                            sx={{ flex: 1, minWidth: 0 }}
+                          >
+                            {t(PROBE_METRIC_LABEL_KEYS[probe.metric])}
+                            <Typography
+                              component="span"
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {` (${unit.symbol})`}
+                            </Typography>
+                          </Typography>
+                          {isVector &&
+                            (["x", "y", "norm"] as const).map((k) => (
+                              <Chip
+                                key={k}
+                                label={k === "norm" ? "norme" : k}
+                                size="small"
+                                clickable
+                                onClick={() =>
+                                  setElementProbes(
+                                    element,
+                                    element.probes.map((p) =>
+                                      p.metric === probe.metric
+                                        ? {
+                                            ...p,
+                                            components: {
+                                              ...p.components,
+                                              [k]: !p.components[k],
+                                            },
+                                          }
+                                        : p,
+                                    ),
+                                  )
+                                }
+                                sx={{
+                                  height: 18,
+                                  "& .MuiChip-label": { px: 0.75 },
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                  color: probe.components[k]
+                                    ? "common.white"
+                                    : "text.secondary",
+                                  backgroundColor: probe.components[k]
+                                    ? curveColors[k]
+                                    : "background.sunken",
+                                  "&:hover": {
+                                    backgroundColor: probe.components[k]
+                                      ? curveColors[k]
+                                      : "action.hover",
+                                  },
+                                }}
+                              />
+                            ))}
+                          <Tooltip title={t("remove_metric")}>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              sx={{ p: 0.25 }}
+                              onClick={() =>
+                                setElementProbes(
+                                  element,
+                                  element.probes.filter(
+                                    (p) => p.metric !== probe.metric,
+                                  ),
+                                )
+                              }
+                            >
+                              <Close sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                        <ProbeChart
+                          curves={curves}
+                          currentTime={runtimeState.time}
+                          {...pool_scales(probe.metric)}
+                          unitFactor={unit.factor}
+                          showZero={metric_shows_zero(probe.metric)}
+                          reference={reference}
+                          emptyMessage={
+                            noComponentSelected
+                              ? t("chart_no_component")
+                              : chart_empty_message(probe.metric)
+                          }
+                          onHover={
+                            abscissa
+                              ? (inside) => {
+                                  hoveredChartRef.current = inside
+                                    ? {
+                                        key: chartKey,
+                                        beamID: element.id,
+                                        series,
+                                        abscissa,
+                                        kind: quantity_kind_for_metric(probe.metric),
+                                      }
+                                    : null;
+                                  setHoveredAbscissa(
+                                    inside ? hovered_chart_mark : null,
+                                  );
+                                }
+                              : undefined
+                          }
+                          onSeek={appMode !== "edition" ? seekTime : undefined}
+                        />
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ))}
+
+            {/* Superposed mode: one chart per metric, one curve per element */}
+            {superposed &&
+              PROBE_METRIC_ORDER.filter((metric) =>
+                probedElements.some((el) =>
+                  el.probes.some((p) => p.metric === metric),
+                ),
+              ).map((metric) => {
+                const contributors = probedElements.filter((el) =>
+                  el.probes.some((p) => p.metric === metric),
+                );
+                const isVector = is_vector_metric(metric);
+                const curves: ChartCurve[] = contributors.flatMap((el) => {
+                  // No reference line here: each beam is read against its own `Re`, and several of them have no one line to share.
+                  const { series } = probe_readout(el, metric);
+                  const curve = series.curves.find(
+                    (c) => c.key === (isVector ? "norm" : "value"),
+                  );
+                  return curve
+                    ? [
+                        {
+                          id: el.id,
+                          color: element_color(el),
+                          t: series.t,
+                          values: curve.values,
+                        },
+                      ]
+                    : [];
+                });
+                // The chart's own SI prefix, picked from what it actually shows — see the per-element mode above for the same reasoning.
                 const peak = curves.reduce(
                   (m, c) =>
                     c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
                   0,
                 );
-                const unit = display_unit(
-                  peak,
-                  quantity_kind_for_metric(probe.metric),
-                );
+                const unit = display_unit(peak, quantity_kind_for_metric(metric));
                 return (
-                  <Box
-                    key={probe.metric}
-                    onMouseEnter={() =>
-                      setHoveredPart(element_to_hovered_part(element))
-                    }
-                    onMouseLeave={() =>
-                      setHoveredPart({ type: "Void", position: ZERO })
-                    }
-                  >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.5,
-                        mb: 0.25,
-                      }}
+                  <Box key={metric}>
+                    <Typography
+                      variant="caption"
+                      fontWeight={600}
+                      sx={{ display: "block", mb: 0.25 }}
                     >
+                      {t(PROBE_METRIC_LABEL_KEYS[metric])}
                       <Typography
+                        component="span"
                         variant="caption"
-                        fontWeight={600}
-                        noWrap
-                        sx={{ flex: 1, minWidth: 0 }}
+                        color="text.secondary"
                       >
-                        {t(PROBE_METRIC_LABEL_KEYS[probe.metric])}
-                        <Typography
-                          component="span"
-                          variant="caption"
-                          color="text.secondary"
-                        >
-                          {` (${unit.symbol})`}
-                        </Typography>
+                        {` (${unit.symbol})`}
+                        {isVector && t("chart_norm_suffix")}
                       </Typography>
-                      {isVector &&
-                        (["x", "y", "norm"] as const).map((k) => (
-                          <Chip
-                            key={k}
-                            label={k === "norm" ? "norme" : k}
-                            size="small"
-                            clickable
-                            onClick={() =>
-                              setElementProbes(
-                                element,
-                                element.probes.map((p) =>
-                                  p.metric === probe.metric
-                                    ? {
-                                        ...p,
-                                        components: {
-                                          ...p.components,
-                                          [k]: !p.components[k],
-                                        },
-                                      }
-                                    : p,
-                                ),
-                              )
-                            }
-                            sx={{
-                              height: 18,
-                              "& .MuiChip-label": { px: 0.75 },
-                              fontSize: "0.68rem",
-                              fontWeight: 600,
-                              color: probe.components[k]
-                                ? "common.white"
-                                : "text.secondary",
-                              backgroundColor: probe.components[k]
-                                ? curveColors[k]
-                                : "background.sunken",
-                              "&:hover": {
-                                backgroundColor: probe.components[k]
-                                  ? curveColors[k]
-                                  : "action.hover",
-                              },
-                            }}
-                          />
-                        ))}
-                      <Tooltip title={t("remove_metric")}>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          sx={{ p: 0.25 }}
-                          onClick={() =>
-                            setElementProbes(
-                              element,
-                              element.probes.filter(
-                                (p) => p.metric !== probe.metric,
-                              ),
-                            )
-                          }
-                        >
-                          <Close sx={{ fontSize: 14 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
+                    </Typography>
                     <ProbeChart
                       curves={curves}
                       currentTime={runtimeState.time}
-                      {...pool_scales(probe.metric)}
+                      {...pool_scales(metric)}
                       unitFactor={unit.factor}
-                      showZero={metric_shows_zero(probe.metric)}
-                      reference={reference}
-                      emptyMessage={
-                        noComponentSelected
-                          ? t("chart_no_component")
-                          : chart_empty_message(probe.metric)
-                      }
-                      onHover={
-                        abscissa
-                          ? (inside) => {
-                              hoveredChartRef.current = inside
-                                ? {
-                                    key: chartKey,
-                                    beamID: element.id,
-                                    series,
-                                    abscissa,
-                                    kind: quantity_kind_for_metric(probe.metric),
-                                  }
-                                : null;
-                              setHoveredAbscissa(
-                                inside ? hovered_chart_mark : null,
-                              );
-                            }
-                          : undefined
-                      }
+                      showZero={metric_shows_zero(metric)}
+                      emptyMessage={chart_empty_message(metric)}
                       onSeek={appMode !== "edition" ? seekTime : undefined}
                     />
+                    <Box
+                      sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}
+                    >
+                      {contributors.map((el) => (
+                        <Chip
+                          key={el.id}
+                          size="small"
+                          variant="outlined"
+                          icon={
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                backgroundColor: element_color(el),
+                                ml: 0.5,
+                              }}
+                            />
+                          }
+                          label={shown_element_name(el)}
+                          onMouseEnter={() =>
+                            setHoveredPart(element_to_hovered_part(el))
+                          }
+                          onMouseLeave={() =>
+                            setHoveredPart({ type: "Void", position: ZERO })
+                          }
+                          onClick={() =>
+                            setCanvasState({
+                              type: "SelectedElement",
+                              elementID: el.id,
+                            })
+                          }
+                          sx={{ height: 20 }}
+                        />
+                      ))}
+                    </Box>
                   </Box>
                 );
               })}
-            </Box>
-          ))}
 
-        {/* Superposed mode: one chart per metric, one curve per element */}
-        {superposed &&
-          PROBE_METRIC_ORDER.filter((metric) =>
-            probedElements.some((el) =>
-              el.probes.some((p) => p.metric === metric),
-            ),
-          ).map((metric) => {
-            const contributors = probedElements.filter((el) =>
-              el.probes.some((p) => p.metric === metric),
-            );
-            const isVector = is_vector_metric(metric);
-            const curves: ChartCurve[] = contributors.flatMap((el) => {
-              // No reference line here: each beam is read against its own `Re`, and several of them have no one line to share.
-              const { series } = probe_readout(el, metric);
-              const curve = series.curves.find(
-                (c) => c.key === (isVector ? "norm" : "value"),
-              );
-              return curve
-                ? [
-                    {
-                      id: el.id,
-                      color: element_color(el),
-                      t: series.t,
-                      values: curve.values,
-                    },
-                  ]
-                : [];
-            });
-            // The chart's own SI prefix, picked from what it actually shows — see the per-element mode above for the same reasoning.
-            const peak = curves.reduce(
-              (m, c) =>
-                c.values.reduce((mm, v) => Math.max(mm, Math.abs(v)), m),
-              0,
-            );
-            const unit = display_unit(peak, quantity_kind_for_metric(metric));
-            return (
-              <Box key={metric}>
-                <Typography
-                  variant="caption"
-                  fontWeight={600}
-                  sx={{ display: "block", mb: 0.25 }}
-                >
-                  {t(PROBE_METRIC_LABEL_KEYS[metric])}
-                  <Typography
-                    component="span"
-                    variant="caption"
-                    color="text.secondary"
-                  >
-                    {` (${unit.symbol})`}
-                    {isVector && t("chart_norm_suffix")}
-                  </Typography>
-                </Typography>
-                <ProbeChart
-                  curves={curves}
-                  currentTime={runtimeState.time}
-                  {...pool_scales(metric)}
-                  unitFactor={unit.factor}
-                  showZero={metric_shows_zero(metric)}
-                  emptyMessage={chart_empty_message(metric)}
-                  onSeek={appMode !== "edition" ? seekTime : undefined}
-                />
-                <Box
-                  sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}
-                >
-                  {contributors.map((el) => (
-                    <Chip
-                      key={el.id}
-                      size="small"
-                      variant="outlined"
-                      icon={
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            backgroundColor: element_color(el),
-                            ml: 0.5,
-                          }}
-                        />
-                      }
-                      label={shown_element_name(el)}
-                      onMouseEnter={() =>
-                        setHoveredPart(element_to_hovered_part(el))
-                      }
-                      onMouseLeave={() =>
-                        setHoveredPart({ type: "Void", position: ZERO })
-                      }
-                      onClick={() =>
-                        setCanvasState({
-                          type: "SelectedElement",
-                          elementID: el.id,
-                        })
-                      }
-                      sx={{ height: 20 }}
-                    />
-                  ))}
-                </Box>
-              </Box>
-            );
-          })}
-
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<Add />}
-          onClick={() => setCanvasState({ type: "PlacingProbe" })}
-          fullWidth
-        >
-          Ajouter une mesure
-        </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<Add />}
+              onClick={() => setCanvasState({ type: "PlacingProbe" })}
+              fullWidth
+            >
+              {t("add_measurement")}
+            </Button>
+          </Box>
+        </CollapsibleSection>
       </Box>
 
       {/* Metric edit menu (shared by the element cards) */}

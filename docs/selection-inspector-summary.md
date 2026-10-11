@@ -1,5 +1,8 @@
 # SelectionInspector : réorganisation
 
+> Dépassé : l'inspecteur a été fondu dans l'onglet Élément (docs/plan-onglet-element.md). Ses règles
+> de lecture (un relevé est un lien, la disposition par type) y vivent dans `ElementReadings`.
+
 ## Décisions produit (validées ensemble)
 
 - **Afficher ce que fait l'élément**, pas tout ce qu'une sonde sait mesurer : 1 à 3 grandeurs par type d'élément, liées à son rôle.
