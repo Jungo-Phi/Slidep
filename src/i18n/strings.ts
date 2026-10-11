@@ -15,7 +15,12 @@ export const STRINGS = {
     de: "Unbenannt",
     es: "Sin título",
   },
-  menu: { fr: "Menu", en: "Menu", de: "Menü", es: "Menú" },
+  more_actions: {
+    fr: "Plus d'actions",
+    en: "More actions",
+    de: "Weitere Aktionen",
+    es: "Más acciones",
+  },
   palette: { fr: "Palette", en: "Palette", de: "Palette", es: "Paleta" },
   open_mechanism: {
     fr: "Ouvrir",

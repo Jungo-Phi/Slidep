@@ -165,6 +165,11 @@ au-dessus. Trois hauteurs :
 - **Un glissement** sur le canvas ne referme jamais la feuille — manipuler le mécanisme en surveillant
   une sonde est un usage légitime.
 
+**Onglet allumé** : un seul onglet est coloré, celui que le desktop aurait ouvert. Feuille levée,
+c'est le sien. Feuille baissée, c'est la palette si un outil est armé, sinon l'onglet où le desktop
+montrerait ce qu'on vient de sélectionner (même règle que lui) — ou aucun, s'il montrerait le projet.
+On sait ainsi où lire l'élément qu'on vient de taper, sans que la feuille change de place.
+
 **Recentrage** : lever la feuille recentre la vue pour garder l'élément concerné visible au-dessus.
 Éditer un objet qu'on ne voit pas est inutilisable.
 
@@ -186,9 +191,9 @@ les masque. Proposer sur un écran contraint des outils inutilisables est un mau
 L'onglet « élément » est *navigationnel*, la sélection est *contextuelle* : la lever automatiquement
 à chaque sélection contredirait la règle de fermeture, puisque sélectionner c'est taper le canvas.
 
-D'où un **bandeau fin juste au-dessus de la barre d'onglets** quand quelque chose est sélectionné :
-nom, deux mesures clés, supprimer. Le taper lève l'onglet complet. La sélection a ainsi sa surface
-propre, minuscule, et la règle de fermeture reste intacte.
+D'où un **bandeau fin juste au-dessus de la barre d'onglets** : un raccourci vers les opérations
+courantes, contextuel — propre à l'élément sélectionné, des outils de la palette quand rien ne l'est
+en édition. Son contenu est à préciser.
 
 ### Sur le canvas
 
@@ -201,15 +206,16 @@ dessin, les déporter dans la feuille casserait ce lien. Elles doivent en revanc
 
 ## 3. Barre haute
 
-Permanente : **☰ ⟷ ( Afficher ▾ │ physique ▾ │ mode ▾ ) ⟷ recentrer · annuler · rétablir**, les trois
-blocs répartis sur la largeur. Sept éléments de largeur fixe, qui tiennent dès 360 px.
+Permanente : **galerie ⟷ ( Afficher ▾ │ physique ▾ │ mode ▾ ) ⟷ recentrer · annuler · rétablir**, les
+trois blocs répartis sur la largeur. Sept éléments de largeur fixe, qui tiennent dès 360 px.
 
 - **Pas de nom de projet** dans la barre : tronqué à trois lettres, il ne se lisait pas. Le projet se
   consulte et s'édite dans la galerie (ci-dessous), où le mécanisme ouvert est en tête.
 - **Pas de point d'état de sauvegarde** sur téléphone : la sauvegarde automatique y est attendue, et
   sans survol rien n'expliquerait ce point.
-- **Menu ☰** : galerie de mécanismes, réglages (grille, snap, thème), langue, à propos. Pas d'entrée
-  « projet ».
+- **La galerie s'ouvre en un tap**, depuis le premier bouton de la barre. Réglages (grille, snap,
+  thème), langue et à propos sont dans son en-tête : rares, ils valent un tap de plus, et la barre ne
+  s'élargit pas.
 - **Afficher, physique et mode** forment **un seul groupe**, un contour coupé en trois segments portant
   chacun la flèche d'un menu : les réglages de la course, que le desktop rassemble aussi au centre de sa
   barre. L'œil et le mode disent leur état (ouvert ou barré, accent en simulation) ; la physique a une
@@ -225,6 +231,10 @@ blocs répartis sur la largeur. Sept éléments de largeur fixe, qui tiennent d�
 ### Galerie de mécanismes
 
 Plein écran, recherche sur sa propre ligne, au moins deux colonnes.
+
+- **En-tête** : titre · réglages · langue · à propos · ⋮ · fermer. Le ⋮ porte les actions de la
+  bibliothèque (importer, tout exporter, restaurer les exemples) et, sous elles, l'avertissement que
+  les mécanismes vivent dans le navigateur — l'infobulle (i) du desktop n'a pas de survol où vivre.
 
 - **Une carte = la vignette et le titre**, rien d'autre : description, dates, nombre de pièces et tags
   n'ont pas la place.

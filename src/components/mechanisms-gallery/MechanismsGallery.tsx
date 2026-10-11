@@ -16,6 +16,10 @@ import {
   Tooltip,
   Divider,
   Button,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   TextField,
   useMediaQuery,
   useTheme,
@@ -26,6 +30,7 @@ import {
   Close,
   FileOpen,
   InfoOutlined,
+  MoreVert,
   Restore,
   Search,
 } from "@mui/icons-material";
@@ -59,6 +64,8 @@ interface MechanismsGalleryProps {
   ) => void;
   /** The mechanism open in the app, marked among the others. */
   currentId: number;
+  /** On a phone, what the app's top bar leaves to the gallery's header — settings, language, about. */
+  phoneActions?: React.ReactNode;
 }
 
 // Height of the "New mechanism" card when the library is empty, with no existing card to copy the height from.
@@ -71,39 +78,26 @@ const fold = (text: string) =>
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
 
-/** One of the library's own actions: labelled, or its icon alone when `compact`, where the width runs short. */
+/** One of the library's own actions, in the header. */
 const LibraryAction: React.FC<{
-  compact: boolean;
   icon: React.ReactNode;
   label: string;
   tooltip: string;
   disabled?: boolean;
   onClick: () => void;
-}> = ({ compact, icon, label, tooltip, disabled = false, onClick }) => (
+}> = ({ icon, label, tooltip, disabled = false, onClick }) => (
   <Tooltip title={tooltip}>
     <span>
-      {compact ? (
-        <IconButton
-          size="small"
-          color="inherit"
-          aria-label={label}
-          disabled={disabled}
-          onClick={onClick}
-        >
-          {icon}
-        </IconButton>
-      ) : (
-        <Button
-          size="small"
-          color="inherit"
-          disabled={disabled}
-          startIcon={icon}
-          onClick={onClick}
-          sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
-        >
-          {label}
-        </Button>
-      )}
+      <Button
+        size="small"
+        color="inherit"
+        disabled={disabled}
+        startIcon={icon}
+        onClick={onClick}
+        sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
+      >
+        {label}
+      </Button>
     </span>
   </Tooltip>
 );
@@ -124,8 +118,15 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   onRestoreExamples,
   onUpdateMetadata,
   currentId,
+  phoneActions,
 }) => {
   useAmbient();
+  // The library's own actions, which a phone keeps behind ⋮.
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
+  const pickMore = (action: () => void) => () => {
+    setMoreAnchor(null);
+    action();
+  };
   const [search, setSearch] = useState("");
   // The typed value keeps the field itself responsive; filtering, sorting and the resulting card shuffle across columns run on this one instead, a beat behind, so a fast typist never waits on a render of the whole grid between keystrokes.
   const deferredSearch = useDeferredValue(search);
@@ -382,52 +383,99 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
             flexShrink: 0,
           }}
         >
-          {/* A tap shows it at once, and long enough to read: a finger has no hover to wait on. */}
-          <Tooltip
-            title={t("storage_notice")}
-            enterTouchDelay={0}
-            leaveTouchDelay={6000}
-          >
-            <InfoOutlined
-              sx={{
-                fontSize: 20,
-                color: "text.secondary",
-                ml: -1,
-                mr: phone ? 0.5 : 4,
-              }}
-            />
-          </Tooltip>
-          <LibraryAction
-            compact={phone}
-            icon={<FileOpen fontSize="small" />}
-            label={t("import")}
-            tooltip={t("import_tooltip")}
-            onClick={onImport}
-          />
-          <LibraryAction
-            compact={phone}
-            icon={<Archive fontSize="small" />}
-            label={t("export_all")}
-            tooltip={t(
-              mechanismRecords.length === 0
-                ? "export_all_empty"
-                : "export_all_tooltip",
-            )}
-            disabled={mechanismRecords.length === 0}
-            onClick={onExportAll}
-          />
-          <LibraryAction
-            compact={phone}
-            icon={<Restore fontSize="small" />}
-            label={t("restore_examples")}
-            tooltip={t(
-              allExamplesPresent
-                ? "restore_examples_none_missing"
-                : "restore_examples_tooltip",
-            )}
-            disabled={allExamplesPresent}
-            onClick={onRestoreExamples}
-          />
+          {phone ? (
+            <>
+              {phoneActions}
+              <IconButton
+                size="small"
+                color="inherit"
+                aria-label={t("more_actions")}
+                onClick={(e) => setMoreAnchor(e.currentTarget)}
+              >
+                <MoreVert />
+              </IconButton>
+              <Menu
+                anchorEl={moreAnchor}
+                open={!!moreAnchor}
+                onClose={() => setMoreAnchor(null)}
+                // The icons in the text's own colour, as everywhere in the app, rather than MUI's grey.
+                MenuListProps={{
+                  sx: { "& .MuiListItemIcon-root": { color: "inherit" } },
+                }}
+              >
+                <MenuItem onClick={pickMore(onImport)}>
+                  <ListItemIcon>
+                    <FileOpen fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>{t("import")}</ListItemText>
+                </MenuItem>
+                <MenuItem
+                  disabled={mechanismRecords.length === 0}
+                  onClick={pickMore(onExportAll)}
+                >
+                  <ListItemIcon>
+                    <Archive fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>{t("export_all")}</ListItemText>
+                </MenuItem>
+                <MenuItem
+                  disabled={allExamplesPresent}
+                  onClick={pickMore(onRestoreExamples)}
+                >
+                  <ListItemIcon>
+                    <Restore fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>{t("restore_examples")}</ListItemText>
+                </MenuItem>
+                <Divider />
+                {/* Under the export, which it is the reason for. */}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  component="p"
+                  sx={{ px: 2, py: 0.5, maxWidth: 280 }}
+                >
+                  {t("storage_notice")}
+                </Typography>
+              </Menu>
+            </>
+          ) : (
+            <>
+              <Tooltip title={t("storage_notice")}>
+                <InfoOutlined
+                  sx={{ fontSize: 20, color: "text.secondary", ml: -1, mr: 4 }}
+                />
+              </Tooltip>
+              <LibraryAction
+                icon={<FileOpen fontSize="small" />}
+                label={t("import")}
+                tooltip={t("import_tooltip")}
+                onClick={onImport}
+              />
+              <LibraryAction
+                icon={<Archive fontSize="small" />}
+                label={t("export_all")}
+                tooltip={t(
+                  mechanismRecords.length === 0
+                    ? "export_all_empty"
+                    : "export_all_tooltip",
+                )}
+                disabled={mechanismRecords.length === 0}
+                onClick={onExportAll}
+              />
+              <LibraryAction
+                icon={<Restore fontSize="small" />}
+                label={t("restore_examples")}
+                tooltip={t(
+                  allExamplesPresent
+                    ? "restore_examples_none_missing"
+                    : "restore_examples_tooltip",
+                )}
+                disabled={allExamplesPresent}
+                onClick={onRestoreExamples}
+              />
+            </>
+          )}
           <Divider orientation="vertical" flexItem sx={{ m: 0.5 }} />
           <Tooltip title={t("close")}>
             <IconButton onClick={onClose} size="small">

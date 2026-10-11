@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import { Box } from "@mui/material";
 import { CanvasState } from "../../types";
 import {
@@ -12,11 +12,21 @@ import { PhonePalette } from "./PhonePalette";
 import { PhoneTopBar, PhoneTopBarProps } from "./PhoneTopBar";
 import { PhoneBottomBar, SheetTab } from "./PhoneBottomBar";
 
+/** The sheet while it is up: the tab it shows, and how high. */
+export interface PhoneSheetState {
+  tab: SheetTab;
+  height: SheetHeight;
+}
+
 interface PhoneLayoutProps {
   /** Draws the canvas, reporting its taps to the layout. */
   renderCanvas: (onTap: (onElement: boolean) => void) => React.ReactNode;
   topBar: PhoneTopBarProps;
+  /** The panel as the desktop would show it: its `activeTab` is the desktop's, which the sheet only shows once raised on it. */
   panel: PropertiesPanelProps;
+  /** Held by the app, whose canvas draws for the tab the sheet shows; `null` while the sheet is down. */
+  sheet: PhoneSheetState | null;
+  setSheet: React.Dispatch<React.SetStateAction<PhoneSheetState | null>>;
   setCanvasState: (state: CanvasState) => void;
   onPlayPause: () => void;
   timelineTrackRef: React.RefObject<HTMLDivElement | null>;
@@ -30,38 +40,32 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
   renderCanvas,
   topBar,
   panel,
+  sheet,
+  setSheet,
   setCanvasState,
   onPlayPause,
   timelineTrackRef,
 }) => {
   const { appMode, canvasState, mechanism, activeTab, setActiveTab } = panel;
-  const [sheet, setSheet] = useState<{
-    palette: boolean;
-    height: SheetHeight;
-  } | null>(null);
   // What the sheet showed last, so it slides away showing it rather than going blank.
-  const lastSheetRef = useRef<{ palette: boolean }>({ palette: false });
-  if (sheet) lastSheetRef.current = sheet;
-  const showsPalette = (sheet ?? lastSheetRef.current).palette;
+  const lastTabRef = useRef<SheetTab>("palette");
+  if (sheet) lastTabRef.current = sheet.tab;
+  const sheetTab = sheet?.tab ?? lastTabRef.current;
 
   const close = () => setSheet(null);
   const open = (tab: SheetTab) => {
     if (tab !== "palette") setActiveTab(tab);
-    setSheet((current) => ({
-      palette: tab === "palette",
-      height: current?.height ?? "half",
-    }));
+    setSheet((current) => ({ tab, height: current?.height ?? "half" }));
   };
   const onTab = (tab: SheetTab) => {
-    const shown = sheet && (sheet.palette ? "palette" : activeTab);
-    if (shown === tab) close();
+    if (sheet?.tab === tab) close();
     else open(tab);
   };
   // Tapping an element keeps the sheet on its tab, so what it reads follows the selection; tapping empty space puts it away.
   // The palette is a chooser: a tap on the canvas means the choosing is over.
   const onCanvasTap = (onElement: boolean) => {
     if (!sheet) return;
-    if (!onElement || sheet.palette) close();
+    if (!onElement || sheet.tab === "palette") close();
   };
 
   return (
@@ -90,7 +94,7 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
           }
           onClose={close}
         >
-          {showsPalette ? (
+          {sheetTab === "palette" ? (
             <PhonePalette
               canvasState={canvasState}
               setCanvasState={setCanvasState}
@@ -99,7 +103,7 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
               onPicked={close}
             />
           ) : (
-            <PropertiesPanel {...panel} variant="sheet" />
+            <PropertiesPanel {...panel} activeTab={sheetTab} variant="sheet" />
           )}
         </PhoneSheet>
       </Box>
@@ -114,7 +118,8 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
         appMode={appMode}
         canvasState={canvasState}
         mechanism={mechanism}
-        active={sheet ? (sheet.palette ? "palette" : activeTab) : null}
+        sheetTab={sheet?.tab ?? null}
+        desktopTab={activeTab}
         onTab={onTab}
         onStop={() =>
           change_app_mode(

@@ -73,9 +73,6 @@ interface SettingsMenuProps {
   systemDark: boolean;
   changeTheme: (family: string, mode: ThemeMode) => void;
   previewLater: (name: ThemeName | null) => void;
-  /** Opens the menu from elsewhere, on that anchor, with no button of its own; `onClose` must then come with it. */
-  anchorEl?: HTMLElement | null;
-  onClose?: () => void;
 }
 
 /** The settings menu: grid/snap toggles, angle step, contact points, and theme family/mode picker. */
@@ -93,16 +90,11 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   systemDark,
   changeTheme,
   previewLater,
-  anchorEl: outerAnchor,
-  onClose,
 }) => {
-  const [ownAnchor, setOwnAnchor] = useState<null | HTMLElement>(null);
-  const controlled = onClose !== undefined;
-  const anchorEl = controlled ? (outerAnchor ?? null) : ownAnchor;
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const popup = useNonModalPopup(!!anchorEl, anchorEl, () => {
     previewLater(null);
-    if (controlled) onClose();
-    else setOwnAnchor(null);
+    setAnchorEl(null);
   });
 
   const setSnapSetting = useCallback(
@@ -113,20 +105,19 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
 
   return (
     <>
-      {!controlled && (
-        <Tooltip title={t("settings")}>
-          <IconButton
-            color="inherit"
-            size="small"
-            onClick={(event) => {
-              const button = event.currentTarget;
-              setOwnAnchor((current) => (current ? null : button));
-            }}
-          >
-            <Settings sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
-      )}
+      <Tooltip title={t("settings")}>
+        <IconButton
+          color="inherit"
+          size="small"
+          aria-label={t("settings")}
+          onClick={(event) => {
+            const button = event.currentTarget;
+            setAnchorEl((current) => (current ? null : button));
+          }}
+        >
+          <Settings sx={{ fontSize: 20 }} />
+        </IconButton>
+      </Tooltip>
       <Menu
         {...popup}
         anchorEl={anchorEl}

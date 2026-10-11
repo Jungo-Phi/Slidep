@@ -7,49 +7,40 @@ import { useNonModalPopup } from "../common/use-non-modal-popup";
 interface LanguageMenuProps {
   language: Lang;
   onSelectLang: (lang: Lang) => void;
-  /** Opens the menu from elsewhere, on that anchor, with no button of its own; `onClose` must then come with it. */
-  anchorEl?: HTMLElement | null;
-  onClose?: () => void;
 }
 
 /** The toolbar's language picker: current code as the button label, full names in the menu. */
 export const LanguageMenu: React.FC<LanguageMenuProps> = ({
   language,
   onSelectLang,
-  anchorEl: outerAnchor,
-  onClose,
 }) => {
-  const [ownAnchor, setOwnAnchor] = useState<null | HTMLElement>(null);
-  const controlled = onClose !== undefined;
-  const anchorEl = controlled ? (outerAnchor ?? null) : ownAnchor;
-  const close = controlled ? onClose : () => setOwnAnchor(null);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const close = () => setAnchorEl(null);
   const open = !!anchorEl;
   const popup = useNonModalPopup(open, anchorEl, close);
 
   return (
     <>
-      {!controlled && (
-        <Tooltip title={t("language")}>
-          <IconButton
-            color="inherit"
-            size="small"
-            aria-expanded={open}
-            onClick={(event) => {
-              const button = event.currentTarget;
-              setOwnAnchor((current) => (current ? null : button));
-            }}
-            sx={{
-              gap: 0.4,
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              px: 0.75,
-            }}
-          >
-            <Language sx={{ fontSize: 20 }} />
-            {language.toUpperCase()}
-          </IconButton>
-        </Tooltip>
-      )}
+      <Tooltip title={t("language")}>
+        <IconButton
+          color="inherit"
+          size="small"
+          aria-expanded={open}
+          onClick={(event) => {
+            const button = event.currentTarget;
+            setAnchorEl((current) => (current ? null : button));
+          }}
+          sx={{
+            gap: 0.4,
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            px: 0.75,
+          }}
+        >
+          <Language sx={{ fontSize: 20 }} />
+          {language.toUpperCase()}
+        </IconButton>
+      </Tooltip>
       <Menu
         {...popup}
         anchorEl={anchorEl}

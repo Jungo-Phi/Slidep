@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { SxProps, Theme } from "@mui/material";
 import { useDismissOnShortcut } from "./dismiss-popups";
 
-/** Every MUI popup portals a layer of its own, so a pointer inside any of them is not outside this one. */
+/** Every MUI popup portals a layer of its own, so a pointer inside any of them but the one it was opened from is not outside this one. */
 const POPUP_LAYER_SELECTOR = ".MuiModal-root, .MuiPopper-root";
 
 const NON_MODAL_SX: SxProps<Theme> = {
@@ -44,7 +44,8 @@ export function useNonModalPopup(
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (anchor?.contains(target)) return;
-      if (target.closest(POPUP_LAYER_SELECTOR)) return;
+      const layer = target.closest(POPUP_LAYER_SELECTOR);
+      if (layer && !(anchor && layer.contains(anchor))) return;
       dismissRef.current(event);
     };
     // Capture, so the dismissal is decided before anything downstream reacts to the same pointer.

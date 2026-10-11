@@ -48,7 +48,7 @@ const TAB_LABEL_KEYS = {
   analysis: "analysis",
 } as const;
 
-/** One slot of the bar: an icon over its name, lit while its sheet is up — or always, for an `accent` action. */
+/** One slot of the bar: an icon over its name, lit when `active` — or always, for an `accent` action. */
 const BarButton: React.FC<{
   label: string;
   active: boolean;
@@ -91,7 +91,9 @@ interface PhoneBottomBarProps {
   canvasState: CanvasState;
   mechanism: Mechanism;
   /** The tab whose sheet is up, `null` while the sheet is down. */
-  active: SheetTab | null;
+  sheetTab: SheetTab | null;
+  /** The panel tab the desktop would show — where what was just selected is read. */
+  desktopTab: PropertiesPanelTab;
   onTab: (tab: SheetTab) => void;
   /** Ends the simulation, back to edition. */
   onStop: () => void;
@@ -100,17 +102,21 @@ interface PhoneBottomBarProps {
 /**
  * The phone's bottom bar — the work: palette, elements, constraints, materials, analysis.
  * In simulation, stop takes the place of constraints.
+ *
+ * One tab at most is lit, the one the desktop would have open: the sheet's while it is up, else the palette while a tool is armed, else the panel tab the desktop would show.
  */
 export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
   appMode,
   canvasState,
   mechanism,
-  active,
+  sheetTab,
+  desktopTab,
   onTab,
   onStop,
 }) => {
   const simulating = appMode !== "edition";
   const armed = armed_palette_element(canvasState, mechanism);
+  const lit: SheetTab = sheetTab ?? (armed ? "palette" : desktopTab);
   const tabs: Exclude<SheetTab, "palette" | "project">[] = [
     "elements",
     "constraints",
@@ -130,11 +136,10 @@ export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
         borderColor: "dividers.toolbar",
       }}
     >
-      {/* Under play, at the transport row's left end: the two ends of a run, one above the other. */}
       {/* The armed tool stands in for the palette's icon: the one sign left, once the sheet is down, that a tap will put something down. */}
       <BarButton
         label={armed ? t(armed.nameKey) : t("palette")}
-        active={active === "palette" || !!armed}
+        active={lit === "palette"}
         onClick={() => onTab("palette")}
       >
         {armed ? (
@@ -167,7 +172,7 @@ export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
           <BarButton
             key={tab}
             label={t(TAB_LABEL_KEYS[tab])}
-            active={active === tab}
+            active={lit === tab}
             onClick={() => onTab(tab)}
           >
             <Icon />

@@ -84,7 +84,11 @@ import {
   PropertiesPanel,
   type PropertiesPanelProps,
 } from "./components/properties-panel/PropertiesPanel";
-import { PhoneLayout } from "./components/phone/PhoneLayout";
+import {
+  PhoneLayout,
+  type PhoneSheetState,
+} from "./components/phone/PhoneLayout";
+import { PhoneAppActions } from "./components/phone/PhoneAppActions";
 import { usePhoneLayout } from "./components/phone/use-phone-layout";
 import { AboutDialog } from "./components/toolbar/AboutDialog";
 import { SimulationTimeline } from "./components/toolbar/SimulationTimeline";
@@ -309,15 +313,29 @@ const App: React.FC = () => {
     severity?: "warning";
   }>({ open: false, message: "" });
 
+  // The panel tab the desktop shows — on a phone, the one its bottom bar lights while no sheet says otherwise.
   const [activeTab, setActiveTab] = useState<PropertiesPanelTab>("project");
+  // The phone's sheet: it keeps its own tab across selections, so the canvas draws for that tab while the sheet is up.
+  const [phoneSheet, setPhoneSheet] = useState<PhoneSheetState | null>(null);
+  const shownTab =
+    phone && phoneSheet && phoneSheet.tab !== "palette"
+      ? phoneSheet.tab
+      : activeTab;
+  // A move from within the panel — a drill-down, a library link — takes the phone's sheet along when it is up on the panel.
+  const showTab = useCallback((tab: PropertiesPanelTab) => {
+    setActiveTab(tab);
+    setPhoneSheet((sheet) =>
+      sheet && sheet.tab !== "palette" ? { ...sheet, tab } : sheet,
+    );
+  }, []);
   const [prevCanvasState, setPrevCanvasState] =
     useState<CanvasState>(canvasState);
   const skipTabSyncStateRef = useRef<CanvasState | null>(null);
 
   if (prevCanvasState !== canvasState) {
     setPrevCanvasState(canvasState);
-    if (phone || canvasState === skipTabSyncStateRef.current) {
-      // Kept as it is: this exact transition asked to keep the current tab, or the phone's sheet — which keeps its tab across selections — decides it.
+    if (canvasState === skipTabSyncStateRef.current) {
+      // Kept as it is: this exact transition asked to keep the current tab.
     } else if (
       canvasState.type === "PlacingProbe" ||
       canvasState.type === "PlacingProbeMetrics" ||
@@ -887,11 +905,11 @@ const App: React.FC = () => {
     null,
   );
   useEffect(() => {
-    if (activeTab !== "library") {
+    if (shownTab !== "library") {
       setLibrarySection(null);
       setHoveredLibraryEntryID(null);
     }
-  }, [activeTab]);
+  }, [shownTab]);
 
 
   /**
@@ -948,7 +966,7 @@ const App: React.FC = () => {
     undoMechanism,
     redoMechanism,
     appMode,
-    activeTab,
+    activeTab: shownTab,
     constraintChangeRef,
     onSpaceKey: handleSpaceKey,
     onEscapeKey: handleEscapeKey,
@@ -974,7 +992,7 @@ const App: React.FC = () => {
     onSelectOverlay: setFocusedOverlay,
     focusedOverlay,
     librarySection:
-      activeTab === "library" ? (librarySection ?? undefined) : undefined,
+      shownTab === "library" ? (librarySection ?? undefined) : undefined,
     hoveredLibraryEntryID,
     galleryOpen,
   };
@@ -996,7 +1014,7 @@ const App: React.FC = () => {
     simulationConfig,
     appMode,
     activeTab,
-    setActiveTab,
+    setActiveTab: showTab,
     blockedMotors,
     setHoveredAbscissa,
     setHoveredBalanceTerm,
@@ -1060,6 +1078,45 @@ const App: React.FC = () => {
       handleInfoOpen,
     ],
   );
+  // Held across renders like the menu above: the gallery is memoised, and a fresh node would re-render it with the clock.
+  const galleryPhoneActions = useMemo(
+    () =>
+      phone ? (
+        <PhoneAppActions
+          language={language}
+          onSelectLang={handleSelectLang}
+          onOpenAbout={handleInfoOpen}
+          showGrid={showGrid}
+          setShowGrid={setShowGrid}
+          showContactPoints={showContactPoints}
+          setShowContactPoints={setShowContactPoints}
+          snapToGrid={snapToGrid}
+          setSnapToGrid={setSnapToGrid}
+          snapSettings={snapSettings}
+          setSnapSettings={setSnapSettings}
+          isCustomAngleStep={isCustomAngleStep}
+          themeChoice={themeChoice}
+          systemDark={systemDark}
+          changeTheme={changeTheme}
+          previewLater={previewLater}
+        />
+      ) : undefined,
+    [
+      phone,
+      language,
+      handleSelectLang,
+      handleInfoOpen,
+      showGrid,
+      showContactPoints,
+      snapToGrid,
+      snapSettings,
+      isCustomAngleStep,
+      themeChoice,
+      systemDark,
+      changeTheme,
+      previewLater,
+    ],
+  );
 
   return (
     <LanguageContext.Provider value={language}>
@@ -1082,22 +1139,6 @@ const App: React.FC = () => {
               updateMetadata,
               applyActions,
               onOpenGallery: handleOpenGallery,
-              onOpenAbout: handleInfoOpen,
-              language,
-              onSelectLang: handleSelectLang,
-              showGrid,
-              setShowGrid,
-              showContactPoints,
-              setShowContactPoints,
-              snapToGrid,
-              setSnapToGrid,
-              snapSettings,
-              setSnapSettings,
-              isCustomAngleStep,
-              themeChoice,
-              systemDark,
-              changeTheme,
-              previewLater,
               overlays: {
                 mechanicalElements: mechanism.mechanicalElements,
                 applyActions,
@@ -1119,6 +1160,8 @@ const App: React.FC = () => {
               },
             }}
             panel={panelProps}
+            sheet={phoneSheet}
+            setSheet={setPhoneSheet}
             setCanvasState={setCanvasState}
             onPlayPause={handleSpaceKey}
             timelineTrackRef={timelineTrackRef}
@@ -1225,6 +1268,7 @@ const App: React.FC = () => {
           onRestoreExamples={handleRestoreExamples}
           onUpdateMetadata={handleUpdateMetadataFromGallery}
           currentId={mechanism.metadata.createdAt}
+          phoneActions={galleryPhoneActions}
         />
         <AboutDialog open={infoOpen} onClose={handleInfoClose} />
         <Snackbar
