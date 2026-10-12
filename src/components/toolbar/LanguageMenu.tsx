@@ -7,12 +7,15 @@ import { useNonModalPopup } from "../common/use-non-modal-popup";
 interface LanguageMenuProps {
   language: Lang;
   onSelectLang: (lang: Lang) => void;
+  /** At the size of the icon buttons beside it in a phone's header, rather than the desktop toolbar's. */
+  large?: boolean;
 }
 
 /** The toolbar's language picker: current code as the button label, full names in the menu. */
 export const LanguageMenu: React.FC<LanguageMenuProps> = ({
   language,
   onSelectLang,
+  large = false,
 }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const close = () => setAnchorEl(null);
@@ -24,7 +27,7 @@ export const LanguageMenu: React.FC<LanguageMenuProps> = ({
       <Tooltip title={t("language")}>
         <IconButton
           color="inherit"
-          size="small"
+          size={large ? "medium" : "small"}
           aria-expanded={open}
           onClick={(event) => {
             const button = event.currentTarget;
@@ -32,12 +35,12 @@ export const LanguageMenu: React.FC<LanguageMenuProps> = ({
           }}
           sx={{
             gap: 0.4,
-            fontSize: "0.72rem",
+            fontSize: large ? "0.8rem" : "0.72rem",
             fontWeight: 700,
-            px: 0.75,
+            px: large ? 1 : 0.75,
           }}
         >
-          <Language sx={{ fontSize: 20 }} />
+          <Language sx={{ fontSize: large ? 24 : 20 }} />
           {language.toUpperCase()}
         </IconButton>
       </Tooltip>

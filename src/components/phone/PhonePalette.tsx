@@ -2,10 +2,79 @@ import React from "react";
 import { Box, ButtonBase, Typography } from "@mui/material";
 import { AppMode, CanvasState, Mechanism } from "../../types";
 import { t } from "../../i18n";
-import { edition_palette } from "../element-palette/ElementPalette";
+import {
+  edition_palette,
+  PaletteElement,
+} from "../element-palette/ElementPalette";
 import { palette_click_state } from "../element-palette/palette-click";
 import { SIMULATION_TOOLS } from "../../constants/canvas-state-sim-effect";
-import { PHONE_LAYOUT } from "../../constants/layout-specs";
+import {
+  PHONE_LAYOUT,
+  PHONE_QUICK_TOOLS,
+} from "../../constants/layout-specs";
+
+interface PhoneToolButtonProps {
+  element: PaletteElement;
+  /** Side of the tool's glyph (px); the button adds its margin around it. */
+  iconSize: number;
+  canvasState: CanvasState;
+  setCanvasState: (state: CanvasState) => void;
+  mechanism: Mechanism;
+  appMode: AppMode;
+  /** Called once the tool is armed or put away. */
+  onPicked?: () => void;
+}
+
+/** One palette tool at a finger's size, lit in its own colour while armed: a tap arms it, a tap on the armed one puts it away. */
+export const PhoneToolButton: React.FC<PhoneToolButtonProps> = ({
+  element,
+  iconSize,
+  canvasState,
+  setCanvasState,
+  mechanism,
+  appMode,
+  onPicked,
+}) => {
+  const simulating = appMode !== "edition";
+  const highlighted = element.hilightRule(canvasState, mechanism);
+  const color =
+    simulating && element.simHilightColor
+      ? element.simHilightColor
+      : element.hilightColor;
+  const src =
+    simulating && element.simIconSrc ? element.simIconSrc : element.iconSrc;
+  return (
+    <ButtonBase
+      aria-label={t(element.nameKey)}
+      aria-pressed={highlighted}
+      onClick={() => {
+        setCanvasState(
+          palette_click_state(element, highlighted, canvasState, mechanism),
+        );
+        onPicked?.();
+      }}
+      sx={{
+        width: iconSize + 8,
+        height: iconSize + 8,
+        flexShrink: 0,
+        borderRadius: 1.5,
+        backgroundColor: highlighted ? color : "transparent",
+      }}
+    >
+      <Box
+        component="img"
+        src={src}
+        alt=""
+        draggable={false}
+        sx={{
+          width: iconSize,
+          height: iconSize,
+          filter: highlighted ? "brightness(0) invert(1)" : "none",
+        }}
+      />
+    </ButtonBase>
+  );
+};
 
 interface PhonePaletteProps {
   canvasState: CanvasState;
@@ -28,7 +97,6 @@ export const PhonePalette: React.FC<PhonePaletteProps> = ({
   onPicked,
 }) => {
   const simulating = appMode !== "edition";
-  const button = PHONE_LAYOUT.PALETTE_ICON + 8;
   return (
     // The groups flow side by side rather than one per row: most hold a handful of tools, and a row each would leave the sheet mostly empty.
     <Box
@@ -44,9 +112,11 @@ export const PhonePalette: React.FC<PhonePaletteProps> = ({
       }}
     >
       {edition_palette().map((group) => {
-        const elements = group.elements.filter(
-          (element) =>
-            !simulating || SIMULATION_TOOLS.has(element.goToStateType),
+        // In edition the quick-access bar always holds the selection tool and the eraser; in simulation it gives way to the transport, and the selection tool comes back here.
+        const elements = group.elements.filter((element) =>
+          simulating
+            ? SIMULATION_TOOLS.has(element.goToStateType)
+            : !PHONE_QUICK_TOOLS.FIXED.includes(element.goToStateType),
         );
         if (elements.length === 0) return null;
         return (
@@ -81,53 +151,18 @@ export const PhonePalette: React.FC<PhonePaletteProps> = ({
                 backgroundColor: "background.sunken",
               }}
             >
-              {elements.map((element) => {
-                const highlighted = element.hilightRule(canvasState, mechanism);
-                const color =
-                  simulating && element.simHilightColor
-                    ? element.simHilightColor
-                    : element.hilightColor;
-                const src =
-                  simulating && element.simIconSrc
-                    ? element.simIconSrc
-                    : element.iconSrc;
-                const name = t(element.nameKey);
-                return (
-                  <ButtonBase
-                    key={element.goToStateType}
-                    aria-label={name}
-                    onClick={() => {
-                      setCanvasState(
-                        palette_click_state(
-                          element,
-                          highlighted,
-                          canvasState,
-                          mechanism,
-                        ),
-                      );
-                      onPicked();
-                    }}
-                    sx={{
-                      width: button,
-                      height: button,
-                      borderRadius: 1.5,
-                      backgroundColor: highlighted ? color : "transparent",
-                    }}
-                  >
-                    <Box
-                      component="img"
-                      src={src}
-                      alt=""
-                      draggable={false}
-                      sx={{
-                        width: PHONE_LAYOUT.PALETTE_ICON,
-                        height: PHONE_LAYOUT.PALETTE_ICON,
-                        filter: highlighted ? "brightness(0) invert(1)" : "none",
-                      }}
-                    />
-                  </ButtonBase>
-                );
-              })}
+              {elements.map((element) => (
+                <PhoneToolButton
+                  key={element.goToStateType}
+                  element={element}
+                  iconSize={PHONE_LAYOUT.PALETTE_ICON}
+                  canvasState={canvasState}
+                  setCanvasState={setCanvasState}
+                  mechanism={mechanism}
+                  appMode={appMode}
+                  onPicked={onPicked}
+                />
+              ))}
             </Box>
           </Box>
         );

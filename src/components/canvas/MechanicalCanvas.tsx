@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useCallback, forwardRef } from "react";
 import { useAmbient } from "../common/use-ambient";
 import {
   Action,
-  ChangeDimensionActionType,
   AppMode,
   BeamStressLens,
   CanvasEvent,
@@ -85,27 +84,12 @@ import { snap_load_hover } from "./snapping/load-snap";
 import { compute_visible_constraints, connected_constraints } from "./utils";
 import { eraser_cursor } from "./drawing/cursors";
 import { OnCanvasValueEditor } from "./OnCanvasValueEditor";
-import {
-  ANGLE,
-  FORCE,
-  LENGTH,
-  LOAD_INTENSITY,
-  MOMENT,
-  QuantityKind,
-} from "../../utils/quantity-format";
+import { ANGLE, LENGTH } from "../../utils/quantity-format";
 
-/** What `OnCanvasValueEditor` formats and parses the element's value as — `undefined` for `gear-ratio` (dimensionless, "ratio" mode reads it directly). */
-const VALUE_EDITOR_KIND: Partial<Record<UnionElement["type"], QuantityKind>> = {
-  "dimension-edge": LENGTH,
-  "dimension-node-to-node": LENGTH,
-  "dimension-edge-to-node": LENGTH,
-  "dimension-radius": LENGTH,
-  "dimension-belt": LENGTH,
-  "dimension-angle": ANGLE,
-  force: FORCE,
-  moment: MOMENT,
-  "distributed-force": LOAD_INTENSITY,
-};
+import {
+  change_constraint_value,
+  VALUE_KIND,
+} from "../properties-panel/element-value-actions";
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import { dismiss_popups } from "../common/dismiss-popups";
 import { is_canvas_shortcut } from "../../constants/shortcuts";
@@ -242,6 +226,8 @@ export interface MechanicalCanvasProps {
   galleryOpen: boolean;
   /** A press released without dragging — a tap or a click — with whether it landed on an element, and the state it left the canvas in. */
   onTap?: (onElement: boolean, state: CanvasState) => void;
+  /** The canvas took a new size (CSS px), for the view to follow it. */
+  onResize?: (width: number, height: number) => void;
 }
 
 /** The simulated mechanism and probe trajectories at the cursor, for one frame. */
@@ -323,6 +309,7 @@ const MechanicalCanvasView = forwardRef<
       focusedOverlay,
       galleryOpen,
       onTap,
+      onResize,
     },
     ref,
   ) => {
@@ -403,6 +390,8 @@ const MechanicalCanvasView = forwardRef<
     onMomentBalanceReferencePickedRef.current = onMomentBalanceReferencePicked;
     const onTapRef = useRef(onTap);
     onTapRef.current = onTap;
+    const onResizeRef = useRef(onResize);
+    onResizeRef.current = onResize;
     const onSelectOverlayRef = useRef(onSelectOverlay);
     onSelectOverlayRef.current = onSelectOverlay;
     const focusedOverlayRef = useRef(focusedOverlay);
@@ -483,7 +472,10 @@ const MechanicalCanvasView = forwardRef<
       const container = containerRef.current;
       if (!container) return;
       measureCanvas();
-      const observer = new ResizeObserver(() => measureCanvas());
+      const observer = new ResizeObserver(() => {
+        const measured = measureCanvas();
+        if (measured) onResizeRef.current?.(measured.width, measured.height);
+      });
       observer.observe(container);
       return () => observer.disconnect();
     }, [measureCanvas]);
@@ -1923,7 +1915,7 @@ const MechanicalCanvasView = forwardRef<
                   ? editingElement.value
                   : canvasState.value
             }
-            kind={VALUE_EDITOR_KIND[editingElement.type]}
+            kind={VALUE_KIND[editingElement.type]}
             // A distributed load's end is the one value here that can be turned around (a minus flips it across the beam) and the one that can legitimately be set to zero — as long as its opposite end is still carrying something, otherwise the load would vanish.
             signed={"targetID" in editingElement}
             allowZero={
@@ -1948,41 +1940,9 @@ const MechanicalCanvasView = forwardRef<
             onCommit={(newValue) => {
               const loadCommitted = commitLoadValue(editingElement, newValue);
 
-              if (!loadCommitted && "value" in editingElement) {
-                let actionType: ChangeDimensionActionType | undefined;
-                switch (editingElement.type) {
-                  case "dimension-edge":
-                    actionType = "ChangeDimensionEdgeValue";
-                    break;
-                  case "dimension-node-to-node":
-                    actionType = "ChangeDimensionNodeToNodeValue";
-                    break;
-                  case "dimension-edge-to-node":
-                    actionType = "ChangeDimensionEdgeToNodeValue";
-                    break;
-                  case "dimension-angle":
-                    actionType = "ChangeDimensionAngleValue";
-                    break;
-                  case "dimension-radius":
-                    actionType = "ChangeDimensionRadiusValue";
-                    break;
-                  case "dimension-belt":
-                    actionType = "ChangeDimensionBeltValue";
-                    break;
-                  case "gear-ratio":
-                    actionType = "ChangeGearRatioValue";
-                    break;
-                }
-                if (actionType) {
-                  applyActions([
-                    {
-                      type: actionType,
-                      id: editingElement.id,
-                      newValue,
-                      oldValue: editingElement.value,
-                    },
-                  ]);
-                }
+              if (!loadCommitted) {
+                const action = change_constraint_value(editingElement, newValue);
+                if (action) applyActions([action]);
               }
               // Committing on an element just put down re-arms its tool, to chain another without going back to the palette.
               // A dimension edited from a tool left armed comes back to it the same way.

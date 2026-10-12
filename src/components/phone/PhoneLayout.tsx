@@ -11,6 +11,8 @@ import { change_app_mode } from "../toolbar/playback-actions";
 import { PhonePalette } from "./PhonePalette";
 import { PhoneTopBar, PhoneTopBarProps } from "./PhoneTopBar";
 import { PhoneBottomBar, SheetTab } from "./PhoneBottomBar";
+import { PhoneQuickBar } from "./PhoneQuickBar";
+import { PHONE_LAYOUT } from "../../constants/layout-specs";
 
 /** The sheet while it is up: the tab it shows, and how high. */
 export interface PhoneSheetState {
@@ -73,6 +75,9 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
       sx={{
         // The dynamic viewport: a mobile browser's own bars come and go, and `vh` would hide the bottom bar behind them.
         height: "100dvh",
+        // Clear of a notch on the side, the phone held sideways; the top and bottom bars keep clear of the rest themselves.
+        pl: "env(safe-area-inset-left)",
+        pr: "env(safe-area-inset-right)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -80,7 +85,17 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
       }}
     >
       <PhoneTopBar {...topBar} />
-      <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          position: "relative",
+          // The buttons in the canvas's corners stay above the sheet at half height; at full height nothing of the canvas is left to keep them in.
+          "--canvas-bottom-inset": sheet
+            ? `${PHONE_LAYOUT.SHEET_HALF * 100}%`
+            : "0px",
+        }}
+      >
         {/* A stacking context of its own: what floats on the canvas — the ruler's button among others — stays under the sheet whatever its own z-index. */}
         <Box sx={{ position: "absolute", inset: 0, zIndex: 0 }}>
           {renderCanvas(onCanvasTap)}
@@ -107,11 +122,23 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
           )}
         </PhoneSheet>
       </Box>
-      {appMode !== "edition" && (
+      {/* One row over the bottom bar: the transport while a simulation runs, the quick-access bar the rest of the time. */}
+      {appMode !== "edition" ? (
         <PhoneTransport
           appMode={appMode}
           onPlayPause={onPlayPause}
           timelineTrackRef={timelineTrackRef}
+        />
+      ) : (
+        <PhoneQuickBar
+          canvasState={canvasState}
+          setCanvasState={setCanvasState}
+          mechanism={mechanism}
+          applyActions={panel.applyActions}
+          // Where the desktop shows the selection — never the project, which the bar has no tab for — or away, if that is the sheet already up.
+          onOpenSelection={() =>
+            onTab(activeTab === "project" ? "elements" : activeTab)
+          }
         />
       )}
       <PhoneBottomBar
@@ -119,7 +146,6 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
         canvasState={canvasState}
         mechanism={mechanism}
         sheetTab={sheet?.tab ?? null}
-        desktopTab={activeTab}
         onTab={onTab}
         onStop={() =>
           change_app_mode(

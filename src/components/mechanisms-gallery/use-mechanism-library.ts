@@ -27,6 +27,7 @@ import { unique_copy_name } from "../../utils/unique-name";
 import {
   debounce,
   fit_viewport_to_bounds,
+  ViewArea,
   FileImport,
   load_mechanism,
   load_mechanisms_from_file,
@@ -88,18 +89,21 @@ const openMechanismsDB = (): Promise<IDBPDatabase<SlidepDB>> => {
 const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
   (await db.getAll("mechanisms")).map(migrate_document);
 
-/** The framing "Recentrer" aims for: the mechanism's content fit to the canvas, clear of the ElementPalette overlay on its left edge. */
+/**
+ * The framing "Recentrer" aims for: the mechanism's content fit to `area`, clear of the ElementPalette overlay on its left edge.
+ * The area is the canvas itself, or what of it a phone's sheet leaves in sight.
+ */
 export const fit_to_content = (
   mechanism: Mechanism,
-  canvas: HTMLCanvasElement,
+  area: ViewArea,
 ): ViewportState => {
   const fitted = fit_viewport_to_bounds(
     mechanism_bounds(
       mechanism.mechanicalElements,
       mechanism.constraintElements,
     ),
-    canvas.width,
-    canvas.height,
+    area.width,
+    area.height,
     { ...CANVAS_FIT_MARGIN, defaultZoom: PREVIEW_MIN_ZOOM },
   );
   return { ...fitted, pan: fitted.pan };

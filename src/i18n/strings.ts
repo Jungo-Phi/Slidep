@@ -502,6 +502,80 @@ export const STRINGS = {
     es: "Contacto",
   },
   code: { fr: "Code", en: "Code", de: "Code", es: "Código" },
+  welcome_reopen: {
+    fr: "Installation et sauvegarde",
+    en: "Installing and saving",
+    de: "Installation und Speicherung",
+    es: "Instalación y guardado",
+  },
+
+  // ── Welcome screen ────────────────────────────────────────────────────────
+  welcome_title: {
+    fr: "Bienvenue dans Slidep",
+    en: "Welcome to Slidep",
+    de: "Willkommen bei Slidep",
+    es: "Bienvenido a Slidep",
+  },
+  welcome_install_title: {
+    fr: "Installer Slidep",
+    en: "Install Slidep",
+    de: "Slidep installieren",
+    es: "Instalar Slidep",
+  },
+  welcome_install_body: {
+    fr: "Installée, Slidep s'ouvre dans sa propre fenêtre et fonctionne hors ligne.",
+    en: "Installed, Slidep opens in its own window and works offline.",
+    de: "Installiert öffnet sich Slidep in einem eigenen Fenster und funktioniert offline.",
+    es: "Instalado, Slidep se abre en su propia ventana y funciona sin conexión.",
+  },
+  welcome_install_ios_storage: {
+    fr: "Sur iPhone et iPad, Safari efface les données d'un site qu'on n'a pas ouvert depuis sept jours : installée, Slidep garde vos mécanismes.",
+    en: "On iPhone and iPad, Safari erases the data of a site left unopened for seven days: installed, Slidep keeps your mechanisms.",
+    de: "Auf iPhone und iPad löscht Safari die Daten einer Website, die sieben Tage lang nicht geöffnet wurde: Installiert behält Slidep Ihre Mechanismen.",
+    es: "En iPhone y iPad, Safari borra los datos de un sitio que no se ha abierto en siete días: instalado, Slidep conserva tus mecanismos.",
+  },
+  welcome_install_button: {
+    fr: "Installer",
+    en: "Install",
+    de: "Installieren",
+    es: "Instalar",
+  },
+  welcome_install_ios: {
+    fr: "Touchez Partager, puis « Sur l'écran d'accueil ».",
+    en: "Tap Share, then “Add to Home Screen”.",
+    de: "Tippen Sie auf Teilen, dann auf „Zum Home-Bildschirm“.",
+    es: "Toca Compartir y luego «Añadir a pantalla de inicio».",
+  },
+  welcome_install_android_menu: {
+    fr: "Ouvrez le menu du navigateur, puis « Ajouter à l'écran d'accueil ».",
+    en: "Open the browser menu, then “Add to Home screen”.",
+    de: "Öffnen Sie das Browsermenü, dann „Zum Startbildschirm hinzufügen“.",
+    es: "Abre el menú del navegador y luego «Añadir a pantalla de inicio».",
+  },
+  welcome_install_mac_safari: {
+    fr: "Dans le menu Fichier, choisissez « Ajouter au Dock ».",
+    en: "In the File menu, choose “Add to Dock”.",
+    de: "Wählen Sie im Menü Ablage „Zum Dock hinzufügen“.",
+    es: "En el menú Archivo, elige «Añadir al Dock».",
+  },
+  welcome_storage_title: {
+    fr: "Vos mécanismes restent sur cet appareil",
+    en: "Your mechanisms stay on this device",
+    de: "Ihre Mechanismen bleiben auf diesem Gerät",
+    es: "Tus mecanismos se quedan en este dispositivo",
+  },
+  welcome_storage_body: {
+    fr: "Ils sont enregistrés dans ce navigateur, nulle part ailleurs : rien n'est envoyé ni synchronisé. Vider les données du navigateur les efface ; exportez ceux qui comptent depuis la galerie.",
+    en: "They are saved in this browser and nowhere else: nothing is sent or synced. Clearing the browser's data erases them; export the ones that matter from the gallery.",
+    de: "Sie werden in diesem Browser gespeichert und nirgendwo sonst: Nichts wird gesendet oder synchronisiert. Werden die Browserdaten gelöscht, sind sie weg; exportieren Sie die wichtigen aus der Galerie.",
+    es: "Se guardan en este navegador y en ningún otro sitio: nada se envía ni se sincroniza. Borrar los datos del navegador los elimina; exporta los que importen desde la galería.",
+  },
+  welcome_start: {
+    fr: "Commencer",
+    en: "Get started",
+    de: "Loslegen",
+    es: "Empezar",
+  },
 
   // ── Library actions and their reports ─────────────────────────────────────
   mechanism_loaded: {

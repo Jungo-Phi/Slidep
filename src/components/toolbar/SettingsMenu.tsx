@@ -73,10 +73,13 @@ interface SettingsMenuProps {
   systemDark: boolean;
   changeTheme: (family: string, mode: ThemeMode) => void;
   previewLater: (name: ThemeName | null) => void;
+  /** At the size of the icon buttons beside it in a phone's header, rather than the desktop toolbar's. */
+  large?: boolean;
 }
 
 /** The settings menu: grid/snap toggles, angle step, contact points, and theme family/mode picker. */
 export const SettingsMenu: React.FC<SettingsMenuProps> = ({
+  large = false,
   showGrid,
   setShowGrid,
   showContactPoints,
@@ -108,14 +111,14 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
       <Tooltip title={t("settings")}>
         <IconButton
           color="inherit"
-          size="small"
+          size={large ? "medium" : "small"}
           aria-label={t("settings")}
           onClick={(event) => {
             const button = event.currentTarget;
             setAnchorEl((current) => (current ? null : button));
           }}
         >
-          <Settings sx={{ fontSize: 20 }} />
+          <Settings sx={{ fontSize: large ? 24 : 20 }} />
         </IconButton>
       </Tooltip>
       <Menu

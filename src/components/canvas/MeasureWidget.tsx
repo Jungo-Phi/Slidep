@@ -13,6 +13,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { Vector } from "../common/Vector";
 import { icon } from "../element-palette/iconDataUris";
 import { shortcut_label } from "../../constants/shortcuts";
+import { CANVAS_CORNER_BOTTOM } from "../../constants/layout-specs";
 import { t } from "../../i18n";
 import type { CanvasState, MeasureReadout, WorldPoint } from "../../types";
 import {
@@ -173,7 +174,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
             sx={{
               position: "absolute",
               right: 12,
-              bottom: 12,
+              bottom: CANVAS_CORNER_BOTTOM,
               zIndex: 900,
               backgroundColor: (theme) =>
                 alpha(theme.palette.text.primary, 0.07),
@@ -206,7 +207,7 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
         sx={{
           position: "absolute",
           right: 12,
-          bottom: 12,
+          bottom: CANVAS_CORNER_BOTTOM,
           zIndex: 900,
           width: 210,
           px: 1.5,

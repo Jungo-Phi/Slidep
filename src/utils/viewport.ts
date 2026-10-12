@@ -181,3 +181,33 @@ export function fit_viewport_to_bounds(
     pan: center.sub(world2screen_vec(contentCenter, { scale, pan: ZERO })),
   };
 }
+
+/** What of the canvas is in sight, from its top-left corner: all of it, or what an overlay along its bottom leaves. */
+export interface ViewArea {
+  width: number;
+  height: number;
+}
+
+/**
+ * The viewport once the area in sight goes from `before` to `after` — the canvas resized, or a sheet raised over its bottom.
+ * A view framed by `fit` is framed again in the new area; any other keeps the point at the area's centre where it was, at the same zoom.
+ */
+export function follow_view_area(
+  viewport: ViewportState,
+  before: ViewArea,
+  after: ViewArea,
+  fit: (area: ViewArea) => ViewportState,
+): ViewportState {
+  const framed = fit(before);
+  if (viewport.scale === framed.scale && viewport.pan.equals(framed.pan))
+    return fit(after);
+  return {
+    scale: viewport.scale,
+    pan: viewport.pan.add(
+      new Point2(
+        (after.width - before.width) / 2,
+        (after.height - before.height) / 2,
+      ).as_space<"screen">(),
+    ),
+  };
+}

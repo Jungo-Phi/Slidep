@@ -51,7 +51,9 @@ export const PhoneTopBar: React.FC<PhoneTopBarProps> = ({
   return (
     <Box
       sx={{
-        height: PHONE_LAYOUT.BAR_HEIGHT,
+        // Clear of a notch or a status bar laid over the page: the bar's ground runs under it, its buttons below.
+        height: `calc(${PHONE_LAYOUT.BAR_HEIGHT}px + env(safe-area-inset-top))`,
+        pt: "env(safe-area-inset-top)",
         flexShrink: 0,
         display: "flex",
         alignItems: "center",

@@ -10,8 +10,6 @@
 
 **Mobile mode**
 
-- 🆕 Suivre le plan _plan-mobile.md_ pour téléphone
-- Appuis long ?
 - 🤔 Faire un nouveau plan pour tablette
 
 - 🆕 Placer join à la jonction des Beams

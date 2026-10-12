@@ -10,7 +10,10 @@ import {
 import { Pause, PlayArrow } from "@mui/icons-material";
 import { AppMode } from "../../types";
 import { t } from "../../i18n";
-import { PHONE_LAYOUT } from "../../constants/layout-specs";
+import {
+  CANVAS_CORNER_BOTTOM,
+  PHONE_LAYOUT,
+} from "../../constants/layout-specs";
 import {
   set_sim_clock as setRuntimeState,
   useSimClockSelector,
@@ -125,7 +128,7 @@ export const PlayFab: React.FC<{ onPlay: () => void }> = ({ onPlay }) => (
     sx={{
       position: "absolute",
       left: 12,
-      bottom: 12,
+      bottom: CANVAS_CORNER_BOTTOM,
       zIndex: 1,
       color: "primary.main",
       backgroundColor: (theme) => alpha(theme.palette.text.primary, 0.07),

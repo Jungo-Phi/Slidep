@@ -10,7 +10,7 @@ type PhoneAppActionsProps = React.ComponentProps<typeof SettingsMenu> &
     onOpenAbout: () => void;
   };
 
-/** The app's own settings, language and about, which a phone's top bar leaves to the gallery's header. */
+/** The app's own settings, language and about, which a phone's top bar leaves to the gallery's header — at the size of the ⋮ beside them. */
 export const PhoneAppActions: React.FC<PhoneAppActionsProps> = ({
   language,
   onSelectLang,
@@ -18,15 +18,10 @@ export const PhoneAppActions: React.FC<PhoneAppActionsProps> = ({
   ...settings
 }) => (
   <>
-    <SettingsMenu {...settings} />
-    <LanguageMenu language={language} onSelectLang={onSelectLang} />
-    <IconButton
-      color="inherit"
-      size="small"
-      aria-label={t("about")}
-      onClick={onOpenAbout}
-    >
-      <InfoOutlined sx={{ fontSize: 20 }} />
+    <SettingsMenu {...settings} large />
+    <LanguageMenu language={language} onSelectLang={onSelectLang} large />
+    <IconButton color="inherit" aria-label={t("about")} onClick={onOpenAbout}>
+      <InfoOutlined />
     </IconButton>
   </>
 );

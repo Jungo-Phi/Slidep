@@ -11,28 +11,10 @@ import {
 import { AppMode, CanvasState, Mechanism, PropertiesPanelTab } from "../../types";
 import { t } from "../../i18n";
 import { PHONE_LAYOUT } from "../../constants/layout-specs";
-import {
-  edition_palette,
-  PaletteElement,
-} from "../element-palette/ElementPalette";
+import { armed_palette_element } from "./armed-tool";
 
 /** What the bottom bar's tabs raise in the sheet: the palette, or one of the panel's tabs. */
 export type SheetTab = "palette" | PropertiesPanelTab;
-
-/** The palette tool armed in `canvasState`, if any — the selection tool being no tool to show. */
-function armed_palette_element(
-  canvasState: CanvasState,
-  mechanism: Mechanism,
-): PaletteElement | undefined {
-  for (const group of edition_palette())
-    for (const element of group.elements)
-      if (
-        element.goToStateType !== "Selecting" &&
-        element.hilightRule(canvasState, mechanism)
-      )
-        return element;
-  return undefined;
-}
 
 const TAB_ICONS: Record<Exclude<SheetTab, "palette" | "project">, typeof Build> = {
   elements: Build,
@@ -92,8 +74,6 @@ interface PhoneBottomBarProps {
   mechanism: Mechanism;
   /** The tab whose sheet is up, `null` while the sheet is down. */
   sheetTab: SheetTab | null;
-  /** The panel tab the desktop would show — where what was just selected is read. */
-  desktopTab: PropertiesPanelTab;
   onTab: (tab: SheetTab) => void;
   /** Ends the simulation, back to edition. */
   onStop: () => void;
@@ -103,20 +83,19 @@ interface PhoneBottomBarProps {
  * The phone's bottom bar — the work: palette, elements, constraints, materials, analysis.
  * In simulation, stop takes the place of constraints.
  *
- * One tab at most is lit, the one the desktop would have open: the sheet's while it is up, else the palette while a tool is armed, else the panel tab the desktop would show.
+ * Only the tab whose sheet is up is lit: the selection reads in the quick-access bar, and the armed tool in the palette tab's own icon.
  */
 export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
   appMode,
   canvasState,
   mechanism,
   sheetTab,
-  desktopTab,
   onTab,
   onStop,
 }) => {
   const simulating = appMode !== "edition";
   const armed = armed_palette_element(canvasState, mechanism);
-  const lit: SheetTab = sheetTab ?? (armed ? "palette" : desktopTab);
+  const lit = sheetTab;
   const tabs: Exclude<SheetTab, "palette" | "project">[] = [
     "elements",
     "constraints",
@@ -127,7 +106,9 @@ export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
   return (
     <Box
       sx={{
-        height: PHONE_LAYOUT.BAR_HEIGHT + 8,
+        // Clear of the home indicator: the bar's ground runs under it, its tabs above.
+        height: `calc(${PHONE_LAYOUT.BAR_HEIGHT + 8}px + env(safe-area-inset-bottom))`,
+        pb: "env(safe-area-inset-bottom)",
         flexShrink: 0,
         display: "flex",
         alignItems: "stretch",

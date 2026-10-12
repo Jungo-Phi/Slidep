@@ -18,7 +18,6 @@ import {
   Action,
   AppMode,
   Mechanism,
-  Point2,
   RuntimeState,
   ZERO,
 } from "../../../types";
@@ -33,6 +32,15 @@ import {
   is_hovered,
 } from "../../../types/hovered-part";
 import NumberInput from "../components/NumberInput";
+import {
+  change_damping,
+  change_edge_length,
+  change_gear_radius,
+  change_mass,
+  change_motor_speed,
+  change_stiffness,
+  toggle_ground,
+} from "../element-value-actions";
 import SignedNumberInput from "../components/SignedNumberInput";
 import ElementDisplay from "../components/ElementDisplay";
 import ElementsOverview from "../components/ElementsOverview";
@@ -349,17 +357,15 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 title={t("motor_speed_label")}
                 kind={ANGULAR_VELOCITY()}
                 value={(displayMotorConfig ?? element.motor).speed}
-                onChange={(speed) => {
-                  const motor = element.motor!;
+                onChange={(speed) =>
                   applyActions([
-                    {
-                      type: "SetMotorConfig",
-                      id: element.id,
-                      newConfig: { ...(displayMotorConfig ?? motor), speed },
-                      oldConfig: motor,
-                    },
-                  ]);
-                }}
+                    change_motor_speed(
+                      element,
+                      displayMotorConfig ?? motorConfig,
+                      speed,
+                    ),
+                  ])
+                }
                 large
                 accent
               />
@@ -411,15 +417,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 title={t("mass")}
                 kind={MASS}
                 value={shown_as(element).mass}
-                onChange={(mass) =>
-                  applyActions([
-                    {
-                      type: "ChangeMass",
-                      id: element.id,
-                      delta: mass - element.mass,
-                    },
-                  ])
-                }
+                onChange={(mass) => applyActions([change_mass(element, mass)])}
                 large
                 accent
                 unsigned
@@ -432,13 +430,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 kind={DAMPING}
                 value={shown_as(element).damping}
                 onChange={(damping) =>
-                  applyActions([
-                    {
-                      type: "ChangeDamping",
-                      id: element.id,
-                      delta: damping - element.damping,
-                    },
-                  ])
+                  applyActions([change_damping(element, damping)])
                 }
                 large
                 accent
@@ -544,13 +536,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 kind={STIFFNESS}
                 value={shown_as(element).stiffness}
                 onChange={(stiffness) =>
-                  applyActions([
-                    {
-                      type: "ChangeStiffness",
-                      id: element.id,
-                      delta: stiffness - element.stiffness,
-                    },
-                  ])
+                  applyActions([change_stiffness(element, stiffness)])
                 }
                 large
                 accent
@@ -744,15 +730,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                   <IconButton
                     color="inherit"
                     size="small"
-                    onClick={() =>
-                      applyActions([
-                        {
-                          type: "GroundNode",
-                          id: element.id,
-                          grounded: !element.isGrounded,
-                        },
-                      ])
-                    }
+                    onClick={() => applyActions([toggle_ground(element)])}
                     sx={{ padding: 0.25, border: 1, borderColor: "divider" }}
                   >
                     <ToggleIcon
@@ -884,21 +862,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 kind={LENGTH}
                 value={element.radius}
                 live={live}
-                onChange={(radius) => {
-                  applyActions([
-                    {
-                      type: "ChangeGearRadius",
-                      id: element.id,
-                      newRadius: radius,
-                      oldRadius: element.radius,
-                      target: new Point2(
-                        element.position.x + radius,
-                        element.position.y,
-                      ),
-                      committed: true,
-                    },
-                  ]);
-                }}
+                onChange={(radius) =>
+                  applyActions([change_gear_radius(element, radius)])
+                }
                 large
                 unsigned
                 adornment={
@@ -1015,63 +981,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     : geometry.positionStart.distance_to(geometry.positionEnd)
                 }
                 live={live}
-                onChange={(length) => {
-                  if (element.type === "belt") {
-                    const beltDim = mechanism.constraintElements.find(
-                      (c) =>
-                        c.type === "dimension-belt" && c.beltID === element.id,
-                    );
-                    if (beltDim && beltDim.type === "dimension-belt") {
-                      // Persistent dimension: update its value.
-                      applyActions([
-                        {
-                          type: "ChangeDimensionBeltValue",
-                          id: beltDim.id,
-                          newValue: length,
-                          oldValue: beltDim.value,
-                        },
-                      ]);
-                    } else {
-                      applyActions([
-                        {
-                          type: "ChangeBeltLength",
-                          id: element.id,
-                          newLength: length,
-                          oldLength: measure_belt_length(
-                            element,
-                            mechanism.mechanicalElements,
-                          ),
-                        },
-                      ]);
-                    }
-                    return;
-                  }
-                  const linkedDim = mechanism.constraintElements.find(
-                    (c) =>
-                      c.type === "dimension-edge" && c.edgeID === element.id,
-                  );
-                  if (linkedDim && linkedDim.type === "dimension-edge") {
-                    applyActions([
-                      {
-                        type: "ChangeDimensionEdgeValue",
-                        id: linkedDim.id,
-                        newValue: length,
-                        oldValue: linkedDim.value,
-                      },
-                    ]);
-                  } else {
-                    applyActions([
-                      {
-                        type: "ChangeEdgeLength",
-                        id: element.id,
-                        newLength: length,
-                        oldLength: element.positionStart.distance_to(
-                          element.positionEnd,
-                        ),
-                      },
-                    ]);
-                  }
-                }}
+                onChange={(length) =>
+                  applyActions([change_edge_length(element, length, mechanism)])
+                }
                 large
                 unsigned
                 adornment={

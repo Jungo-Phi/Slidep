@@ -15,9 +15,15 @@ import { usePhoneLayout } from "../phone/use-phone-layout";
 interface AboutDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Opens the welcome screen again, for its install steps and storage notice. */
+  onOpenWelcome: () => void;
 }
 
-const AboutDialogView: React.FC<AboutDialogProps> = ({ open, onClose }) => {
+const AboutDialogView: React.FC<AboutDialogProps> = ({
+  open,
+  onClose,
+  onOpenWelcome,
+}) => {
   // A phone has no room to spare around a dialog.
   const fullScreen = usePhoneLayout();
   return (
@@ -99,6 +105,15 @@ const AboutDialogView: React.FC<AboutDialogProps> = ({ open, onClose }) => {
         </Box>
 
         <Typography sx={{ mt: 3 }}>{t("contribute")}</Typography>
+
+        <MuiLink
+          component="button"
+          variant="body2"
+          onClick={onOpenWelcome}
+          sx={{ mt: 2, display: "block" }}
+        >
+          {t("welcome_reopen")}
+        </MuiLink>
       </DialogContent>
       {/* Pinned under the text above, which alone scrolls: the version and the contact stay in sight. */}
       <DialogContent sx={{ flex: "none", overflow: "visible" }}>

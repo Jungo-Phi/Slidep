@@ -52,7 +52,7 @@ export const MechanismDetailsPanel: React.FC<MechanismDetailsPanelProps> = ({
       bgcolor: "background.paper",
     }}
   >
-    <Box sx={{ display: "flex", gap: 1.5, p: 2, pb: 1.5 }}>
+    <Box sx={{ display: "flex", gap: 0.5, p: 2, pb: 1.5 }}>
       <Box
         sx={{
           width: THUMBNAIL_SIDE,
@@ -72,12 +72,13 @@ export const MechanismDetailsPanel: React.FC<MechanismDetailsPanelProps> = ({
           display: "flex",
           flexWrap: "wrap",
           alignContent: "flex-start",
-          mt: 0.5,
+          mt: 1,
           gap: 0.5,
           "& .MuiButton-root": { textTransform: "none" },
         }}
       >
         <Button
+          sx={{mx: -0.5}}
           size="small"
           color="inherit"
           startIcon={<AddToPhotos />}
@@ -86,6 +87,7 @@ export const MechanismDetailsPanel: React.FC<MechanismDetailsPanelProps> = ({
           {t("duplicate")}
         </Button>
         <Button
+          sx={{mx: -0.5}}
           size="small"
           color="inherit"
           startIcon={<Download />}
@@ -94,6 +96,7 @@ export const MechanismDetailsPanel: React.FC<MechanismDetailsPanelProps> = ({
           {t("export")}
         </Button>
         <Button
+          sx={{mx: -0.5}}
           size="small"
           color="error"
           startIcon={<Delete />}
@@ -102,6 +105,7 @@ export const MechanismDetailsPanel: React.FC<MechanismDetailsPanelProps> = ({
           {t("delete")}
         </Button>
         <Button
+          sx={{mx: -0.5}}
           size="small"
           variant="contained"
           startIcon={<OpenInNew />}
@@ -113,7 +117,7 @@ export const MechanismDetailsPanel: React.FC<MechanismDetailsPanelProps> = ({
       <IconButton
         aria-label={t("close")}
         onClick={onClose}
-        sx={{ alignSelf: "flex-start", mt: -1, mr: -1 }}
+        sx={{ alignSelf: "flex-start", m: -1 }}
       >
         <Close />
       </IconButton>

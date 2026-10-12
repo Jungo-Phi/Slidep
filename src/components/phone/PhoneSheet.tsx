@@ -53,7 +53,7 @@ export const PhoneSheet: React.FC<PhoneSheetProps> = ({
           left: 0,
           right: 0,
           bottom: 0,
-          height: height === "half" ? "50%" : "100%",
+          height: height === "half" ? `${PHONE_LAYOUT.SHEET_HALF * 100}%` : "100%",
           transition: "height 200ms ease",
           display: "flex",
           flexDirection: "column",

@@ -114,7 +114,20 @@ praticable.
 
 Elle tient **sans code** : après un tap, les navigateurs émulent les événements souris, et le
 `mouseleave` n'arrive qu'au tap suivant ailleurs. Vérifié sous Firefox (Surface et téléphone) ; Safari
-iOS reste à vérifier. Le reste de l'inventaire :
+iOS reste à vérifier, faute d'appareil. Ce qu'on en sait (sources 2012-2020, comportement non
+documenté par Apple) :
+
+- Si la page change pendant le survol émulé d'un tap, Safari **garde le survol et n'envoie pas le
+  clic** : il faut un second tap. Risque sur les lignes cliquables qui réagissent aussi au survol (les
+  cartes d'élément : fond teinté, élément surligné). Sans risque pour les lignes qui n'agissent qu'au
+  survol (modes des DDL) : que le survol tienne, c'est ce qu'on veut.
+- La fin du survol n'est pas toujours envoyée quand on tape ailleurs : un surlignage peut traîner.
+
+Pas de code à l'aveugle. À tester sur un iPhone réel (ou un service d'appareils en ligne) : un tap
+sur une carte d'élément doit la sélectionner, un tap sur un mode des DDL l'animer. Si ça casse, le
+remède est de gérer le doigt explicitement sur ces lignes (`pointerType === "touch"`) au lieu de
+compter sur l'émulation — même comportement partout, au prix d'un inventaire des lignes concernées.
+Le reste de l'inventaire :
 
 - Une ligne déjà cliquable (cartes d'élément, groupes, termes du bilan) : le tap sélectionne, et la
   sélection montre l'élément — rien à faire.
@@ -165,13 +178,22 @@ au-dessus. Trois hauteurs :
 - **Un glissement** sur le canvas ne referme jamais la feuille — manipuler le mécanisme en surveillant
   une sonde est un usage légitime.
 
-**Onglet allumé** : un seul onglet est coloré, celui que le desktop aurait ouvert. Feuille levée,
-c'est le sien. Feuille baissée, c'est la palette si un outil est armé, sinon l'onglet où le desktop
-montrerait ce qu'on vient de sélectionner (même règle que lui) — ou aucun, s'il montrerait le projet.
-On sait ainsi où lire l'élément qu'on vient de taper, sans que la feuille change de place.
+**Onglet allumé** : seul l'onglet de la feuille levée est coloré. Feuille baissée, aucun : la
+sélection se lit dans la barre d'accès rapide, qui ouvre d'un tap l'onglet où le desktop la montre,
+et l'outil armé dans l'icône de l'onglet palette.
 
-**Recentrage** : lever la feuille recentre la vue pour garder l'élément concerné visible au-dessus.
-Éditer un objet qu'on ne voit pas est inutilisable.
+Les boutons des coins du canvas (lecture, règle) remontent au-dessus de la feuille à mi-hauteur.
+
+**Safe areas** : la page s'étend sous l'encoche et l'indicateur d'accueil (`viewport-fit=cover`). Les
+barres haute et basse y étendent leur fond et gardent leurs boutons à l'écart ; les dialogues plein
+écran et la snackbar aussi ; en paysage, le layout se décale de l'encoche latérale.
+
+**Recentrage** : une seule règle, **le centre de la zone visible reste fixe**. Lever la feuille à
+mi-hauteur retire sa moitié de la zone visible : la vue se décale d'autant, et revient en place quand
+la feuille redescend. Le plein écran ne déplace rien. Redimensionner la fenêtre (desktop, rotation du
+téléphone) suit la même règle, au lieu de garder le coin haut gauche. Une vue cadrée (celle que vise
+« Recentrer ») est recadrée dans la nouvelle zone plutôt que décalée, et « Recentrer » vise la zone
+visible.
 
 ### Onglet palette
 
@@ -180,20 +202,40 @@ est plein pour poser.
 
 L'onglet reste alors **actif mais fermé**, et il **affiche l'outil armé** à la place de l'icône
 générique. C'est là que revient l'affordance « tu es en mode pose » que la palette permanente donne
-sur desktop — sans surface supplémentaire. Le taper rouvre la feuille pour changer d'outil ;
-un appui dessus désarme.
+sur desktop — sans surface supplémentaire. Le taper rouvre la feuille pour changer d'outil ; y
+retaper l'outil armé le désarme. Le désarmement en un tap est dans la barre d'accès rapide.
+Pas d'appui long sur le canvas pour désarmer : il se battrait avec la visée, où l'on garde le doigt
+immobile pour regarder l'accroche avant de lever.
 
 **En simulation, la palette est filtrée** aux outils autorisés : le desktop les grise, le téléphone
 les masque. Proposer sur un écran contraint des outils inutilisables est un mauvais service.
 
-### Onglet élément et bandeau de sélection
+### Onglet élément et barre d'accès rapide
 
 L'onglet « élément » est *navigationnel*, la sélection est *contextuelle* : la lever automatiquement
 à chaque sélection contredirait la règle de fermeture, puisque sélectionner c'est taper le canvas.
 
-D'où un **bandeau fin juste au-dessus de la barre d'onglets** : un raccourci vers les opérations
-courantes, contextuel — propre à l'élément sélectionné, des outils de la palette quand rien ne l'est
-en édition. Son contenu est à préciser.
+D'où une **barre d'accès rapide juste au-dessus de la barre d'onglets**, en édition : un raccourci
+vers les opérations courantes, contextuel. Première version, à compléter :
+
+- **Une sélection** : l'élément (ou « N éléments ») — le taper lève la feuille là où le desktop le
+  montre, ou la referme si elle le montre déjà —, sa valeur, et supprimer. **Une valeur au plus par
+  élément** : celles que sa page met en évidence (m, k, b, ω d'un moteur), la longueur d'une poutre,
+  le rayon d'un engrenage, la valeur d'une charge ou d'une cote ; pour les autres nœuds, l'ancrage.
+  Elles s'écrivent comme sur la page (`element-value-actions.ts`), le nom cède la place en premier.
+- **Rien de sélectionné** : la sélection et la gomme, toujours — elles quittent donc la palette de la
+  feuille —, puis autant d'outils que la largeur en tient (5 au moins sur un petit écran), centrés.
+  Chaque catégorie de la palette a sa place tant qu'il en reste, dans l'ordre géométrie, liaisons,
+  appuis, charges, contraintes, masses et ressorts, mesures ; elle y met son outil le plus utilisé — au
+  départ poutre, pivot, sol, force, cote, ressort, sonde. La place restante va aux plus utilisés des
+  autres. Ordre d'affichage : celui de la palette. Un outil ne change de place que si un autre prend
+  la sienne, ce qui demande de l'armer depuis la feuille : un tap dans la barre ne déplace rien sous
+  le doigt. L'outil armé y est allumé ; taper la sélection ou l'outil armé le désarme.
+
+Elle est toujours là en édition, à hauteur fixe : une barre qui apparaîtrait à la sélection
+redimensionnerait le canvas à chaque tap. **En simulation, le transport prend sa place** (même
+hauteur, le canvas ne bouge pas) : la timeline est l'accès rapide d'une course. La sélection revient
+alors dans la palette de la feuille.
 
 ### Sur le canvas
 
@@ -264,17 +306,17 @@ Plein écran, recherche sur sa propre ligne, au moins deux colonnes.
 
 ## 5. Ce qui remplace le clavier et la souris
 
-- **Échap / clic droit** (annuler un placement, reculer d'une étape de la règle) → l'onglet palette
-  armé se désarme d'un appui ; la feuille de l'outil en cours porte l'annulation explicite.
+- **Échap / clic droit** (désarmer, reculer d'une étape de la règle) → la sélection de la barre
+  d'accès rapide ; au doigt, une pose n'a pas d'étape intermédiaire à annuler.
 - **Échap sans outil** (réinitialiser la simulation / revenir en édition) → sélecteur de mode et transport.
 - **Espace** (lecture/pause) → transport.
-- **Suppr** → dans le bandeau de sélection.
+- **Suppr** → dans la barre d'accès rapide.
 - **Annuler / rétablir** → barre haute.
 - **Maj** (ajout à la sélection) → le rectangle suffit ; pas de bouton dans la première version.
 - **Raccourcis d'outils** → la palette, rien de plus.
 
 **Hors de la première version** : l'appui long (rien à mettre dans un menu contextuel tant que le
-bandeau porte la sélection — le geste reste non attribué) et les infobulles des `NumberInput` (étape à
+barre d'accès rapide porte la sélection — le geste reste non attribué) et les infobulles des `NumberInput` (étape à
 part, juste après le layout).
 
 **Seuil** : layout téléphone quand la plus petite dimension de l'écran est sous 600 px (constante).
@@ -322,8 +364,8 @@ Le **layout desktop** (barre haute, palette à gauche, canvas, panneau à droite
    placement en un geste.
 2. ~~**Survol du panneau au doigt.**~~ Fait (§1) : le tap tient par l'émulation souris des navigateurs,
    les diagrammes se balaient au doigt.
-3. **Layout téléphone** : barre haute, barre d'onglets, feuille, bandeau, transport. Se teste sur PC en
-   mode appareil des devtools, qui simule aussi le toucher et `pointer: coarse`.
+3. **Layout téléphone** : barre haute, barre d'onglets, feuille, barre d'accès rapide, transport. Se
+   teste sur PC en mode appareil des devtools, qui simule aussi le toucher et `pointer: coarse`.
 4. **Tablette** (§7) : densité tactile, panneau repliable, surimpression en portrait.
 
 La performance sur téléphone est un chantier séparé : mesurée, elle ne bloque pas.
@@ -341,7 +383,10 @@ Le modèle tient s'ils se font en 3 gestes sans lever la feuille :
 ## Non tranché
 
 - **Contenu du menu contextuel** à l'appui long : rien de tel n'existe encore sur desktop.
-- Que devient l'aide au premier lancement — l'app perd les infobulles au survol.
+- ~~Que devient l'aide au premier lancement.~~ Un **écran d'accueil**, au premier lancement sur
+  téléphone comme sur desktop, rouvrable depuis « À propos » : installer l'app (le bouton du navigateur
+  quand il en offre un, sinon les étapes de son menu, rien s'il ne sait pas installer ou si c'est
+  fait) et où vivent les mécanismes. Pas d'aide aux gestes.
 - **Tracer une courroie en suivant un chemin** (doigt et souris) : chaque engrenage traversé pendant le
   glisser s'enroule. À définir : ce que « traverser » veut dire, le sens d'enroulement, et comment se
   rattraper d'un engrenage touché par erreur.

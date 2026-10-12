@@ -44,11 +44,14 @@ import {
 } from "./types";
 import {
   clamp_pan,
+  follow_view_area,
   getStorageItem,
   setStorageItem,
+  ViewArea,
   zoom_delta_to,
   zoom_on_point,
 } from "./utils";
+import { PHONE_LAYOUT } from "./constants/layout-specs";
 import { useThemeChoice } from "./theme/use-theme-choice";
 import { get_language, Lang, set_language, t } from "./i18n";
 import { LanguageContext } from "./i18n/language-context";
@@ -91,6 +94,7 @@ import {
 import { PhoneAppActions } from "./components/phone/PhoneAppActions";
 import { usePhoneLayout } from "./components/phone/use-phone-layout";
 import { AboutDialog } from "./components/toolbar/AboutDialog";
+import { WelcomeDialog } from "./components/welcome/WelcomeDialog";
 import { SimulationTimeline } from "./components/toolbar/SimulationTimeline";
 import { ToolsMenu } from "./components/toolbar/ToolsMenu";
 import { PlaybackControls } from "./components/toolbar/PlaybackControls";
@@ -160,6 +164,12 @@ const is_armed_tool_waiting = (state: CanvasState, mechanism: Mechanism) => {
     mechanism.constraintElements.some((el) => el.id === state.elementID)
   );
 };
+
+/** What of a `size` canvas is in sight with `cover` of its height hidden under an overlay along its bottom. */
+const view_area = (size: ViewArea, cover: number): ViewArea => ({
+  width: size.width,
+  height: size.height * (1 - cover),
+});
 
 const App: React.FC = () => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
@@ -918,6 +928,19 @@ const App: React.FC = () => {
   const handleInfoOpen = useCallback(() => setInfoOpen(true), []);
   const handleInfoClose = useCallback(() => setInfoOpen(false), []);
 
+  // Shown on the first launch only; About opens it again.
+  const [welcomeOpen, setWelcomeOpen] = useState<boolean>(
+    () => !getStorageItem<boolean>("welcome-seen", false),
+  );
+  const handleWelcomeOpen = useCallback(() => {
+    setInfoOpen(false);
+    setWelcomeOpen(true);
+  }, []);
+  const handleWelcomeClose = useCallback(() => {
+    setWelcomeOpen(false);
+    setStorageItem("welcome-seen", true);
+  }, []);
+
   /** Which section is hovered in the library tab — also what tints the canvas for as long as that hover lasts, the same "hover a group to color it" gesture the DDL redundancy audit already uses.
    * `null` the rest of the time. */
   const [librarySection, setLibrarySection] = useState<
@@ -955,10 +978,50 @@ const App: React.FC = () => {
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  // The share of the canvas hidden under the phone's sheet: the view works in what is left in sight above it.
+  // Raised to full height, the sheet keeps the half's share — nothing of the canvas is left to aim at.
+  const sheetCover = phone && phoneSheet ? PHONE_LAYOUT.SHEET_HALF : 0;
+  const coverRef = useRef(sheetCover);
+  const canvasSizeRef = useRef<ViewArea | null>(null);
+  const followViewArea = useCallback(
+    (before: ViewArea, after: ViewArea) =>
+      setMechanism((prev) => ({
+        ...prev,
+        viewport: follow_view_area(prev.viewport, before, after, (area) =>
+          fit_to_content(prev, area),
+        ),
+      })),
+    [],
+  );
+  // A resized canvas keeps the mechanism where it was in sight, rather than pinned to the top-left corner.
+  const handleCanvasResize = useCallback(
+    (width: number, height: number) => {
+      // A canvas laid out at nothing (hidden) has no centre to keep: its last real size stands.
+      if (width === 0 || height === 0) return;
+      const before = canvasSizeRef.current;
+      canvasSizeRef.current = { width, height };
+      if (before)
+        followViewArea(
+          view_area(before, coverRef.current),
+          view_area({ width, height }, coverRef.current),
+        );
+    },
+    [followViewArea],
+  );
+  // A sheet raised over the canvas would hide half the mechanism: the view moves into what is left in sight, and back once it goes down.
+  useLayoutEffect(() => {
+    const before = coverRef.current;
+    if (before === sheetCover) return;
+    coverRef.current = sheetCover;
+    const size = canvasSizeRef.current;
+    if (size)
+      followViewArea(view_area(size, before), view_area(size, sheetCover));
+  }, [sheetCover, followViewArea]);
+
   // What "Recentrer" aims for, and what its disabled state compares against.
   // Kept as the same object while its value holds, so the menu below is not rebuilt for a target that did not move.
   const fitted = canvasRef.current
-    ? fit_to_content(mechanism, canvasRef.current)
+    ? fit_to_content(mechanism, view_area(canvasRef.current, sheetCover))
     : null;
   const recenterTargetRef = useRef(fitted);
   const held = recenterTargetRef.current;
@@ -1018,6 +1081,7 @@ const App: React.FC = () => {
       shownTab === "library" ? (librarySection ?? undefined) : undefined,
     hoveredLibraryEntryID,
     galleryOpen,
+    onResize: handleCanvasResize,
   };
   const panelProps: PropertiesPanelProps = {
     setHighlight,
@@ -1203,6 +1267,10 @@ const App: React.FC = () => {
               flexDirection: "column",
               height: "100vh",
               overflow: "hidden",
+              // Clear of what a tablet lays over the page (status bar aside, a home indicator, a notch on the side); the top bar runs its ground under the status bar itself.
+              pb: "env(safe-area-inset-bottom)",
+              pl: "env(safe-area-inset-left)",
+              pr: "env(safe-area-inset-right)",
             }}
           >
             {/* App Bar */}
@@ -1210,6 +1278,7 @@ const App: React.FC = () => {
               position="static"
               elevation={0}
               sx={{
+                pt: "env(safe-area-inset-top)",
                 backgroundColor: "background.toolbar",
                 border: "none",
                 borderRadius: 0,
@@ -1304,7 +1373,13 @@ const App: React.FC = () => {
           currentId={mechanism.metadata.createdAt}
           phoneActions={galleryPhoneActions}
         />
-        <AboutDialog open={infoOpen} onClose={handleInfoClose} />
+        <AboutDialog
+          open={infoOpen}
+          onClose={handleInfoClose}
+          onOpenWelcome={handleWelcomeOpen}
+        />
+        {/* After the gallery, which may open at launch: the welcome is read first, over it. */}
+        <WelcomeDialog open={welcomeOpen} onClose={handleWelcomeClose} />
         <Snackbar
           open={snackbar.open}
           autoHideDuration={snackbar.duration ?? SNACKBAR_DURATION.DEFAULT}

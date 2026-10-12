@@ -297,7 +297,7 @@ const SPECS = {
     ink: "#001D59",
     paper: "#fff3d6",
     appBackground: "#FDECC9",
-    toolbar: "#FFBE80",
+    toolbar: "#fdcda0",
     fillBody: "#B7E2FF",
     fillNode: "#FFBE80",
     selectionStroke: "#6595D0",
@@ -314,7 +314,7 @@ const SPECS = {
     ink: "#f2e1bc",
     paper: "#2a2827",
     appBackground: "#212121",
-    toolbar: "#303030",
+    toolbar: "#3a2a21",
     fillBody: "#5387a1",
     fillNode: "#c98456",
     selectionStroke: "#44b3dc",
@@ -330,7 +330,7 @@ const SPECS = {
     ink: "#000000",
     paper: "#fffbf7",
     appBackground: "#FFFFFF",
-    toolbar: "#e2e9f2",
+    toolbar: "#e5ecf5",
     fillBody: "#c5e2ff",
     fillNode: "#f5b567",
     selectionStroke: "#4ca0ee",
@@ -361,8 +361,8 @@ const SPECS = {
     onAccent: "#FFFFFF",
     ink: "#1D3F73",
     paper: "#f5f0e5",
-    appBackground: "#EFE8D4",
-    toolbar: "#e4d9c2",
+    appBackground: "#f2ebd7",
+    toolbar: "#e7d8c2",
     fillBody: "#c5dfff",
     fillNode: "#e8a774",
     selectionStroke: "#2F7DDA",
@@ -841,10 +841,19 @@ const components: ThemeOptions["components"] = {
   MuiDialog: {
     styleOverrides: {
       // A dialog that takes the whole screen has no edge to frame: the border and the rounding every paper gets would only eat into it.
+      // It also reaches the screen's edges, under a notch or a home indicator: its content keeps clear of them.
       paperFullScreen: {
         border: "none",
         borderRadius: 0,
+        padding:
+          "env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)",
       },
+    },
+  },
+  MuiSnackbar: {
+    styleOverrides: {
+      // Above a home indicator, which the page reaches under.
+      root: { marginBottom: "env(safe-area-inset-bottom)" },
     },
   },
   MuiTooltip: {

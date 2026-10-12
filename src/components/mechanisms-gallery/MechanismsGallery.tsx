@@ -319,11 +319,17 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
           rowGap: 1,
           pt: 1.5,
           pb: 1,
-          pr: 2,
+          pr: 2.5,
           bgcolor: "background.default",
         }}
       >
-        <Typography fontSize={"large"} fontWeight={500} sx={{ flexShrink: 0 }}>
+        <Typography
+          fontSize={"large"}
+          fontWeight={500}
+          noWrap
+          // On a phone the title is what gives way when the header runs short, never the buttons beside it: from no width of its own, it can only take what they leave, never push them onto a line of their own.
+          sx={phone ? { flex: "1 1 0", minWidth: 0 } : { flexShrink: 0 }}
+        >
           {t("library")}
         </Typography>
 
@@ -379,7 +385,9 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 1,
+            // A phone's icon buttons carry their own padding: they need no gap on top of it.
+            gap: phone ? 0 : 1,
+            mr: -1,
             flexShrink: 0,
           }}
         >
@@ -387,7 +395,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
             <>
               {phoneActions}
               <IconButton
-                size="small"
+                size="medium"
                 color="inherit"
                 aria-label={t("more_actions")}
                 onClick={(e) => setMoreAnchor(e.currentTarget)}
@@ -447,13 +455,13 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
                 />
               </Tooltip>
               <LibraryAction
-                icon={<FileOpen fontSize="small" />}
+                icon={<FileOpen fontSize="medium" />}
                 label={t("import")}
                 tooltip={t("import_tooltip")}
                 onClick={onImport}
               />
               <LibraryAction
-                icon={<Archive fontSize="small" />}
+                icon={<Archive fontSize="medium" />}
                 label={t("export_all")}
                 tooltip={t(
                   mechanismRecords.length === 0
@@ -464,7 +472,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
                 onClick={onExportAll}
               />
               <LibraryAction
-                icon={<Restore fontSize="small" />}
+                icon={<Restore fontSize="medium" />}
                 label={t("restore_examples")}
                 tooltip={t(
                   allExamplesPresent
@@ -478,7 +486,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
           )}
           <Divider orientation="vertical" flexItem sx={{ m: 0.5 }} />
           <Tooltip title={t("close")}>
-            <IconButton onClick={onClose} size="small">
+            <IconButton onClick={onClose} size="medium">
               <Close />
             </IconButton>
           </Tooltip>
