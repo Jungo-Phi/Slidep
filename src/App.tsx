@@ -93,6 +93,11 @@ import {
 } from "./components/phone/PhoneLayout";
 import { PhoneAppActions } from "./components/phone/PhoneAppActions";
 import { usePhoneLayout } from "./components/phone/use-phone-layout";
+import {
+  escape_goes_to_popup_or_field,
+  press_escape,
+  useBackAsEscape,
+} from "./components/common/use-back-as-escape";
 import { AboutDialog } from "./components/toolbar/AboutDialog";
 import { WelcomeDialog } from "./components/welcome/WelcomeDialog";
 import { SimulationTimeline } from "./components/toolbar/SimulationTimeline";
@@ -1017,6 +1022,24 @@ const App: React.FC = () => {
     if (size)
       followViewArea(view_area(size, before), view_area(size, sheetCover));
   }, [sheetCover, followViewArea]);
+
+  // The system back button of a touch device answers as Escape, the sheet going down before the canvas steps back, and closes the app once there is nothing left to undo.
+  const touchDevice = useMediaQuery("(pointer: coarse)");
+  useBackAsEscape(touchDevice, () => {
+    if (escape_goes_to_popup_or_field()) {
+      press_escape();
+      return true;
+    }
+    if (phone && phoneSheet) {
+      setPhoneSheet(null);
+      return true;
+    }
+    if (appMode !== "edition" || canvasStateRef.current.type !== "Selecting") {
+      press_escape();
+      return true;
+    }
+    return false;
+  });
 
   // What "Recentrer" aims for, and what its disabled state compares against.
   // Kept as the same object while its value holds, so the menu below is not rebuilt for a target that did not move.
