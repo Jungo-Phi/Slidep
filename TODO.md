@@ -10,8 +10,6 @@
 
 **Mobile mode**
 
-- 🤔 Faire un nouveau plan pour tablette
-
 - 🆕 Placer join à la jonction des Beams
 - 🆕 Ajouter un paramètre pour mettre des enroulements en édition
 - 🆕 Placer une courroie en traçant un chemin

@@ -1,7 +1,8 @@
 # Plan UI/UX — slidep sur téléphone et tablette
 
 Objectif : **concevoir sur téléphone**, en portrait — **toutes** les capacités de slidep, pas une
-version consultation. La tablette garde le layout desktop, adapté au doigt (§7).
+version consultation. La tablette en paysage garde le layout desktop, adapté au doigt ; en portrait,
+elle prend le layout téléphone (§7).
 
 Principe fondateur : **le canvas est l'application ; tout le reste est invoqué et disparaît.**
 Sur desktop la palette et le panneau sont permanents parce qu'il y a la place. Ici, rien n'est
@@ -18,12 +19,14 @@ Grammaire spatiale, à tenir partout :
 
 - **L'entrée** se décide **par événement** (`pointerType`) : un PC à écran tactile a aussi une souris,
   et l'utilisateur passe de l'une à l'autre sans prévenir. Jamais de `pointer: coarse` global pour ça.
-- **Le layout** (téléphone ou desktop) se décide par la **plus petite dimension** de l'écran, pas par
+- **Le layout** (téléphone ou desktop) se décide par la **plus petite dimension** de l'écran, et par
   sa largeur : un téléphone en paysage (~900 × 400) reste un téléphone — le layout desktop, sa barre de
-  40 px et sa timeline lui laisseraient un canvas de 300 px de haut.
+  40 px et sa timeline lui laisseraient un canvas de 300 px de haut ; une tablette en portrait ou une
+  fenêtre étroite (sous 900 px de large) le devient — palette et panneau ne lui laisseraient pas assez
+  de canvas.
 - **La densité** (taille des cibles) se décide par `(pointer: coarse)`, le pointeur *principal* de
-  l'appareil : c'est le bon signal pour une mise en page, pas pour une entrée. Une tablette, c'est le
-  layout desktop en densité tactile — une Surface sans clavier en est une.
+  l'appareil : c'est le bon signal pour une mise en page, pas pour une entrée. Une tablette en paysage,
+  c'est le layout desktop en densité tactile — une Surface sans clavier en est une.
 
 ---
 
@@ -319,7 +322,15 @@ Plein écran, recherche sur sa propre ligne, au moins deux colonnes.
 barre d'accès rapide porte la sélection — le geste reste non attribué) et les infobulles des `NumberInput` (étape à
 part, juste après le layout).
 
-**Seuil** : layout téléphone quand la plus petite dimension de l'écran est sous 600 px (constante).
+**Seuil** : layout téléphone quand la plus petite dimension de l'écran est sous 600 px, ou sa largeur
+sous 900 px (constantes `PHONE_LAYOUT.MAX_SIDE`, `MAX_WIDTH`). Sous 900 px de large, palette et
+panneau ne laisseraient qu'environ 500 px de canvas : une tablette en portrait, ou une fenêtre
+étroite, est mieux servie par le canvas plein écran et la feuille.
+
+**Orientation** : un téléphone (écran dont le petit côté est sous 600 px) est verrouillé en portrait
+là où le navigateur le permet (`screen.orientation.lock`, surtout l'app installée sous Android).
+Ailleurs — iOS, un onglet — il tourne comme avant : pas d'écran « tournez votre téléphone » par-dessus
+l'app. Le paysage reste donc pris en charge par le layout téléphone.
 
 ---
 
@@ -344,11 +355,14 @@ Le **layout desktop** (barre haute, palette à gauche, canvas, panneau à droite
   panneau (40 px), barre haute dense, boutons d'icônes (annuler/rétablir), œils et relevés du panneau.
   La palette calcule ses colonnes d'après la hauteur : avec de grosses icônes, elle s'élargit — à
   surveiller, c'est autant de largeur prise au canvas.
-- **Panneau repliable**, **à la souris aussi** : un petit portable en profite autant qu'une tablette.
-- **En portrait**, le panneau passe **en surimpression** sur le canvas au lieu de le pousser : palette
-  et panneau de 300 px ne laisseraient qu'environ 400 px de canvas sur 820. Le layout reste le desktop :
-  une tablette en portrait est assez grande pour une palette permanente, et la feuille basse est pensée
-  pour un écran tenu d'une main.
+- **Pas de panneau repliable** : essayé (une poignée sur son bord), puis retiré. Au-dessus de 900 px
+  de large, le canvas a assez de place à côté du panneau ; en dessous, c'est le layout téléphone.
+- **En portrait**, une tablette prend le **layout téléphone** (largeur sous 900 px, voir le seuil au
+  §5) : palette et panneau de 300 px ne laisseraient qu'environ 400 px de canvas sur 820. Une
+  surimpression du panneau sur le canvas a été essayée puis retirée : soit elle cachait 40 % du dessin,
+  soit on la sortait et la rangeait sans cesse. La feuille à mi-hauteur d'une tablette en portrait fait
+  ~550 px, plus que le panneau desktop. Tourner la tablette change de layout ; sélection et mécanisme
+  tiennent, la feuille se ferme.
 - **Le clavier est déjà presque entièrement couvert** par l'interface desktop : annuler/rétablir dans
   la barre, supprimer dans le panneau, l'outil armé se désarme d'un tap dans la palette, lecture/pause
   a son bouton, le rectangle remplace Maj, et au doigt aucune pose n'a d'étape intermédiaire à reculer.
@@ -366,7 +380,7 @@ Le **layout desktop** (barre haute, palette à gauche, canvas, panneau à droite
    les diagrammes se balaient au doigt.
 3. **Layout téléphone** : barre haute, barre d'onglets, feuille, barre d'accès rapide, transport. Se
    teste sur PC en mode appareil des devtools, qui simule aussi le toucher et `pointer: coarse`.
-4. **Tablette** (§7) : densité tactile, panneau repliable, surimpression en portrait.
+4. **Tablette** (§7) : densité tactile en paysage ; en portrait, le layout téléphone.
 
 La performance sur téléphone est un chantier séparé : mesurée, elle ne bloque pas.
 

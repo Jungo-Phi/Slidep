@@ -985,8 +985,8 @@ const App: React.FC = () => {
 
   // The share of the canvas hidden under the phone's sheet: the view works in what is left in sight above it.
   // Raised to full height, the sheet keeps the half's share — nothing of the canvas is left to aim at.
-  const sheetCover = phone && phoneSheet ? PHONE_LAYOUT.SHEET_HALF : 0;
-  const coverRef = useRef(sheetCover);
+  const cover = phone && phoneSheet ? PHONE_LAYOUT.SHEET_HALF : 0;
+  const coverRef = useRef(cover);
   const canvasSizeRef = useRef<ViewArea | null>(null);
   const followViewArea = useCallback(
     (before: ViewArea, after: ViewArea) =>
@@ -1016,12 +1016,11 @@ const App: React.FC = () => {
   // A sheet raised over the canvas would hide half the mechanism: the view moves into what is left in sight, and back once it goes down.
   useLayoutEffect(() => {
     const before = coverRef.current;
-    if (before === sheetCover) return;
-    coverRef.current = sheetCover;
+    if (before === cover) return;
+    coverRef.current = cover;
     const size = canvasSizeRef.current;
-    if (size)
-      followViewArea(view_area(size, before), view_area(size, sheetCover));
-  }, [sheetCover, followViewArea]);
+    if (size) followViewArea(view_area(size, before), view_area(size, cover));
+  }, [cover, followViewArea]);
 
   // The system back button of a touch device answers as Escape, the sheet going down before the canvas steps back, and closes the app once there is nothing left to undo.
   const touchDevice = useMediaQuery("(pointer: coarse)");
@@ -1044,7 +1043,7 @@ const App: React.FC = () => {
   // What "Recentrer" aims for, and what its disabled state compares against.
   // Kept as the same object while its value holds, so the menu below is not rebuilt for a target that did not move.
   const fitted = canvasRef.current
-    ? fit_to_content(mechanism, view_area(canvasRef.current, sheetCover))
+    ? fit_to_content(mechanism, view_area(canvasRef.current, cover))
     : null;
   const recenterTargetRef = useRef(fitted);
   const held = recenterTargetRef.current;

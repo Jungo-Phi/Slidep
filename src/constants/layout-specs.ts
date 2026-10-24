@@ -4,6 +4,8 @@ import { ToolStateType } from "./shortcuts";
 export const PHONE_LAYOUT = {
   /** Below this smallest side (CSS px), the phone layout: a phone held either way round, never a tablet. */
   MAX_SIDE: 600,
+  /** Below this width (CSS px), the phone layout too: palette and side panel would leave too narrow a canvas between them — a tablet held upright, 768 to 834 px wide, or a narrow window. */
+  MAX_WIDTH: 900,
   /** Height of the phone's top and bottom bars (px): a finger's target. */
   BAR_HEIGHT: 48,
   /** Height of the transport row (play, timeline, speed) shown in simulation (px). */
