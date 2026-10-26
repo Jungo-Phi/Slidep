@@ -337,6 +337,12 @@ export const STRINGS = {
     de: "Über Slidep",
     es: "Acerca de Slidep",
   },
+  try_slidep_3d: {
+    fr: "Essayer Slidep 3D (prototype)",
+    en: "Try Slidep 3D (prototype)",
+    de: "Slidep 3D ausprobieren (Prototyp)",
+    es: "Probar Slidep 3D (prototipo)",
+  },
 
   // ── Settings menu ─────────────────────────────────────────────────────────
   show_grid: {

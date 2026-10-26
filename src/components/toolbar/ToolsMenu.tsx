@@ -6,6 +6,7 @@ import {
   Redo,
   Remove,
   Undo,
+  ViewInAr,
   ZoomIn,
 } from "@mui/icons-material";
 import { Lang } from "../../i18n";
@@ -210,7 +211,7 @@ interface ToolsMenuProps {
   onOpenAbout: () => void;
 }
 
-/** The toolbar's right-hand cluster: viewport, undo/redo, language, settings, about. */
+/** The toolbar's right-hand cluster: viewport, undo/redo, language, settings, about, and the link to the 3D prototype. */
 export const ToolsMenu: React.FC<ToolsMenuProps> = ({
   mechanism,
   recenterTarget,
@@ -311,6 +312,21 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     <Tooltip title={t("about")}>
       <IconButton color="inherit" size="small" onClick={onOpenAbout}>
         <Info sx={{ fontSize: 20 }} />
+      </IconButton>
+    </Tooltip>
+
+    {/* A new tab, so the mechanism being edited stays open and nothing waits on the autosave. */}
+    <Tooltip title={t("try_slidep_3d")}>
+      <IconButton
+        color="inherit"
+        size="small"
+        component="a"
+        href="/3d/"
+        target="_blank"
+        rel="noopener"
+        aria-label={t("try_slidep_3d")}
+      >
+        <ViewInAr sx={{ fontSize: 20 }} />
       </IconButton>
     </Tooltip>
   </Box>

@@ -11,6 +11,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout the 3D prototype
+        uses: actions/checkout@v4
+        with:
+          repository: Jungo-Phi/Slidep3D
+          path: slidep3d
+
       # If you're using pnpm, add this step then change the commands and cache key below to use `pnpm`
       # - name: Install pnpm
       #   uses: pnpm/action-setup@v3
@@ -20,8 +26,12 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Vite 8, which the 3D prototype builds with, needs a recent Node.
+          node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            slidep3d/package-lock.json
 
       - name: Install dependencies
         run: npm install
@@ -31,6 +41,13 @@ jobs:
           BASE_PATH: "/${{ github.event.repository.name }}"
         run: |
           npm run build
+
+      # Copied in after Slidep's build, so Slidep's service worker does not precache the prototype.
+      - name: Build the 3D prototype into /3d/
+        run: |
+          npm ci --prefix slidep3d
+          npm run build --prefix slidep3d -- --base=/3d/
+          cp -r slidep3d/dist dist/3d
 
       - name: Upload Artifacts
         uses: actions/upload-pages-artifact@v3

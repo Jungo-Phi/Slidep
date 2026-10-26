@@ -47,6 +47,8 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff,woff2}"],
         // Offline navigation: serves index.html for any route it does not know.
         navigateFallback: "index.html",
+        // The 3D prototype is a separate app the deploy copies into /3d/, after this build has listed what to precache.
+        navigateFallbackDenylist: [/^\/3d(\/|$)/],
         cleanupOutdatedCaches: true,
       },
       manifest: {
