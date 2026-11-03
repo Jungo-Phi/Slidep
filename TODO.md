@@ -130,7 +130,6 @@
 - 🔨 Mieux afficher les unités des graphs globaux
 - 🚨 En simulation, clicker sur l'icon force, puis esc, puis reprendre la simu nous remet sur l'icon force.
 - 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
-- 🔨 Ne pas enregistrer un mécanisme vide
 - 🔨 Afficher l'angle total ET modulo 360
 
 - 🔨 On devrait afficher T/N au lieu de x/y pour les mesures des forces internes

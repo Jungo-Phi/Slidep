@@ -1,5 +1,7 @@
 import { useMemo } from "react";
+import type { StringKey } from "../../i18n";
 import {
+  Action,
   AppMode,
   Mechanism,
   MechanismMetadata,
@@ -33,6 +35,74 @@ export function useShownSimulation(
     [mechanism, shownParameters],
   );
 }
+
+export interface PhysicsSwitch {
+  iconName: "gravity" | "collision" | "floor";
+  labelKey: StringKey;
+  /** The tooltip of its chip, which says the state as well as the setting. */
+  stateKey: StringKey;
+  on: boolean;
+  /** The action that flips it. */
+  toggle: Action;
+}
+
+/** Gravity, collisions and floor, as they stand at the instant on screen: what they show is what they flip. */
+export const usePhysicsSwitches = (
+  appMode: AppMode,
+  mechanism: Mechanism,
+): PhysicsSwitch[] => {
+  const shown = useShownSimulation(appMode, mechanism);
+  return [
+    {
+      iconName: "gravity",
+      labelKey: "gravity",
+      stateKey: shown.gravity ? "gravity_on" : "gravity_off",
+      on: shown.gravity,
+      toggle: { type: "SetGravity", enabled: !shown.gravity },
+    },
+    {
+      iconName: "collision",
+      labelKey: "collisions",
+      stateKey: shown.collisions ? "collisions_on" : "collisions_off",
+      on: shown.collisions,
+      toggle: { type: "SetCollisions", enabled: !shown.collisions },
+    },
+    {
+      iconName: "floor",
+      labelKey: "floor",
+      stateKey: shown.floor.enabled ? "floor_on" : "floor_off",
+      on: shown.floor.enabled,
+      toggle: { type: "SetFloorEnabled", enabled: !shown.floor.enabled },
+    },
+  ];
+};
+
+/** The modes a menu offers: statics is left out until it exists. */
+export const RUN_MODES: {
+  mode: AppMode;
+  labelKey: StringKey;
+  shortKey: StringKey;
+  tooltipKey: StringKey;
+}[] = [
+  {
+    mode: "edition",
+    labelKey: "mode_edition",
+    shortKey: "mode_edition_short",
+    tooltipKey: "mode_edition_tooltip",
+  },
+  {
+    mode: "kinematic",
+    labelKey: "mode_kinematic",
+    shortKey: "mode_kinematic_short",
+    tooltipKey: "mode_kinematic_tooltip",
+  },
+  {
+    mode: "dynamic",
+    labelKey: "mode_dynamic",
+    shortKey: "mode_dynamic_short",
+    tooltipKey: "mode_dynamic_tooltip",
+  },
+];
 
 /** Simulation speed steps, slowest to fastest. */
 export const SPEEDS: SimulationSpeed[] = [0.1, 0.25, 0.5, 1, 2, 4, 10];

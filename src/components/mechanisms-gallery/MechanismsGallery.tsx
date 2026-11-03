@@ -68,6 +68,9 @@ interface MechanismsGalleryProps {
   phoneActions?: React.ReactNode;
 }
 
+/** Below this window width (px), the library's actions drop their label for their icon alone, the label moving into the tooltip: the search keeps its room. */
+const ICON_ONLY_ACTIONS_MAX_WIDTH = 1200;
+
 // Height of the "New mechanism" card when the library is empty, with no existing card to copy the height from.
 const NEW_CARD_FALLBACK_HEIGHT = 300;
 
@@ -85,19 +88,45 @@ const LibraryAction: React.FC<{
   tooltip: string;
   disabled?: boolean;
   onClick: () => void;
-}> = ({ icon, label, tooltip, disabled = false, onClick }) => (
-  <Tooltip title={tooltip}>
+  /** Shows the icon alone, the label heading the tooltip instead. */
+  iconOnly?: boolean;
+}> = ({ icon, label, tooltip, disabled = false, onClick, iconOnly = false }) => (
+  <Tooltip
+    title={
+      iconOnly ? (
+        <>
+          <Box component="span" sx={{ display: "block", fontWeight: 700 }}>
+            {label}
+          </Box>
+          {tooltip}
+        </>
+      ) : (
+        tooltip
+      )
+    }
+  >
     <span>
-      <Button
-        size="small"
-        color="inherit"
-        disabled={disabled}
-        startIcon={icon}
-        onClick={onClick}
-        sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
-      >
-        {label}
-      </Button>
+      {iconOnly ? (
+        <IconButton
+          color="inherit"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {icon}
+        </IconButton>
+      ) : (
+        <Button
+          size="small"
+          color="inherit"
+          disabled={disabled}
+          startIcon={icon}
+          onClick={onClick}
+          sx={{ textTransform: "none", fontSize: "0.8rem", px: 1.5 }}
+        >
+          {label}
+        </Button>
+      )}
     </span>
   </Tooltip>
 );
@@ -184,6 +213,9 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   ].sort();
 
   const phone = usePhoneLayout();
+  const iconOnlyActions = useMediaQuery(
+    `(max-width:${ICON_ONLY_ACTIONS_MAX_WIDTH}px)`,
+  );
   // A phone's alone, and only for a mechanism still in the library: deleting one takes its details with it.
   const detailsRecord = phone
     ? mechanismRecords.find((r) => r.metadata.createdAt === detailsId)
@@ -376,7 +408,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
             flexGrow: 1,
             ...(phone
               ? { order: 1, flexBasis: "100%", maxWidth: "none" }
-              : { maxWidth: 360 }),
+              : { maxWidth: 360, minWidth: 180, mx: 2 }),
           }}
         />
 
@@ -451,16 +483,18 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
             <>
               <Tooltip title={t("storage_notice")}>
                 <InfoOutlined
-                  sx={{ fontSize: 20, color: "text.secondary", ml: -1, mr: 4 }}
+                  sx={{ fontSize: 20, color: "text.secondary", mr: 3 }}
                 />
               </Tooltip>
               <LibraryAction
+                iconOnly={iconOnlyActions}
                 icon={<FileOpen fontSize="medium" />}
                 label={t("import")}
                 tooltip={t("import_tooltip")}
                 onClick={onImport}
               />
               <LibraryAction
+                iconOnly={iconOnlyActions}
                 icon={<Archive fontSize="medium" />}
                 label={t("export_all")}
                 tooltip={t(
@@ -472,6 +506,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
                 onClick={onExportAll}
               />
               <LibraryAction
+                iconOnly={iconOnlyActions}
                 icon={<Restore fontSize="medium" />}
                 label={t("restore_examples")}
                 tooltip={t(

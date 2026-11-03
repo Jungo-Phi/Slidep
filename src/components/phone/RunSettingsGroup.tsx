@@ -1,12 +1,5 @@
 import React, { useState } from "react";
-import {
-  alpha,
-  Box,
-  ButtonBase,
-  ListItemText,
-  Menu,
-  MenuItem,
-} from "@mui/material";
+import { alpha, Box, ButtonBase } from "@mui/material";
 import {
   KeyboardArrowDown,
   Public,
@@ -14,24 +7,14 @@ import {
   VisibilityOff,
 } from "@mui/icons-material";
 import { Action, AppMode, Mechanism, MechanismMetadata } from "../../types";
-import { StringKey, t } from "../../i18n";
+import { t } from "../../i18n";
 import { OverlaysMenu, OverlaysMenuProps } from "../toolbar/OverlaysMenu";
-import { PhysicsToggle } from "../toolbar/PlaybackControls";
+import { ModeMenu, PhysicsMenu } from "../toolbar/RunSettingsMenus";
 import {
-  change_app_mode,
-  useShownSimulation,
+  RUN_MODES,
+  usePhysicsSwitches,
 } from "../toolbar/playback-actions";
 import { overlays_shown } from "../properties-panel/overlay-actions";
-
-const MODES: { mode: AppMode; labelKey: StringKey; shortKey: StringKey }[] = [
-  { mode: "edition", labelKey: "mode_edition", shortKey: "mode_edition_short" },
-  {
-    mode: "kinematic",
-    labelKey: "mode_kinematic",
-    shortKey: "mode_kinematic_short",
-  },
-  { mode: "dynamic", labelKey: "mode_dynamic", shortKey: "mode_dynamic_short" },
-];
 
 /** One segment of the group: what it shows, then the caret every one of them carries, since each opens a menu. */
 const Segment: React.FC<{
@@ -84,38 +67,13 @@ export const RunSettingsGroup: React.FC<RunSettingsGroupProps> = ({
   const anchor = (menu: "overlays" | "physics" | "mode") =>
     open?.menu === menu ? open.anchor : null;
   const close = () => setOpen(null);
-  const shown = useShownSimulation(appMode, mechanism);
+  const physics = usePhysicsSwitches(appMode, mechanism);
   const anyShown = overlays_shown(
     overlays.mechanicalElements,
     overlays.beamStressLens,
     overlays.supportReactions,
   );
-  const current = MODES.find((m) => m.mode === appMode) ?? MODES[0];
-  const physics: {
-    iconName: "gravity" | "collision" | "floor";
-    labelKey: StringKey;
-    on: boolean;
-    toggle: Action;
-  }[] = [
-    {
-      iconName: "gravity",
-      labelKey: "gravity",
-      on: shown.gravity,
-      toggle: { type: "SetGravity", enabled: !shown.gravity },
-    },
-    {
-      iconName: "collision",
-      labelKey: "collisions",
-      on: shown.collisions,
-      toggle: { type: "SetCollisions", enabled: !shown.collisions },
-    },
-    {
-      iconName: "floor",
-      labelKey: "floor",
-      on: shown.floor.enabled,
-      toggle: { type: "SetFloorEnabled", enabled: !shown.floor.enabled },
-    },
-  ];
+  const current = RUN_MODES.find((m) => m.mode === appMode) ?? RUN_MODES[0];
 
   return (
     <>
@@ -173,46 +131,21 @@ export const RunSettingsGroup: React.FC<RunSettingsGroupProps> = ({
         anchorEl={anchor("overlays")}
         onClose={close}
       />
-      <Menu
+      <PhysicsMenu
         anchorEl={anchor("physics")}
-        open={!!anchor("physics")}
         onClose={close}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-      >
-        {physics.map((row) => (
-          <MenuItem
-            key={row.iconName}
-            onClick={() => applyActions([row.toggle])}
-            sx={{ gap: 1 }}
-          >
-            <PhysicsToggle on={row.on} iconName={row.iconName} size={28} />
-            <ListItemText>{t(row.labelKey)}</ListItemText>
-          </MenuItem>
-        ))}
-      </Menu>
-      <Menu
+        switches={physics}
+        applyActions={applyActions}
+      />
+      <ModeMenu
         anchorEl={anchor("mode")}
-        open={!!anchor("mode")}
         onClose={close}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-      >
-        {MODES.map(({ mode, labelKey }) => (
-          <MenuItem
-            key={mode}
-            selected={mode === appMode}
-            onClick={() => {
-              close();
-              if (mode !== appMode)
-                change_app_mode(mode, setAppMode, mechanism, updateMetadata);
-            }}
-            sx={{ minHeight: 44 }}
-          >
-            {t(labelKey)}
-          </MenuItem>
-        ))}
-      </Menu>
+        appMode={appMode}
+        setAppMode={setAppMode}
+        mechanism={mechanism}
+        updateMetadata={updateMetadata}
+        rowHeight={44}
+      />
     </>
   );
 };

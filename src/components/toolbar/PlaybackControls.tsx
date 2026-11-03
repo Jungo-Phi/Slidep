@@ -1,13 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
-  Chip,
   Divider,
   IconButton,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
-  useTheme,
 } from "@mui/material";
 import {
   ChevronLeft,
@@ -16,9 +14,10 @@ import {
   LastPage,
   Pause,
   PlayArrow,
+  Public,
   RestartAlt,
 } from "@mui/icons-material";
-import { t } from "../../i18n";
+import { StringKey, t } from "../../i18n";
 import {
   Action,
   AppMode,
@@ -27,7 +26,6 @@ import {
   MechanismMetadata,
   SimulationSpeed,
 } from "../../types";
-import { icon, icon_inked } from "../element-palette/iconDataUris";
 import { useAmbient } from "../common/use-ambient";
 import { at_recording_end } from "../solver/dynamics/simulation-engine";
 import {
@@ -43,9 +41,16 @@ import { OverlaysMenu } from "./OverlaysMenu";
 import { ProjectHeader } from "./ProjectHeader";
 import {
   change_app_mode,
+  RUN_MODES,
   SPEEDS,
-  useShownSimulation,
+  usePhysicsSwitches,
 } from "./playback-actions";
+import {
+  MenuTrigger,
+  ModeMenu,
+  PhysicsMenu,
+  PhysicsToggle,
+} from "./RunSettingsMenus";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
 import {
   TOP_BAR_CONTROL_HEIGHT,
@@ -55,109 +60,180 @@ import {
   TOP_BAR_SLIM_BUTTON_SX,
 } from "./toolbar-metrics";
 
-
-interface PhysicsToggleProps {
-  on: boolean;
-  /** The palette icon's basename: the off state is its `-off` sibling. */
-  iconName: "gravity" | "collision" | "floor";
-  tooltip?: string;
-  /** Absent, the chip only shows the state: whatever holds it takes the click. */
-  onToggle?: () => void;
-  /** Diameter (px). */
-  size?: number;
-}
-
-/** One simulation switch (gravity, collisions, floor): icon only, filled when on. */
-export const PhysicsToggle: React.FC<PhysicsToggleProps> = ({
-  on,
-  iconName,
-  tooltip,
-  onToggle,
-  size = 22,
-}) => {
-  const theme = useTheme();
-  const chip = (
-    <Chip
-      icon={
-        <Box
-          component="img"
-          src={
-            on
-              ? icon_inked(iconName, theme.palette.primary.contrastText)
-              : icon(`${iconName}-off`)
-          }
-          alt=""
-          sx={{ width: (size * 18) / 22, height: (size * 18) / 22 }}
-        />
-      }
-      size="small"
-      clickable={!!onToggle}
-      onClick={onToggle}
-      variant="outlined"
-      sx={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        borderColor: on ? "primary.main" : "text.primary",
-        backgroundColor: on ? "primary.main" : "transparent",
-        color: on ? "primary.contrastText" : "inherit",
-        // The label's slot is what makes a chip a pill: dropped, the icon centres on its own.
-        "& .MuiChip-label": { display: "none" },
-        "& .MuiChip-icon": {
-          margin: 0,
-          color: on ? "primary.contrastText" : "inherit",
-        },
-        "&.MuiChip-clickable:hover": {
-          backgroundColor: on ? "primary.dark" : "action.hover",
-        },
-      }}
-    />
-  );
-  return tooltip ? <Tooltip title={tooltip}>{chip}</Tooltip> : chip;
-};
-
 interface PhysicsTogglesProps {
   appMode: AppMode;
   mechanism: Mechanism;
   applyActions: (actions: Action[]) => void;
+  /** Folds the three switches behind a single button opening them as a menu. */
+  folded: boolean;
 }
 
 /** Gravity, collisions and floor, as they stand at the instant on screen: what they show is what they flip. */
-export const PhysicsToggles: React.FC<PhysicsTogglesProps> = ({
+const PhysicsToggles: React.FC<PhysicsTogglesProps> = ({
   appMode,
   mechanism,
   applyActions,
+  folded,
 }) => {
-  const shown = useShownSimulation(appMode, mechanism);
+  const switches = usePhysicsSwitches(appMode, mechanism);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  if (folded)
+    return (
+      <>
+        {/* A fixed icon for the three settings together: none of them stands for the others, and their states are read in the menu. */}
+        <MenuTrigger
+          label={t("physics_settings")}
+          expanded={!!anchorEl}
+          onToggle={(button) =>
+            setAnchorEl((current) => (current ? null : button))
+          }
+        >
+          <Public sx={{ fontSize: 20 }} />
+        </MenuTrigger>
+        <PhysicsMenu
+          anchorEl={anchorEl}
+          onClose={() => setAnchorEl(null)}
+          nonModal
+          switches={switches}
+          applyActions={applyActions}
+        />
+      </>
+    );
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: TOP_BAR_GROUP_GAP }}>
-      <PhysicsToggle
-        on={shown.gravity}
-        iconName="gravity"
-        tooltip={t(shown.gravity ? "gravity_on" : "gravity_off")}
-        onToggle={() =>
-          applyActions([{ type: "SetGravity", enabled: !shown.gravity }])
-        }
-      />
-      <PhysicsToggle
-        on={shown.collisions}
-        iconName="collision"
-        tooltip={t(shown.collisions ? "collisions_on" : "collisions_off")}
-        onToggle={() =>
-          applyActions([{ type: "SetCollisions", enabled: !shown.collisions }])
-        }
-      />
-      <PhysicsToggle
-        on={shown.floor.enabled}
-        iconName="floor"
-        tooltip={t(shown.floor.enabled ? "floor_on" : "floor_off")}
-        onToggle={() =>
-          applyActions([
-            { type: "SetFloorEnabled", enabled: !shown.floor.enabled },
-          ])
-        }
-      />
+      {switches.map((row) => (
+        <PhysicsToggle
+          key={row.iconName}
+          on={row.on}
+          iconName={row.iconName}
+          tooltip={t(row.stateKey)}
+          onToggle={() => applyActions([row.toggle])}
+        />
+      ))}
     </Box>
+  );
+};
+
+interface ModeSelectorProps {
+  appMode: AppMode;
+  setAppMode: (mode: AppMode) => void;
+  mechanism: Mechanism;
+  updateMetadata: (metadata: MechanismMetadata, touch?: boolean) => void;
+  condensed: boolean;
+  /** Shows only the current mode, the others behind its menu. */
+  folded: boolean;
+}
+
+const MODE_SELECTOR_SX = {
+  mr: TOP_BAR_SECTION_GAP,
+  "& .MuiToggleButton-root": {
+    px: 1,
+    py: 0.2,
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    textTransform: "none",
+    color: "text.secondary",
+    borderColor: "dividers.toolbar",
+    "&.Mui-selected": {
+      color: "primary.contrastText",
+      backgroundColor: "primary.main",
+      "&:hover": { backgroundColor: "primary.dark" },
+    },
+  },
+} as const;
+
+/** Every mode the unfolded selector shows, statics included, greyed out until it exists. */
+const MODE_BUTTONS: {
+  mode: "edition" | "static" | "kinematic" | "dynamic";
+  tooltipKey: StringKey;
+  disabled?: boolean;
+}[] = [
+  { mode: "edition", tooltipKey: "mode_edition_tooltip" },
+  { mode: "static", tooltipKey: "mode_static_tooltip", disabled: true },
+  { mode: "kinematic", tooltipKey: "mode_kinematic_tooltip" },
+  { mode: "dynamic", tooltipKey: "mode_dynamic_tooltip" },
+];
+
+/** Edition, statics, kinematics, dynamics: what the app is doing. */
+const ModeSelector: React.FC<ModeSelectorProps> = ({
+  appMode,
+  setAppMode,
+  mechanism,
+  updateMetadata,
+  condensed,
+  folded,
+}) => {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  if (folded) {
+    const current = RUN_MODES.find((m) => m.mode === appMode) ?? RUN_MODES[0];
+    return (
+      <>
+        <Box sx={{ mr: TOP_BAR_SECTION_GAP }}>
+          <MenuTrigger
+            label={t(current.labelKey)}
+            tooltip={t(current.tooltipKey)}
+            expanded={!!anchorEl}
+            onToggle={(button) =>
+              setAnchorEl((open) => (open ? null : button))
+            }
+            outlined
+          >
+            <Box component="span" sx={{ fontSize: "0.75rem", fontWeight: 700 }}>
+              {t(current.labelKey)}
+            </Box>
+          </MenuTrigger>
+        </Box>
+        <ModeMenu
+          anchorEl={anchorEl}
+          onClose={() => setAnchorEl(null)}
+          nonModal
+          appMode={appMode}
+          setAppMode={setAppMode}
+          mechanism={mechanism}
+          updateMetadata={updateMetadata}
+        />
+      </>
+    );
+  }
+  return (
+    <ToggleButtonGroup
+      value={appMode}
+      exclusive
+      size="small"
+      onChange={(_e, newMode: AppMode) => {
+        if (newMode)
+          change_app_mode(newMode, setAppMode, mechanism, updateMetadata);
+      }}
+      sx={MODE_SELECTOR_SX}
+    >
+      {MODE_BUTTONS.map(({ mode, tooltipKey, disabled }) => {
+        const full = t(`mode_${mode}`);
+        const short = t(`mode_${mode}_short`);
+        // A shortened name is spelt out in full at the head of its tooltip.
+        const truncated = condensed && short !== full;
+        return (
+          <Tooltip
+            key={mode}
+            title={
+              truncated ? (
+                <>
+                  <Box component="span" sx={{ display: "block", fontWeight: 700 }}>
+                    {full}
+                  </Box>
+                  {t(tooltipKey)}
+                </>
+              ) : (
+                t(tooltipKey)
+              )
+            }
+          >
+            <ToggleButton value={mode} disabled={disabled}>
+              {condensed ? short : full}
+            </ToggleButton>
+          </Tooltip>
+        );
+      })}
+    </ToggleButtonGroup>
   );
 };
 
@@ -169,6 +245,8 @@ interface PlaybackControlsProps {
   applyActions: (actions: Action[]) => void;
   condensed: boolean;
   tight: boolean;
+  /** Shows only the current mode, the others behind its menu: narrower still than `tight`, the mode being read at a glance. */
+  foldMode: boolean;
   resetToStart: () => void;
   handleSpaceKey: () => void;
   onOpenGallery: () => void;
@@ -195,6 +273,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
   applyActions,
   condensed,
   tight,
+  foldMode,
   resetToStart,
   handleSpaceKey,
   onOpenGallery,
@@ -238,57 +317,14 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           gap: TOP_BAR_GROUP_GAP,
         }}
       >
-        {/* Mode selector */}
-        <ToggleButtonGroup
-          value={appMode}
-          exclusive
-          size="small"
-          onChange={(_e, newMode: AppMode) => {
-            if (newMode)
-              change_app_mode(newMode, setAppMode, mechanism, updateMetadata);
-          }}
-          sx={{
-            mr: TOP_BAR_SECTION_GAP,
-            "& .MuiToggleButton-root": {
-              px: 1,
-              py: 0.2,
-              fontSize: "0.72rem",
-              fontWeight: 600,
-              textTransform: "none",
-              color: "text.secondary",
-              borderColor: "dividers.toolbar",
-              "&.Mui-selected": {
-                color: "primary.contrastText",
-                backgroundColor: "primary.main",
-                "&:hover": { backgroundColor: "primary.dark" },
-              },
-            },
-          }}
-        >
-          <Tooltip title={t("mode_edition_tooltip")}>
-            <ToggleButton value="edition">
-              {t(condensed ? "mode_edition_short" : "mode_edition")}
-            </ToggleButton>
-          </Tooltip>
-
-          <Tooltip title={t("mode_static_tooltip")}>
-            <ToggleButton value="static" disabled>
-              {t(condensed ? "mode_static_short" : "mode_static")}
-            </ToggleButton>
-          </Tooltip>
-
-          <Tooltip title={t("mode_kinematic_tooltip")}>
-            <ToggleButton value="kinematic">
-              {t(condensed ? "mode_kinematic_short" : "mode_kinematic")}
-            </ToggleButton>
-          </Tooltip>
-
-          <Tooltip title={t("mode_dynamic_tooltip")}>
-            <ToggleButton value="dynamic">
-              {t(condensed ? "mode_dynamic_short" : "mode_dynamic")}
-            </ToggleButton>
-          </Tooltip>
-        </ToggleButtonGroup>
+        <ModeSelector
+          appMode={appMode}
+          setAppMode={setAppMode}
+          mechanism={mechanism}
+          updateMetadata={updateMetadata}
+          condensed={condensed}
+          folded={foldMode}
+        />
 
         {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
@@ -446,20 +482,27 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           );
         })()}
 
-        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
+        <Divider
+          flexItem
+          sx={{
+            ...TOP_BAR_DIVIDER_SX,
+            mx: tight ? -0.25 : condensed ? 0 : TOP_BAR_DIVIDER_SX.mx,
+          }}
+        />
 
         {/* Gravity / collisions / floor — reachable in edition too: these are settings of the mechanism, not of the run. */}
         <PhysicsToggles
           appMode={appMode}
           mechanism={mechanism}
           applyActions={applyActions}
+          folded={tight}
         />
 
         <Divider
           flexItem
           sx={{
             ...TOP_BAR_DIVIDER_SX,
-            mx: condensed ? 0.25 : TOP_BAR_DIVIDER_SX.mx,
+            mx: tight ? -0.25 : condensed ? 0.25 : TOP_BAR_DIVIDER_SX.mx,
           }}
         />
 

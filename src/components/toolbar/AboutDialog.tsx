@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Box,
+  Button,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -8,7 +9,14 @@ import {
   Link as MuiLink,
   Typography,
 } from "@mui/material";
-import { Bolt, Close, CloudOff, Devices, Lock } from "@mui/icons-material";
+import {
+  Bolt,
+  Close,
+  CloudOff,
+  Devices,
+  Lock,
+  ViewInAr,
+} from "@mui/icons-material";
 import { t } from "../../i18n";
 import { usePhoneLayout } from "../phone/use-phone-layout";
 
@@ -116,7 +124,17 @@ const AboutDialogView: React.FC<AboutDialogProps> = ({
         </MuiLink>
       </DialogContent>
       {/* Pinned under the text above, which alone scrolls: the version and the contact stay in sight. */}
-      <DialogContent sx={{ flex: "none", overflow: "visible" }}>
+      <DialogContent
+        sx={{
+          flex: "none",
+          overflow: "visible",
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          gap: 2,
+        }}
+      >
         <Box
           sx={{
             display: "grid",
@@ -161,6 +179,18 @@ const AboutDialogView: React.FC<AboutDialogProps> = ({
             github.com/Jungo-Phi/Slidep
           </MuiLink>
         </Box>
+        {/* A new tab, so the mechanism being edited stays open and nothing waits on the autosave. */}
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ViewInAr />}
+          href="/3d/"
+          target="_blank"
+          rel="noopener"
+          sx={{ ml: "auto", textTransform: "none" }}
+        >
+          {t("try_slidep_3d")}
+        </Button>
       </DialogContent>
     </Dialog>
   );

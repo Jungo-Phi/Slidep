@@ -154,8 +154,10 @@ import {
 
 /** Shortens the labels (Édition → Édit) and hides the chip labels. */
 const CONDENSED_BREAKPOINT = 1400;
-/** Also drops the separators and tightens the spacing, for really narrow windows. */
+/** Also folds the physics switches into a menu, for narrow windows: the zoom stepper, the most used of the bar, keeps its place. */
 const TIGHT_BREAKPOINT = 1150;
+/** Also folds the mode selector into a menu, for the narrowest windows short of the phone layout. */
+const FOLD_MODE_BREAKPOINT = 1000;
 
 /** Whether a canvas state is an armed placement tool waiting for its first click — no element selected, no gesture started. */
 const is_armed_tool_waiting = (state: CanvasState, mechanism: Mechanism) => {
@@ -297,6 +299,7 @@ const App: React.FC = () => {
   // The top bar's width follows the window, not the canvas: these queries re-render the component every time a breakpoint is crossed.
   const condensed = useMediaQuery(`(max-width:${CONDENSED_BREAKPOINT}px)`);
   const tight = useMediaQuery(`(max-width:${TIGHT_BREAKPOINT}px)`);
+  const foldMode = useMediaQuery(`(max-width:${FOLD_MODE_BREAKPOINT}px)`);
   const phone = usePhoneLayout();
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
@@ -1146,7 +1149,6 @@ const App: React.FC = () => {
         undoMechanism={undoMechanism}
         redoMechanism={redoMechanism}
         onZoomTo={zoomTo}
-        tight={tight}
         language={language}
         onSelectLang={handleSelectLang}
         showGrid={showGrid}
@@ -1172,7 +1174,6 @@ const App: React.FC = () => {
       undoMechanism,
       redoMechanism,
       zoomTo,
-      tight,
       language,
       handleSelectLang,
       showGrid,
@@ -1330,6 +1331,7 @@ const App: React.FC = () => {
                   applyActions={applyActions}
                   condensed={condensed}
                   tight={tight}
+                  foldMode={foldMode}
                   resetToStart={resetToStart}
                   handleSpaceKey={handleSpaceKey}
                   onOpenGallery={handleOpenGallery}

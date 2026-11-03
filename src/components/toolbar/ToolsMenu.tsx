@@ -1,13 +1,11 @@
-import React, { useState } from "react";
-import { Box, Divider, IconButton, Menu, Tooltip } from "@mui/material";
+import React from "react";
+import { Box, Divider, IconButton, Tooltip } from "@mui/material";
 import {
   Add,
   Info,
   Redo,
   Remove,
   Undo,
-  ViewInAr,
-  ZoomIn,
 } from "@mui/icons-material";
 import { Lang } from "../../i18n";
 import { t } from "../../i18n";
@@ -16,7 +14,6 @@ import { ThemeMode, ThemeName } from "../../theme/mui-theme";
 import type { SnapSettings } from "../../utils/snap-corridor";
 import { LanguageMenu } from "./LanguageMenu";
 import { SettingsMenu } from "./SettingsMenu";
-import { useNonModalPopup } from "../common/use-non-modal-popup";
 import { MAX_GRID_SCALE, MIN_GRID_SCALE } from "../../utils/grid";
 import {
   TOP_BAR_CONTROL_HEIGHT,
@@ -150,40 +147,6 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
   );
 };
 
-/** The same stepper behind a single magnifier, for a toolbar with no room for three slots. */
-const ZoomMenu: React.FC<ZoomControlsProps> = (props) => {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const popup = useNonModalPopup(!!anchorEl, anchorEl, () => setAnchorEl(null));
-  return (
-    <>
-      <Tooltip title={t("zoom")}>
-        <IconButton
-          color="inherit"
-          size="small"
-          aria-expanded={!!anchorEl}
-          onClick={(event) => {
-            const button = event.currentTarget;
-            setAnchorEl((current) => (current ? null : button));
-          }}
-        >
-          <ZoomIn sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-      <Menu
-        {...popup}
-        anchorEl={anchorEl}
-        open={!!anchorEl}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        transformOrigin={{ vertical: "top", horizontal: "center" }}
-      >
-        <Box sx={{ px: 1, py: 0.5 }}>
-          <ZoomControls {...props} />
-        </Box>
-      </Menu>
-    </>
-  );
-};
-
 interface ToolsMenuProps {
   mechanism: Mechanism;
   recenterTarget: ViewportState | null;
@@ -191,8 +154,6 @@ interface ToolsMenuProps {
   undoMechanism: () => void;
   redoMechanism: () => void;
   onZoomTo: (scale: number) => void;
-  /** Folds the zoom stepper behind a single magnifier. */
-  tight: boolean;
   language: Lang;
   onSelectLang: (lang: Lang) => void;
   showGrid: boolean;
@@ -211,7 +172,7 @@ interface ToolsMenuProps {
   onOpenAbout: () => void;
 }
 
-/** The toolbar's right-hand cluster: viewport, undo/redo, language, settings, about, and the link to the 3D prototype. */
+/** The toolbar's right-hand cluster: viewport, undo/redo, language, settings and about. */
 export const ToolsMenu: React.FC<ToolsMenuProps> = ({
   mechanism,
   recenterTarget,
@@ -219,7 +180,6 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
   undoMechanism,
   redoMechanism,
   onZoomTo,
-  tight,
   language,
   onSelectLang,
   showGrid,
@@ -246,21 +206,12 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
       justifyContent: "flex-end",
     }}
   >
-    {tight ? (
-      <ZoomMenu
-        viewport={mechanism.viewport}
-        recenterTarget={recenterTarget}
-        onZoomTo={onZoomTo}
-        onRecenter={onRecenter}
-      />
-    ) : (
-      <ZoomControls
-        viewport={mechanism.viewport}
-        recenterTarget={recenterTarget}
-        onZoomTo={onZoomTo}
-        onRecenter={onRecenter}
-      />
-    )}
+    <ZoomControls
+      viewport={mechanism.viewport}
+      recenterTarget={recenterTarget}
+      onZoomTo={onZoomTo}
+      onRecenter={onRecenter}
+    />
 
     <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
 
@@ -312,21 +263,6 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
     <Tooltip title={t("about")}>
       <IconButton color="inherit" size="small" onClick={onOpenAbout}>
         <Info sx={{ fontSize: 20 }} />
-      </IconButton>
-    </Tooltip>
-
-    {/* A new tab, so the mechanism being edited stays open and nothing waits on the autosave. */}
-    <Tooltip title={t("try_slidep_3d")}>
-      <IconButton
-        color="inherit"
-        size="small"
-        component="a"
-        href="/3d/"
-        target="_blank"
-        rel="noopener"
-        aria-label={t("try_slidep_3d")}
-      >
-        <ViewInAr sx={{ fontSize: 20 }} />
       </IconButton>
     </Tooltip>
   </Box>
