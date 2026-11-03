@@ -153,11 +153,11 @@ import {
 } from "./components/mechanisms-gallery/use-mechanism-library";
 
 /** Shortens the labels (Édition → Édit) and hides the chip labels. */
-const CONDENSED_BREAKPOINT = 1400;
+const CONDENSED_BREAKPOINT = 1350;
 /** Also folds the physics switches into a menu, for narrow windows: the zoom stepper, the most used of the bar, keeps its place. */
 const TIGHT_BREAKPOINT = 1150;
 /** Also folds the mode selector into a menu, for the narrowest windows short of the phone layout. */
-const FOLD_MODE_BREAKPOINT = 1000;
+const FOLD_MODE_BREAKPOINT = 1050;
 
 /** Whether a canvas state is an armed placement tool waiting for its first click — no element selected, no gesture started. */
 const is_armed_tool_waiting = (state: CanvasState, mechanism: Mechanism) => {

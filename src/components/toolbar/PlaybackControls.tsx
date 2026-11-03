@@ -302,7 +302,6 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
         }}
       >
         <ProjectHeader
-          tight={tight}
           onOpenGallery={onOpenGallery}
           projectName={mechanism.metadata.name}
           saveStatus={saveStatus}
@@ -530,6 +529,8 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           }
           condensed={condensed}
         />
+
+        <Divider flexItem sx={{ mx: condensed ? 0.75 : 2 }} />
       </Box>
 
       <Box

@@ -7,8 +7,6 @@ import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
 import { TOP_BAR_DIVIDER_SX, TOP_BAR_GROUP_GAP } from "./toolbar-metrics";
 
 interface ProjectHeaderProps {
-  /** Drops the wordmark, keeping only the logo — for narrow windows. */
-  tight: boolean;
   onOpenGallery: () => void;
   projectName: string;
   saveStatus: SaveStatus;
@@ -16,7 +14,6 @@ interface ProjectHeaderProps {
 
 /** Logo, library shortcut, and project name with its save-status dot. */
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
-  tight,
   onOpenGallery,
   projectName,
   saveStatus,
@@ -37,7 +34,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       sx={{ height: 26, display: "block", flexShrink: 0 }}
     />
     {/* The wordmark is the first thing sacrificed: the logo alone identifies the app when room runs short. */}
-    {!tight && (
+
       <Typography
         sx={{
           fontSize: "1.5em",
@@ -50,7 +47,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       >
         Slidep
       </Typography>
-    )}
+
 
     <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
 
