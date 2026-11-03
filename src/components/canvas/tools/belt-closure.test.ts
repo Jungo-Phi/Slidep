@@ -276,6 +276,24 @@ describe("the gear a belt is started on", () => {
     expect(attached(actions)).toEqual([G_A]);
   });
 
+  // Wrapped, not pinned: the start stays a free terminal on the rim.
+  it("wraps the belt over it without pinning the start to its rim", () => {
+    const { actions } = handle_placing_element(
+      { ...routing, attachedGearsIDs: [{ id: G_B, clockwise: false }] },
+      { type: "Void", position: P(500, -200) },
+      MECH,
+      [],
+      [],
+      [],
+      [],
+      VIEWPORT,
+    );
+    expect(attached(actions)).toEqual([G_A, G_B]);
+    const created = actions.filter((a) => a.type === "CreateElement");
+    expect(created.map((a) => a.element.type)).toEqual(["belt"]);
+    expect(actions.some((a) => a.type === "ConnectsFixedNodeStart")).toBe(false);
+  });
+
   it("stays first in the route, ahead of the gears clicked after it", () => {
     const { actions } = handle_placing_element(
       { ...routing, attachedGearsIDs: [{ id: G_B, clockwise: false }] },

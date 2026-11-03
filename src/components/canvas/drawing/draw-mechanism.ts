@@ -77,6 +77,8 @@ import {
 } from "./node-stress";
 import { RedundancySymbol } from "../../solver/analysis/redundancy-symbols";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
+import { weld_groups } from "./weld-groups";
+import { beam_end, draw_weld, type WeldDrawing } from "./draw-weld";
 import {
   deletion_closure,
   get_mechanical_element_from_id,
@@ -728,12 +730,41 @@ export function draw_mechanism(
         constraintElements,
       );
 
+  // Read once for the whole frame: the drawing and the hover share this map, so the stroke and the cursor cannot disagree on where an edge is.
+  const parallelOffsets = parallel_edge_offsets(mechanicalElements);
+
+  /** Whether the cursor itself is on `id`, directly or through what it aims at. */
+  const under_cursor = (id: ID) =>
+    is_hovered(id, hoveredPart, constraintElements) ||
+    id === terminalNodeID ||
+    crossedNodeIDs.has(id) ||
+    id === hoveredOverlayElementID;
+
+  // A join anything points at keeps its disc, so the joint shows where the eye is sent.
+  const welds = weld_groups(
+    mechanicalElements,
+    parallelOffsets,
+    (id) =>
+      undrawable.has(id) ||
+      doomed.has(id) ||
+      (state.type === "ErasingMultiple" && state.hoveredElementIDs.includes(id)) ||
+      is_selected(id, state) ||
+      is_erase_hovered(id, state, constraintElements, doomed) ||
+      under_cursor(id) ||
+      focused.has(id) ||
+      faulty.has(id) ||
+      measured.has(id),
+  );
+  const is_seamless = (nodeID: ID | undefined) =>
+    nodeID !== undefined && welds.seamless.has(nodeID);
+
   for (const element of allElements.filter(
     (element) => element.type === "join",
   )) {
     if (
       undrawable.has(element.id) ||
       doomed.has(element.id) ||
+      welds.seamless.has(element.id) ||
       (state.type === "ErasingMultiple" &&
         state.hoveredElementIDs.includes(element.id))
     )
@@ -776,9 +807,6 @@ export function draw_mechanism(
   }
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   ctx.strokeStyle = COLORS.ELEMENT_STROKE;
-
-  // Read once for the whole frame: the drawing and the hover share this map, so the stroke and the cursor cannot disagree on where an edge is.
-  const parallelOffsets = parallel_edge_offsets(mechanicalElements);
 
   // The library dialog's tint — every beam's own color, and which of them share the hovered row's material/profile (see `CanvasDrawing.libraryTint`'s own doc).
   const beamTintColors = new Map<ID, string>();
@@ -929,6 +957,135 @@ export function draw_mechanism(
     shadowBlur: number;
   }[] = [];
 
+  /** Sets `ctx` up for `element` — hover, selection, eraser, fault… — and returns what its drawing reads of that state, or `undefined` when it is not drawn at all. */
+  const style_element = (element: UnionElement) => {
+    if (undrawable.has(element.id) || replaced.has(element.id)) return undefined;
+    // Skip constraints hidden by the current context (mode / tab / hover).
+    const constraintOpacity = is_constraint_type(element.type)
+      ? visibleConstraints.get(element.id)
+      : undefined;
+    if (is_constraint_type(element.type) && constraintOpacity === undefined)
+      return undefined;
+    const isLoadElement =
+      element.type === "force" ||
+      element.type === "moment" ||
+      element.type === "distributed-force";
+    // A focused overlay reading eclipses its own element's selected look — see `CanvasDrawing.focusedOverlay`.
+    const isSelected = is_selected(element.id, state) && !focusedOverlay;
+    const isEraseHovered = is_erase_hovered(
+      element.id,
+      state,
+      constraintElements,
+      doomed,
+    );
+    // A terminal held by a node is grabbed through it: the node takes the hover, and the handle that would sit on top of it is not drawn.
+    const handleTerminal =
+      terminalNodeID === undefined
+        ? handled_edge_terminal(element.id, hoveredPart, state)
+        : undefined;
+    const isEdgeEndHovered = handleTerminal !== undefined;
+    // Cursor-driven only: a group highlight (focused/faulty) must not, by itself, pull a motor to the front — see the "pivot" case below.
+    const isCursorHovered =
+      under_cursor(element.id) ||
+      (dimensionSnapped &&
+        state.type === "MovingConstraint" &&
+        state.elementID === element.id);
+    const isHovered =
+      focused.has(element.id) || faulty.has(element.id) || isCursorHovered;
+
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.strokeStyle = isLoadElement ? COLORS.ACCENT : COLORS.ELEMENT_STROKE;
+    ctx.fillStyle = isLoadElement ? COLORS.ACCENT : COLORS.FILL_BODY;
+    ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+    if (element.type === "gear") {
+      ctx.lineWidth = STROKE_WIDTHS.GEAR;
+    }
+    // The library dialog's tint (`CanvasDrawing.libraryTint`) — drawn as a translucent film over the beam's own normal colors (below, once the shape itself is drawn), not as a replacement for them: the beam still reads as a beam, the tint just marks which material/profile it belongs to.
+    const beamTint =
+      element.type === "beam" ? beamTintColors.get(element.id) : undefined;
+
+    // Thicken the stroke if element is hovered.
+    // Loads are left out: they pick their width per sub-part below, from loadRestWidth / loadHoverWidth.
+    if (isHovered && !isEdgeEndHovered && !isLoadElement)
+      ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
+    // Add blue halo and blue stroke if element is selected
+    if (isSelected) {
+      if (isLoadElement) ctx.lineWidth += 1;
+      ctx.shadowColor = isLoadElement
+        ? COLORS.ACCENT
+        : COLORS.SELECTION_STROKE;
+      ctx.strokeStyle = isLoadElement
+        ? COLORS.SELECTION_ACCENT
+        : COLORS.SELECTION_STROKE;
+      ctx.fillStyle = isLoadElement
+        ? COLORS.SELECTION_ACCENT
+        : COLORS.FILL_BODY;
+      ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
+    }
+    // Held whole by the ruler: re-inked in the measurement hue, and nothing more.
+    // The halo is the selection's own mark and stays its alone.
+    if (measured.has(element.id)) ctx.strokeStyle = COLORS.MEASURE;
+    // Add red stroke and make semi-transparent if element is to be deleted
+    if (isEraseHovered) {
+      if (!isLoadElement) ctx.strokeStyle = COLORS.DELETION_STROKE;
+      ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
+    }
+    // At fault: a joint the redundancy audit found dispensable, or a motor the mechanism will not follow.
+    // The eraser's red, because it reads as a warning in every theme — but at full opacity, since this is something to look at, not something on its way out.
+    if (faulty.has(element.id) && !isLoadElement)
+      ctx.strokeStyle = COLORS.DELETION_STROKE;
+    // Fade out revealed constraints at the end of their hover cooldown.
+    if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
+    if (ignoringCollisions.has(element.id))
+      ctx.globalAlpha *= INTERACTION_SPECS.COLLISION_OFF_OPACITY;
+    // A row hovered in the library panel: its own beams thicken, same as any other hover — the rest keep their tint, undimmed.
+    if (
+      libraryTint &&
+      libraryTint.hoveredEntryID !== null &&
+      element.type === "beam" &&
+      beamTintHovered.has(element.id)
+    ) {
+      ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
+    }
+    // Tombstone of a just-deleted constraint (undo/redo feedback).
+    const isGhost = ghostConstraintIDs.has(element.id);
+    if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
+    const hideText =
+      (state.type === "EditingValue" || state.type === "PlacingValue") &&
+      state.elementID === element.id;
+    // Widths a load's sub-parts choose from: the element's own width when at rest, the hovered width for the part under the cursor.
+    const loadRestWidth = ctx.lineWidth;
+    const loadHoverWidth = loadRestWidth + STROKE_WIDTHS.HOVER_GAIN;
+    return {
+      constraintOpacity,
+      isLoadElement,
+      isSelected,
+      isEraseHovered,
+      handleTerminal,
+      isEdgeEndHovered,
+      isCursorHovered,
+      isHovered,
+      beamTint,
+      isGhost,
+      hideText,
+      loadRestWidth,
+      loadHoverWidth,
+    };
+  };
+
+  const weldDrawing: WeldDrawing = {
+    viewport,
+    seamless: welds.seamless,
+    style: style_element,
+    stressStops: (beamID) => beamStressStops.get(beamID),
+    stressFillAt: stress_fill_at,
+  };
+  /** Beams already drawn this frame, with the rest of their weld. */
+  const weldDrawn = new Set<ID>();
+
   DRAWING_ORDER.forEach((type) => {
     if (type === "probe" && !hideProbes) {
       ctx.globalAlpha = 1;
@@ -1017,109 +1174,30 @@ export function draw_mechanism(
     }
     const elements = allElements.filter((element) => element.type === type);
     for (const element of elements) {
-      if (undrawable.has(element.id) || replaced.has(element.id)) continue;
-      // Skip constraints hidden by the current context (mode / tab / hover).
-      const constraintOpacity = is_constraint_type(element.type)
-        ? visibleConstraints.get(element.id)
-        : undefined;
-      if (is_constraint_type(element.type) && constraintOpacity === undefined)
+      if (weldDrawn.has(element.id)) continue;
+      const weld =
+        element.type === "beam" ? welds.groups.get(element.id) : undefined;
+      if (weld) {
+        draw_weld(ctx, weld, weldDrawing);
+        // Springs and dampers still draw the rest of themselves in their own layer.
+        for (const piece of weld.pieces)
+          if (piece.type === "beam") weldDrawn.add(piece.id);
         continue;
-      const isLoadElement =
-        element.type === "force" ||
-        element.type === "moment" ||
-        element.type === "distributed-force";
-      // A focused overlay reading eclipses its own element's selected look — see `CanvasDrawing.focusedOverlay`.
-      const isSelected = is_selected(element.id, state) && !focusedOverlay;
-      const isEraseHovered = is_erase_hovered(
-        element.id,
-        state,
-        constraintElements,
-        doomed,
-      );
-      // A terminal held by a node is grabbed through it: the node takes the hover, and the handle that would sit on top of it is not drawn.
-      const handleTerminal =
-        terminalNodeID === undefined
-          ? handled_edge_terminal(element.id, hoveredPart, state)
-          : undefined;
-      const isEdgeEndHovered = handleTerminal !== undefined;
-      // Cursor-driven only: a group highlight (focused/faulty) must not, by itself, pull a motor to the front — see the "pivot" case below.
-      const isCursorHovered =
-        is_hovered(element.id, hoveredPart, constraintElements) ||
-        element.id === terminalNodeID ||
-        crossedNodeIDs.has(element.id) ||
-        element.id === hoveredOverlayElementID ||
-        (dimensionSnapped &&
-          state.type === "MovingConstraint" &&
-          state.elementID === element.id);
-      const isHovered =
-        focused.has(element.id) || faulty.has(element.id) || isCursorHovered;
-
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
-      ctx.lineCap = "butt";
-      ctx.lineJoin = "miter";
-      ctx.strokeStyle = isLoadElement ? COLORS.ACCENT : COLORS.ELEMENT_STROKE;
-      ctx.fillStyle = isLoadElement ? COLORS.ACCENT : COLORS.FILL_BODY;
-      ctx.lineWidth = STROKE_WIDTHS.STANDARD;
-      if (element.type === "gear") {
-        ctx.lineWidth = STROKE_WIDTHS.GEAR;
       }
-      // The library dialog's tint (`CanvasDrawing.libraryTint`) — drawn as a translucent film over the beam's own normal colors (below, once the shape itself is drawn), not as a replacement for them: the beam still reads as a beam, the tint just marks which material/profile it belongs to.
-      const beamTint =
-        element.type === "beam" ? beamTintColors.get(element.id) : undefined;
-
-      // Thicken the stroke if element is hovered.
-      // Loads are left out: they pick their width per sub-part below, from loadRestWidth / loadHoverWidth.
-      if (isHovered && !isEdgeEndHovered && !isLoadElement)
-        ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
-      // Add blue halo and blue stroke if element is selected
-      if (isSelected) {
-        if (isLoadElement) ctx.lineWidth += 1;
-        ctx.shadowColor = isLoadElement
-          ? COLORS.ACCENT
-          : COLORS.SELECTION_STROKE;
-        ctx.strokeStyle = isLoadElement
-          ? COLORS.SELECTION_ACCENT
-          : COLORS.SELECTION_STROKE;
-        ctx.fillStyle = isLoadElement
-          ? COLORS.SELECTION_ACCENT
-          : COLORS.FILL_BODY;
-        ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
-      }
-      // Held whole by the ruler: re-inked in the measurement hue, and nothing more.
-      // The halo is the selection's own mark and stays its alone.
-      if (measured.has(element.id)) ctx.strokeStyle = COLORS.MEASURE;
-      // Add red stroke and make semi-transparent if element is to be deleted
-      if (isEraseHovered) {
-        if (!isLoadElement) ctx.strokeStyle = COLORS.DELETION_STROKE;
-        ctx.globalAlpha = INTERACTION_SPECS.DELETION_OPACITY;
-      }
-      // At fault: a joint the redundancy audit found dispensable, or a motor the mechanism will not follow.
-      // The eraser's red, because it reads as a warning in every theme — but at full opacity, since this is something to look at, not something on its way out.
-      if (faulty.has(element.id) && !isLoadElement)
-        ctx.strokeStyle = COLORS.DELETION_STROKE;
-      // Fade out revealed constraints at the end of their hover cooldown.
-      if (constraintOpacity !== undefined) ctx.globalAlpha *= constraintOpacity;
-      if (ignoringCollisions.has(element.id))
-        ctx.globalAlpha *= INTERACTION_SPECS.COLLISION_OFF_OPACITY;
-      // A row hovered in the library panel: its own beams thicken, same as any other hover — the rest keep their tint, undimmed.
-      if (
-        libraryTint &&
-        libraryTint.hoveredEntryID !== null &&
-        element.type === "beam" &&
-        beamTintHovered.has(element.id)
-      ) {
-        ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
-      }
-      // Tombstone of a just-deleted constraint (undo/redo feedback).
-      const isGhost = ghostConstraintIDs.has(element.id);
-      if (isGhost) ctx.strokeStyle = COLORS.DELETION_STROKE;
-      const hideText =
-        (state.type === "EditingValue" || state.type === "PlacingValue") &&
-        state.elementID === element.id;
-      // Widths a load's sub-parts choose from: the element's own width when at rest, the hovered width for the part under the cursor.
-      const loadRestWidth = ctx.lineWidth;
-      const loadHoverWidth = loadRestWidth + STROKE_WIDTHS.HOVER_GAIN;
+      const style = style_element(element);
+      if (!style) continue;
+      const {
+        isSelected,
+        isEraseHovered,
+        handleTerminal,
+        isCursorHovered,
+        isHovered,
+        beamTint,
+        isGhost,
+        hideText,
+        loadRestWidth,
+        loadHoverWidth,
+      } = style;
 
       switch (element.type) {
         case "pivot":
@@ -1267,6 +1345,8 @@ export function draw_mechanism(
               break;
             }
             case "join":
+              // A weld is drawn by its bars (`draw_weld`): nothing of the join shows but its ground.
+              if (welds.seamless.has(element.id)) break;
               ctx.fillStyle =
                 stress_fill_at(element.position, element.fixedEdgesIDs) ??
                 ctx.fillStyle;
@@ -1324,8 +1404,8 @@ export function draw_mechanism(
                 ctx,
                 start,
                 end,
-                !!element.fixedNodeStartID,
-                !!element.fixedNodeEndID,
+                beam_end(element.fixedNodeStartID, welds.seamless),
+                beam_end(element.fixedNodeEndID, welds.seamless),
                 // The library tint takes priority when both are active — the dialog's hover feedback is the more immediate one, and the two are not meant to compete.
                 beamTint ? undefined : beamStressStops.get(element.id),
               );
@@ -1339,8 +1419,8 @@ export function draw_mechanism(
                   ctx,
                   start,
                   end,
-                  !!element.fixedNodeStartID,
-                  !!element.fixedNodeEndID,
+                  beam_end(element.fixedNodeStartID, welds.seamless),
+                  beam_end(element.fixedNodeEndID, welds.seamless),
                 );
                 ctx.restore();
               }
@@ -1353,10 +1433,17 @@ export function draw_mechanism(
                 coilPitch,
                 element.restLength,
                 viewport.scale,
+                {
+                  start: is_seamless(element.fixedNodeStartID),
+                  end: is_seamless(element.fixedNodeEndID),
+                },
               );
               break;
             case "damper":
-              draw_damper(ctx, start, end, element.restLength, viewport.scale);
+              draw_damper(ctx, start, end, element.restLength, viewport.scale, {
+                start: is_seamless(element.fixedNodeStartID),
+                end: is_seamless(element.fixedNodeEndID),
+              });
               break;
           }
           if (offset) {

@@ -1117,6 +1117,13 @@ export const STRINGS = {
     es: "Eliminar la selección",
   },
   dimension: { fr: "Dimension", en: "Dimension", de: "Bemaßung", es: "Cota" },
+  // The palette names both uses of the one element: a user looking for a pulley read "Gear" and moved on.
+  tool_gear: {
+    fr: "Engrenage / Poulie",
+    en: "Gear / Pulley",
+    de: "Zahnrad / Riemenscheibe",
+    es: "Engranaje / Polea",
+  },
   tool_gear_ratio: {
     fr: "Rapport d'engrenages",
     en: "Gear ratio",

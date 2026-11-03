@@ -23,10 +23,31 @@
 
 **Lisibilité**
 
-- 🔨 Faire comprendre que l’engrenage à un double usage et fait aussi poulie
+
+2. Connecter la fin sur une poulie ne crée pas de join !
+4. Tracé de courroie par chemin.
+5. Outil engrenage sur un brin dès la première étape.
+6. Pivot par défaut.
+
+Themes
+- 🔨 Theme blueprint : Bords tags plus lisibles, luminosité plus basse et moins saturé sur les bords
+- 🔨 Theme slidep dark : la couleur de sélection est trop saturée
+- 🔨 Theme classic dark : la couleur de stroke est trop bleu
+
+- 🔨 Après avoir changé une valeur dans un NumberInput, cliquer sur le canvas (sans avoir cliquer sur enter) annule la modif
+
+- Les DDL ne prennent pas en compte les déconnexions de courroies
+- Collision à répétition avec "Pince.slidep"
+- Mauvais bilan des forces avec "Poulie tombante.slidep"
+
 - 🔨 Mieux différencier visuellement les joins et les pivots
 - 🔨 Donner des titres à toutes les sections du panneau latéral
 - 🤔 Les mécaniciens on tendance à penser avec des conditions aux limites et sont donc confus par le slider ou slidep, car ce sont des liaisons. Faudrait-il faire quelque chose pour clarifier ça ? Créer de vraies conditions limites ? Ou ne rien faire ?
+- 🤔 Fusionner statique et cinématique ?
+- 🤔 Outil "déconnecter" ?
+- 🤔 Outil "couper" (les poutres) ?
+- 🔨 Changer icon des collisions de groupe
+- 🔨 Connexion/déconnexion moteur ! (Pince.slidep)
 - 🔨 Rendre les hitbox exactes (contraintes, noeuds)
 - 🔨 Finir les traits de DimensionAngle
 - 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
@@ -35,7 +56,6 @@
 - 🔨 N’arrive pas bien à connecter une courroie (l’attrape par les bouts)
 - 🆕 Placer une courroie en traçant un chemin
 - 🆕 Placer une courroie en commençant par les engrenages (au lieu du vide)
-- 🚨 Le bilan des forces est faux sur certains mécanismes (ex: "Test Poulie sans masse_frottement (Loic).slidep"). Ne devrait-il pas se faire par groupe rigide ou DDL au lieu de global ?
 
 **Découvrabilité et onboarding**
 
@@ -121,7 +141,6 @@
 - 🚨 Clicker sur le canvas après avoir sélectionné un élément ne doit pas afficher la sélection multiple (ou seulement après avoir commencé le drag).
 - 🔨 Transférer les propriétées de mesures et overlays au remplacement d'un node / edge
 - 🔨 Hover le bilan des moments ne doit pas faire apparitre le cg, seulement à la sélection. Et n'afficher la croix que si on n'affiche pas de moment à sa position
-- 🔨 Bords tags en thème blueprint
 - 🔨 Afficher les contraintes d'un élément sélectionné
 - 🔨 Afficher le point grabbé en simulation
 - 🔨 Afficher les trajectoires anciennes de plus en plus transparentes

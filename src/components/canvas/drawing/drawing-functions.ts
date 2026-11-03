@@ -1087,18 +1087,47 @@ export interface BeamFillStop {
   color: string;
 }
 
+/**
+ * How a beam end meets what holds it.
+ * `free`: a square end.
+ * `join`: the contour stops short, leaving it to the node drawn over the end (join disc, pivot, slider…).
+ * `seamless`: a butt end on the node itself, for a weld whose corner is drawn by `draw_weld` and whose bars are drawn in two passes (`EdgePass`) so they merge into one piece.
+ */
+export type BeamEnd = "free" | "join" | "seamless";
+
+/** Which half of a bar to draw: its contour, its body over the contour, or both at once. */
+export type EdgePass = "outline" | "fill" | "both";
+
+/** The bar-like stub a spring or damper ends with, in screen px from its node, which a weld draws in its stead (`draw_spring`'s `seamless`). */
+export function edge_stub_length(type: "spring" | "damper"): number {
+  return DIM.TAC - DIM.BEAM_WIDTH / 2 + (type === "damper" ? 1 : 0);
+}
+
+/** Half the width of a bar's contour and of its body, for the stroke width `lineWidth` it is drawn with. */
+export function beam_half_widths(lineWidth: number): { outline: number; fill: number } {
+  return {
+    outline: (DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + lineWidth) / 2,
+    fill: (DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - lineWidth) / 2,
+  };
+}
+
 export function draw_beam(
   ctx: CanvasRenderingContext2D,
   start: ScreenPoint,
   end: ScreenPoint,
-  isStartJoin: boolean = false,
-  isEndJoin: boolean = false,
+  startEnd: BeamEnd = "free",
+  endEnd: BeamEnd = "free",
   stressStops?: BeamFillStop[],
+  pass: EdgePass = "both",
 ) {
   const sL = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD + ctx.lineWidth;
   const sideS = DIM.BEAM_WIDTH - STROKE_WIDTHS.STANDARD - ctx.lineWidth;
-  const startJ = isStartJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
-  const endJ = isEndJoin ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
+  const startJ =
+    startEnd === "join" ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
+  const endJ =
+    endEnd === "join" ? DIM.JOIN_RADIUS + STROKE_WIDTHS.STANDARD + 1 : 0;
+  const buttStart = startEnd === "seamless";
+  const buttEnd = endEnd === "seamless";
   const oldFillStyle = ctx.fillStyle;
 
   ctx.save();
@@ -1107,8 +1136,13 @@ export function draw_beam(
     ctx.rotate(end.sub(start).angle());
     const length = start.distance_to(end);
 
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.fillRect(-sL / 2 + startJ, -sL / 2, length + sL - endJ - startJ, sL);
+    if (pass !== "fill") {
+      ctx.fillStyle = ctx.strokeStyle;
+      const x0 = buttStart ? 0 : -sL / 2 + startJ;
+      const x1 = buttEnd ? length : length + sL / 2 - endJ;
+      ctx.fillRect(x0, -sL / 2, x1 - x0, sL);
+    }
+    if (pass === "outline") return;
     // Built here, under this call's own translate/rotate: a gradient's coordinates are only guaranteed to line up with the shape they fill when both are resolved under the same transform, so it cannot be built by the caller and handed in.
     if (stressStops && stressStops.length > 0) {
       const gradient = ctx.createLinearGradient(0, 0, length, 0);
@@ -1121,7 +1155,9 @@ export function draw_beam(
     } else {
       ctx.fillStyle = oldFillStyle;
     }
-    ctx.fillRect(-sideS / 2, -sideS / 2, length + sideS, sideS);
+    const x0 = buttStart ? 0 : -sideS / 2;
+    const x1 = buttEnd ? length : length + sideS / 2;
+    ctx.fillRect(x0, -sideS / 2, x1 - x0, sideS);
   } finally {
     // A stray exception (an invalid gradient color stop, say) must never skip this: leaving the translate/rotate above unwound would rotate every element drawn after this one for the rest of the session, canvas-wide.
     ctx.restore();
@@ -1130,6 +1166,7 @@ export function draw_beam(
 
 /**
  * `coilPitch` is the world length one coil stands for, from `spring_coil_pitch`; `undefined` for a mechanism with no span at all, where the spring is left to be counted against itself.
+ * `seamless` names the ends whose stub a weld has already drawn (`edge_stub_length`).
  */
 export function draw_spring(
   ctx: CanvasRenderingContext2D,
@@ -1138,6 +1175,7 @@ export function draw_spring(
   coilPitch: number | undefined,
   restLength: number | undefined = undefined,
   scale: number = 1,
+  seamless: { start?: boolean; end?: boolean } = {},
 ) {
   ctx.save();
   ctx.translate(start.x, start.y);
@@ -1193,28 +1231,23 @@ export function draw_spring(
     DIM.SPRING_INNER_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
   ctx.strokeStyle = oldStrokeStyle;
-  // Start
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(DIM.TAC - DIM.BEAM_WIDTH / 2, 0);
-  ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = oldStrokeStyle;
-  ctx.stroke();
-  ctx.strokeStyle = oldFillStyle;
-  ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
-  ctx.stroke();
-  ctx.strokeStyle = oldStrokeStyle;
-  // End
-  ctx.beginPath();
-  ctx.moveTo(length - DIM.TAC + DIM.BEAM_WIDTH / 2, 0);
-  ctx.lineTo(length, 0);
-  ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = oldStrokeStyle;
-  ctx.stroke();
-  ctx.strokeStyle = oldFillStyle;
-  ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
-  ctx.stroke();
-  ctx.strokeStyle = oldStrokeStyle;
+  const stub = edge_stub_length("spring");
+  for (const [skip, from, to] of [
+    [seamless.start, 0, stub],
+    [seamless.end, length - stub, length],
+  ] as const) {
+    if (skip) continue;
+    ctx.beginPath();
+    ctx.moveTo(from, 0);
+    ctx.lineTo(to, 0);
+    ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
+    ctx.strokeStyle = oldStrokeStyle;
+    ctx.stroke();
+    ctx.strokeStyle = oldFillStyle;
+    ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
+    ctx.stroke();
+    ctx.strokeStyle = oldStrokeStyle;
+  }
 
   // Front coils
   ctx.lineCap = "round";
@@ -1251,12 +1284,14 @@ function damper_geometry(
   return { mouth, cylinder, piston };
 }
 
+/** `seamless` names the ends whose stub a weld has already drawn (`edge_stub_length`). */
 export function draw_damper(
   ctx: CanvasRenderingContext2D,
   start: ScreenPoint,
   end: ScreenPoint,
   restLength: number | undefined = undefined,
   scale: number = 1,
+  seamless: { start?: boolean; end?: boolean } = {},
 ) {
   ctx.save();
   ctx.translate(start.x, start.y);
@@ -1269,19 +1304,22 @@ export function draw_damper(
   );
   const oldStrokeStyle = ctx.strokeStyle;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
+  const stub = edge_stub_length("damper");
+  const draw_stub = (from: number, to: number) => {
+    ctx.beginPath();
+    ctx.moveTo(from, 0);
+    ctx.lineTo(to, 0);
+    ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
+    ctx.strokeStyle = oldStrokeStyle;
+    ctx.stroke();
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
+    ctx.stroke();
+    ctx.strokeStyle = oldStrokeStyle;
+  };
 
-  // End
   ctx.lineCap = "square";
-  ctx.beginPath();
-  ctx.moveTo(length - DIM.TAC + DIM.BEAM_WIDTH / 2 - 1, 0);
-  ctx.lineTo(length, 0);
-  ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = oldStrokeStyle;
-  ctx.stroke();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
-  ctx.stroke();
-  ctx.strokeStyle = oldStrokeStyle;
+  if (!seamless.end) draw_stub(length - stub, length);
 
   // Cylinder body
   ctx.beginPath();
@@ -1306,17 +1344,7 @@ export function draw_damper(
     DIM.DAMPER_INNER_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
   ctx.stroke();
   ctx.strokeStyle = oldStrokeStyle;
-  // Start
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(DIM.TAC - DIM.BEAM_WIDTH / 2 + 1, 0);
-  ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
-  ctx.strokeStyle = oldStrokeStyle;
-  ctx.stroke();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
-  ctx.stroke();
-  ctx.strokeStyle = oldStrokeStyle;
+  if (!seamless.start) draw_stub(0, stub);
 
   // Valve
   ctx.beginPath();

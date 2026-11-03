@@ -148,7 +148,7 @@ export const edition_palette = (): {
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
       {
-        nameKey: "gear",
+        nameKey: "tool_gear",
         iconSrc: icon("gear"),
         goToStateType: "PlacingGearStart",
         hilightRule: (state) =>

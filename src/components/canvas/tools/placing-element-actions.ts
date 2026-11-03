@@ -645,7 +645,10 @@ function handle_place_element(
     "startHover" in state &&
     "positionStart" in newElement &&
     // A closing belt normally attaches to its own start through the closure below — except when the gesture began on a node, which then becomes the junction (the closure reuses it instead of minting a fresh one).
-    (hoveredPart.type !== "BeltClosure" || state.startHover.type === "Node")
+    (hoveredPart.type !== "BeltClosure" || state.startHover.type === "Node") &&
+    // A belt begun on a pulley only wraps it: its start stays a free terminal, as if begun in the void beside it.
+    // Users clicking a pulley meant to run over it, not to pin the belt's end to its rim; that pin is still had by dragging the terminal onto the rim afterwards.
+    !(state.type === "PlacingBeltEnd" && state.startHover.type === "GearTooth")
   ) {
     sim.step(
       connect_elements(
