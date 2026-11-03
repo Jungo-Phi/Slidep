@@ -137,12 +137,14 @@ const pendulum = (rotationalFriction: number): MechanicalElement[] => [
 /**
  * A vertical rail held at both ends, with a block free to fall along it.
  * Long enough that the block never reaches the far end, where it would jam against the anchor and stop for a reason unrelated to friction.
+ * The block's weight is a short arm welded to the slider: a bare slider has no mass, so nothing would pull it down.
  */
 const chute = (slidingFriction: number): MechanicalElement[] => [
   pivot("top", P(0, 5), true, [id("rail")]),
   pivot("bottom", P(0, -5), true, [id("rail")]),
   beam("rail", P(0, 5), P(0, -5), "top", "bottom", [id("block")], LIGHT_ID),
-  slider("block", P(0, 0), "rail", slidingFriction),
+  { ...slider("block", P(0, 0), "rail", slidingFriction), fixedEdgesIDs: [id("arm")] },
+  beam("arm", P(0, 0), P(0.5, 0), "block"),
 ];
 
 describe("frottement des liaisons, en simulation", () => {

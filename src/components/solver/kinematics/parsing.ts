@@ -618,7 +618,7 @@ export function rebuild_belt_q_links(
         l.owner === belt.owner
       ),
   );
-  if (active.length < 2) return kept;
+  if (active.length < (belt.closed ? 2 : 1)) return kept;
 
   const spec = {
     gearPosKeys: active.map((i) => belt.gearPosKeys[i]),

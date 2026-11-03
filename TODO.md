@@ -10,7 +10,6 @@
 
 **Roadmap**
 
-- 🚨 Régler les bugs prioritaires
 - 🤔 Répondre aux questions
 - 🔨 Lisibilité
 - 🔨 Tutos et onboarding
@@ -21,18 +20,6 @@
 - 🆕 Nouvelles fonctionnalités
 
 ### Retours utilisateurs
-
-**Bugs prioritaires**
-
-- 🚨 Échec de l'enregistrement automatique et du chargement de fichiers sur Mac
-- 🔨 Afficher un message d'erreur clair en cas d'échec d'enregistrement / de chargement
-- 🚨 Mauvais résultats de la physique sur "Test Poulie sans masse/frottement.slidep"
-- 🚨 Mauvais affichage des contraintes sur "Asymétrie.slidep"
-- 🚨 Un snap sur la grille ne se fait pas toujours bien aux valeurs rondes, wtf !?
-- 🚨 Supprimer la référence d'une force sur les courroies
-- 🚨 Il manque des réactions aux appuis
-- 🚨 On manque d'un moment de réaction d'appuis sur le slider de "Puente"
-- 🚨 Les forces de réaction et efforts internes disparaissent après un grab dans "Hoist.slidep"
 
 **Lisibilité**
 
@@ -48,6 +35,7 @@
 - 🔨 N’arrive pas bien à connecter une courroie (l’attrape par les bouts)
 - 🆕 Placer une courroie en traçant un chemin
 - 🆕 Placer une courroie en commençant par les engrenages (au lieu du vide)
+- 🚨 Le bilan des forces est faux sur certains mécanismes (ex: "Test Poulie sans masse_frottement (Loic).slidep"). Ne devrait-il pas se faire par groupe rigide ou DDL au lieu de global ?
 
 **Découvrabilité et onboarding**
 

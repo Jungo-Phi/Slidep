@@ -155,8 +155,8 @@ export interface StaticsFrame {
   accelerationOf: (key: string) => Point2;
   /** Loads, spring/damper and joint friction forces at a node — never gravity, which is added here, nor a motor's, which is a reaction. */
   externalForceAt: (key: string) => Point2;
-  /** Mass lumped at a node MINUS the beams' own endpoint shares: what genuinely belongs to
-   * the node, a `mass` element's own value and nothing else. */
+  /** Mass lumped at a node MINUS the beams' own endpoint shares: what genuinely belongs to the node, a `mass` element's own value and nothing else.
+   * The inertial mass the dynamics solved with, so it may hold a floor or be lowered by a lent one; the weight the floor does not have comes in through `externalForceAt`. */
   nodeMassAt: (key: string) => number;
   /** A beam's continuum mass, `μL`. */
   beamMass: (beamID: ID) => number;

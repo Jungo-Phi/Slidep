@@ -614,6 +614,12 @@ export const STRINGS = {
     de: "Datei nicht lesbar",
     es: "Archivo ilegible",
   },
+  import_storage_failed: {
+    fr: "Import impossible : le navigateur refuse l'enregistrement. Rechargez la page et réessayez.",
+    en: "Import failed: the browser refuses to save. Reload the page and try again.",
+    de: "Import fehlgeschlagen: Der Browser verweigert das Speichern. Laden Sie die Seite neu und versuchen Sie es erneut.",
+    es: "Importación imposible: el navegador rechaza el guardado. Recarga la página e inténtalo de nuevo.",
+  },
   drop_to_import: {
     fr: "Déposez pour importer",
     en: "Drop to import",

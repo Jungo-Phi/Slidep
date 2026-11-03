@@ -23,6 +23,7 @@ import {
   ParameterSnapshot,
   SimulationSnapshot,
   SnapshotLayout,
+  SupportTorsor,
 } from "../../../types/runtime-state";
 import {
   belt_q_links,
@@ -39,7 +40,7 @@ import { BeamCohesionSpec, build_beam_cohesion_specs } from "./beam-cohesion";
 import { StaticsSystem, build_statics_system } from "../statics/equilibrium-model";
 import { solve_statics } from "../statics/equilibrium-solve";
 import { build_flexibility } from "../statics/flexibility";
-import { beam_cohesion_from_statics, belt_strands_from_statics } from "../statics/publish";
+import { beam_cohesion_from_statics, belt_strands_from_statics, supports_from_statics } from "../statics/publish";
 import { compute_balance_sample } from "../statics/equilibrium-solve";
 import { BEAM_END_MASS_FRACTION } from "./mass-model";
 import { StaticsBeam, statics_frame } from "../statics/statics-frame";
@@ -1734,6 +1735,10 @@ function solve_dynamic_frame(
       if (own > 0) groundedWeights.set(key, gravity.mul(own));
     }
   }
+  // A free node's solver mass differs from its real one where the mass model floored or lent it (`DynamicMassModel.weightCorrections`); the predict step's uniform `g` needs the difference restated as a force.
+  const weightCorrections = new Map<string, Point2>();
+  for (const [key, difference] of model.dynamicMasses.weightCorrections)
+    weightCorrections.set(key, gravity.mul(difference));
   let angleVelocitiesBeforeSolve = new Map(angleVelocities);
   const subDt = dt / substeps;
   let reactions: LinkReaction[] | undefined;
@@ -1851,6 +1856,8 @@ function solve_dynamic_frame(
       for (const [key, f] of extra) forces.set(key, (forces.get(key) ?? ZERO).add(f));
     };
     merge_forces(resolve_spring_damper_forces(model.compiledSpringDampers, positions, velocities));
+    // Gravity pulls on the mechanism's real masses, not the solver's floors: folded into `applied` too, so the statics balances the same weight.
+    merge_forces(weightCorrections);
     // The grab, as a force rather than a `HandleGrab` position constraint — resolved against the same live positions/velocities, and folded into `passive`/`applied` so the statics balance accounts for it like any other external action.
     const grabForce = grab_forces(
       model,
@@ -2163,6 +2170,7 @@ function solve_dynamic_frame(
       ? beam_cohesion_from_statics(model.beamCohesionSpecs, staticsFrame, statics)
       : undefined,
     beltStrands: collectDiagnostics ? belt_strands_from_statics(statics) : undefined,
+    supports: collectDiagnostics ? supports_from_statics(statics) : undefined,
     grab: grabDisplay,
     contacts: touching.size > 0 ? [...touching.values()] : undefined,
   };
@@ -2191,7 +2199,8 @@ function compute_energy_sample(
     const v = velocities.get(key);
     if (v) kinetic += 0.5 * mass * (v.x * v.x + v.y * v.y);
     const p = positions.get(key);
-    if (p) potentialGravity -= mass * (p.x * gravity.x + p.y * gravity.y);
+    const weighed = mass + (model.dynamicMasses.weightCorrections.get(key) ?? 0);
+    if (p) potentialGravity -= weighed * (p.x * gravity.x + p.y * gravity.y);
   }
   for (const [key, invInertia] of model.dynamicMasses.angleMasses) {
     if (invInertia <= 0) continue;
@@ -2485,6 +2494,39 @@ function interpolate_beam_cohesion(
 }
 
 /**
+ * Blend two frames' `SupportTorsor`s, matched by node key.
+ * A torsor blends whole or not at all, like a `LinkReaction`'s force: each component must keep its sign and both frames must have settled it, or it holds the nearer side.
+ */
+function interpolate_supports(
+  a: SupportTorsor[] | undefined,
+  b: SupportTorsor[] | undefined,
+  u: number,
+): SupportTorsor[] | undefined {
+  if (!a || !b) return a ?? b;
+  const byKeyB = new Map(b.map((s) => [s.nodeKey, s]));
+  const held = u <= 0.5;
+  return a.flatMap((sa) => {
+    const sb = byKeyB.get(sa.nodeKey);
+    if (!sb) return held ? [sa] : [];
+    const blends =
+      sa.determined &&
+      sb.determined &&
+      stable_sign(sa.fx, sb.fx) &&
+      stable_sign(sa.fy, sb.fy) &&
+      stable_sign(sa.m, sb.m);
+    if (!blends) return [held ? sa : sb];
+    return [
+      {
+        ...sa,
+        fx: lerp_num(sa.fx, sb.fx, u),
+        fy: lerp_num(sa.fy, sb.fy, u),
+        m: lerp_num(sa.m, sb.m, u),
+      },
+    ];
+  });
+}
+
+/**
  * Blend two frames' `BeltStrand`s, matched by which via pair each strand runs between (`beltID`+`fromGear`+`toGear` — stable while `same_belt_topology` holds, since that is exactly what fixes which vias are in contact).
  * `determined` gates like `BeamCohesion.determinate`; `tension` also passes `stable_sign` — a belt tension never reads negative in this model, so this mostly guards the taut/slack edge itself, a member's tension arriving at (or leaving from) zero.
  */
@@ -2702,6 +2744,7 @@ export function dynamic_snapshot_at(
     ),
     balance: interpolate_balance(a.balance, b.balance, u),
     beltStrands: interpolate_belt_strands(a.beltStrands, b.beltStrands, u),
+    supports: interpolate_supports(a.supports, b.supports, u),
     grab: interpolate_grab(a.grab, b.grab, u),
     // Same reading as `snapshot_at`'s.
     contacts: b.contacts,

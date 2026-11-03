@@ -339,7 +339,11 @@ describe("réaction d'appui d'un cantilever (poutre encastrée sur un join ancr�
     let snapshot: DynamicSnapshot | null = null;
     for (let i = 0; i < 30; i++)
       snapshot = step_dynamic_simulation(model, i * RECORD_DT, snapshot, RECORD_DT, new Point2(0, 0));
-    expect(element_reactions(join, snapshot!)).toEqual([]);
+    // The statics says so at the join too, with a zero rather than with nothing.
+    for (const reaction of element_reactions(join, snapshot!)) {
+      expect(reaction.vector.length()).toBeCloseTo(0, 6);
+      expect(reaction.moment ?? 0).toBeCloseTo(0, 6);
+    }
     const atBeam = element_reactions(beam, snapshot!);
     expect(atBeam).toHaveLength(2);
     for (const reaction of atBeam) expect(reaction.vector.length()).toBeCloseTo(0, 6);

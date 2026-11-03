@@ -11,7 +11,10 @@ import {
   Point2,
   ZERO,
 } from "../../../types";
-import { node_candidate_edges } from "../../../utils/load-frame";
+import {
+  can_frame_load,
+  node_candidate_edges,
+} from "../../../utils/load-frame";
 import { HoveredPart } from "../../../types/hovered-part";
 import {
   change_distributed_force,
@@ -161,11 +164,13 @@ export const LoadDetails = React.forwardRef<HTMLDivElement, LoadDetailsProps>(
     ref,
   ) => {
     if (load.type === "moment") return null;
-    // Reference edge(s) for the world/edge frame control: an edge host is the single reference, a node host offers the edges attached to it.
+    // Reference edge(s) for the world/edge frame control: an edge host is the single reference (unless it is a belt, which has no axis), a node host offers the edges attached to it.
     const hostEdge: EdgeElement | undefined =
       "positionStart" in host ? (host as EdgeElement) : undefined;
-    const nodeEdges = hostEdge
-      ? []
+    const frameEdges = hostEdge
+      ? can_frame_load(hostEdge)
+        ? [hostEdge]
+        : []
       : node_candidate_edges(host, mechanicalElements);
 
     const shownForce = shownLoad.type === "force" ? shownLoad : undefined;
@@ -217,7 +222,7 @@ export const LoadDetails = React.forwardRef<HTMLDivElement, LoadDetailsProps>(
           <Box sx={ROW_SX}>
             <ElementPicker
               label={t("frame")}
-              options={hostEdge ? [hostEdge] : nodeEdges}
+              options={frameEdges}
               extraOption={{
                 label: t("frame_world"),
                 icon: Public,
@@ -227,7 +232,7 @@ export const LoadDetails = React.forwardRef<HTMLDivElement, LoadDetailsProps>(
                 shownFrame &&
                 frame_current_edge(
                   shownFrame,
-                  hostEdge ? [hostEdge] : nodeEdges,
+                  frameEdges,
                   mechanicalElements,
                 )
               }

@@ -168,6 +168,20 @@ export interface BeltStrand {
 }
 
 /**
+ * The support reaction at one anchored node — the force and counter-clockwise couple the frame applies onto it — as the statics pass resolved it.
+ * Solved from the same frame the beam torsors are, so the supports and the beams close one balance together; the raw impulses `LinkReaction` files at an anchor carry the iterative sweep's own convergence error, which no beam torsor shares.
+ */
+export interface SupportTorsor {
+  /** Fused solver key, as `LinkReaction.key` carries them. */
+  nodeKey: string;
+  fx: number;
+  fy: number;
+  m: number;
+  /** False where the pose leaves this reaction open (a hyperstatic support the flexibilities could not settle). */
+  determined: boolean;
+}
+
+/**
  * Which key sits at which slot of a snapshot's arrays.
  * Held once per recording and shared by all its snapshots, so two snapshots may only be read against one another — or interpolated — when they carry the very same layout object.
  *
@@ -309,6 +323,9 @@ export interface DynamicSnapshot extends SimulationSnapshot {
   /** Every strand of every belt the statics pass could carry — see `BeltStrand`.
    * Undefined under the same `collectDiagnostics` gate as `reactions`. */
   beltStrands?: BeltStrand[];
+  /** What the frame applies at each anchored node the statics pass could carry — see `SupportTorsor`.
+   * Undefined under the same `collectDiagnostics` gate as `reactions`. */
+  supports?: SupportTorsor[];
   /** The grab force applied this frame, as the arrow to draw — see `GrabForceSample`.
    * Undefined on frames without a grab. */
   grab?: GrabForceSample;

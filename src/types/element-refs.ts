@@ -68,6 +68,16 @@ const ALIGNABLE_EDGE_TYPES = [
   "damper",
 ] as const satisfies readonly ElementType[];
 
+/**
+ * Edges a load's direction may be expressed against.
+ * A belt has no axis of its own — it runs around its pulleys — so it cannot orient a force.
+ */
+export const FRAME_EDGE_TYPES = [
+  "beam",
+  "spring",
+  "damper",
+] as const satisfies readonly ElementType[];
+
 /** A node's edge lists also hold gears pinned to its perimeter, and a moment turns either. */
 const EDGE_OR_GEAR = [...EDGE_TYPES, "gear"] as const;
 
@@ -303,7 +313,7 @@ const frame_edge_ref = <T extends { frame: LoadFrame }>(): RefSpec<
   T,
   LoadFrame
 > => ({
-  target: EDGE_TYPES,
+  target: FRAME_EDGE_TYPES,
   required: false,
   extract: (frame) => (frame === "world" ? [] : [frame.edgeID]),
   prune: (load) => ({ ...load, frame: "world" }),

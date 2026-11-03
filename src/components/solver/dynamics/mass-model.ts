@@ -32,6 +32,12 @@ export interface DynamicMassModel {
   flooredKeys: Set<string>;
   flooredAngles: Set<string>;
   /**
+   * Free keys whose solver mass (`1 / posMasses`) is not the mass the mechanism puts there, with the difference `real − solver` in kg: minus the floor on a massless node, plus what a lender gave away (see `FLOOR_LENDING_CAP`).
+   * Gravity has to pull on the REAL mass, not on the solver's: `step_dynamic_simulation` restates `difference · g` as a force on top of the predict step's uniform acceleration, so a floor never weighs anything and a lender keeps its whole weight.
+   * The floor then only ever changes how a node answers to being moved, never what the mechanism weighs — and where it could be borrowed from a body-mate, not even the body's total inertia.
+   */
+  weightCorrections: Map<string, number>;
+  /**
    * One entry per beam with positive mass, giving `dynamics`-only nodes and links the shape needed to reproduce the beam's own rotational inertia — see `BEAM_END_MASS_FRACTION`.
    * `startKey`/`endKey` are already fused (`compile_simulation_model`'s Coincidence pass); `midKey` (`${beamId}:mid`) never is, since nothing else can ever share it.
    * Read only by `step_dynamic_simulation`, which pins `midKey` onto the live segment each frame with a `FixedOnSegment` link — kinematic/edition solves never see it, same reasoning as the rest of this model.
@@ -60,6 +66,47 @@ const FLOOR_SHARE = 1e-2;
 
 /** Reference for a node tied to no mass at all: nothing in the mechanism says what scale it should answer to, so the point-mass default stands in. */
 const MASS_FLOOR_FALLBACK = DEFAULT.MASS;
+/**
+ * Links that make their keys parts of one rigid body, which is what a massless node may borrow its floor from (see `rigid_lenders`).
+ * A belt, a slider or a spring leaves its two ends free relative to each other: lending across one would shift mass between two bodies.
+ */
+const RIGID_TIES: ReadonlySet<Link["type"]> = new Set<Link["type"]>(["Distance", "FixedOnSegment"]);
+/**
+ * Most of its own mass a node may lend to massless body-mates, as a share of it.
+ * Past it the lender would stop being the body's mass itself and the floor is invented instead — the node keeps its weight either way (`weightCorrections`).
+ */
+const FLOOR_LENDING_CAP = 0.5;
+
+/**
+ * For each massless key, the free massive keys tied to it by a single rigid link (`RIGID_TIES`) — the body-mates it may borrow its floor from, heaviest first.
+ * One link deep on purpose: two beams meeting at a massless node are two bodies hinged there, and a node further away belongs to another body.
+ */
+function rigid_lenders(
+  links: Link[],
+  lumped: Map<string, number>,
+  isFree: (key: string) => boolean,
+  targets: Iterable<string>,
+): Map<string, string[]> {
+  const wanted = new Set(targets);
+  const found = new Map<string, Set<string>>();
+  for (const link of links) {
+    if (!RIGID_TIES.has(link.type)) continue;
+    const keys = position_keys_of(link);
+    for (const key of keys) {
+      if (!wanted.has(key)) continue;
+      for (const other of keys) {
+        if (other === key || !isFree(other) || (lumped.get(other) ?? 0) <= 0) continue;
+        let set = found.get(key);
+        if (!set) found.set(key, (set = new Set()));
+        set.add(other);
+      }
+    }
+  }
+  const out = new Map<string, string[]>();
+  for (const [key, set] of found)
+    out.set(key, [...set].sort((a, b) => (lumped.get(b) ?? 0) - (lumped.get(a) ?? 0)));
+  return out;
+}
 
 /**
  * Lightest mass each of `targets` is rigidly tied to, widened link by link until one is found.
@@ -231,6 +278,25 @@ export function compute_dynamic_mass_model(
     angleMasses.set(id, floored > 0 ? 1 / floored : 0);
   }
 
+  // The floor a massless node needs is borrowed, where it can be, from a body-mate that has mass: the body's total mass stays what the user entered, only how it is spread across the body's nodes changes — the same kind of lumping `BEAM_END_MASS_FRACTION` already is.
+  // Where nothing can lend it, it is invented; either way it weighs nothing (`weightCorrections`).
+  const isFree = (key: string) => (anchoredMasses.get(key) ?? 0) !== 0;
+  const lenders = rigid_lenders(links, lumped, isFree, massless);
+  const lent = new Map<string, number>();
+  const weightCorrections = new Map<string, number>();
+  const correct = (key: string, difference: number) =>
+    weightCorrections.set(key, (weightCorrections.get(key) ?? 0) + difference);
+  for (const key of massless) {
+    const floor = floor_for(key, 0);
+    correct(key, -floor);
+    const lender = (lenders.get(key) ?? []).find(
+      (other) => (lent.get(other) ?? 0) + floor <= FLOOR_LENDING_CAP * (lumped.get(other) ?? 0),
+    );
+    if (lender === undefined) continue;
+    lent.set(lender, (lent.get(lender) ?? 0) + floor);
+    correct(lender, floor);
+  }
+
   const posMasses = new Map<string, number>();
   const groundedMasses = new Map<string, number>();
   const phantomKeys = new Set<string>();
@@ -246,11 +312,15 @@ export function compute_dynamic_mass_model(
       flooredKeys.add(key);
       if (passiveKeys.has(key)) phantomKeys.add(key);
     }
-    posMasses.set(key, 1 / floor_for(key, mass));
+    posMasses.set(key, 1 / (mass > 0 ? mass - (lent.get(key) ?? 0) : floor_for(key, mass)));
   }
   // A beam's midpoint is never a real element key, so it never goes through the anchored branch above — it has nothing to be grounded BY, only mass to resist being moved.
-  for (const { midKey } of beamMidpoints)
-    posMasses.set(midKey, 1 / floor_for(midKey, lumped.get(midKey) ?? 0));
+  // It only exists for a beam with mass, so it never needs a floor (nor lends one: no compiled link reaches it).
+  for (const { midKey } of beamMidpoints) {
+    const mass = lumped.get(midKey) ?? 0;
+    if (mass === 0) correct(midKey, -floor_for(midKey, 0));
+    posMasses.set(midKey, 1 / floor_for(midKey, mass));
+  }
 
   return {
     posMasses,
@@ -259,6 +329,7 @@ export function compute_dynamic_mass_model(
     phantomKeys,
     flooredKeys,
     flooredAngles,
+    weightCorrections,
     beamMidpoints,
   };
 }

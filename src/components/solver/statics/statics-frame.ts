@@ -89,8 +89,9 @@ export function statics_frame(inputs: StaticsFrameInputs): StaticsFrame {
     externalForceAt: (key) => inputs.externalForceAt(key).sub(inputs.distributedShareAt(key)),
     nodeMassAt: (key) => {
       const inverse = inputs.masses.posMasses.get(key) ?? 0;
-      const lumped = inverse > 0 ? 1 / inverse : (inputs.masses.groundedMasses.get(key) ?? 0);
-      return Math.max(0, lumped - (lumps.get(key) ?? 0));
+      if (inverse <= 0) return Math.max(0, (inputs.masses.groundedMasses.get(key) ?? 0) - (lumps.get(key) ?? 0));
+      // Negative for a node that lent part of a beam's or gear's share to a massless body-mate (`DynamicMassModel.weightCorrections`): its weight comes back through `externalForceAt`, the inertia it gave away does not.
+      return 1 / inverse - (lumps.get(key) ?? 0);
     },
     beamMass: (beamID) => (beamOf.get(beamID)?.linearMass ?? 0) * length_of(beamID),
     gearAngularAcceleration: inputs.angularAccelerationOf,

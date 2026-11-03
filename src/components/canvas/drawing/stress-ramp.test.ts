@@ -40,27 +40,46 @@ describe("beam_fill_stops — la rupture nette au franchissement de la limite é
     for (const s of stops) expect(s.color).not.toBe(STRESS_OVERSTRESS_COLOR);
   });
 
-  it("crossing into overstress inserts a hard step at the crossing sample's own offset", () => {
+  it("crossing into overstress inserts a hard step where ratio = 1, interpolated between the bracketing samples", () => {
     const raw = [
       { offset: 0, ratio: 0.5, stress: 500 },
-      { offset: 1, ratio: 1.2, stress: 1200 }, // crosses ratio = 1 here
+      { offset: 1, ratio: 1.5, stress: 1500 }, // ratio = 1 at offset 0.5
     ];
     const stops = beam_fill_stops(raw, 1000);
-    // Extra stop inserted right before the crossing sample: same offset, two colors.
-    expect(stops.map((s) => s.offset)).toEqual([0, 1, 1]);
+    // Two stops inserted at the crossing itself: same offset, two colors.
+    expect(stops.map((s) => s.offset)).toEqual([0, 0.5, 0.5, 1]);
     expect(stops[1].color).not.toBe(STRESS_OVERSTRESS_COLOR); // the ramp, one instant before
-    expect(stops[2].color).toBe(STRESS_OVERSTRESS_COLOR); // the sample itself
+    expect(stops[2].color).toBe(STRESS_OVERSTRESS_COLOR);
+    expect(stops[3].color).toBe(STRESS_OVERSTRESS_COLOR); // the sample itself
   });
 
-  it("crossing back out of overstress steps the other way, at the same offset", () => {
+  it("crossing back out of overstress steps the other way, at the interpolated crossing", () => {
     const raw = [
       { offset: 0, ratio: 1.5, stress: 1500 },
-      { offset: 1, ratio: 0.3, stress: 300 }, // drops back under 1 here
+      { offset: 1, ratio: 0.5, stress: 500 }, // ratio = 1 at offset 0.5
     ];
     const stops = beam_fill_stops(raw, 1000);
-    expect(stops.map((s) => s.offset)).toEqual([0, 1, 1]);
+    expect(stops.map((s) => s.offset)).toEqual([0, 0.5, 0.5, 1]);
     expect(stops[1].color).toBe(STRESS_OVERSTRESS_COLOR); // overstress, right up to the boundary
     expect(stops[2].color).not.toBe(STRESS_OVERSTRESS_COLOR); // straight into the ramp
+    expect(stops[3].color).not.toBe(STRESS_OVERSTRESS_COLOR);
+  });
+
+  it("a symmetric field draws a symmetric overstress zone — no shift towards the beam's end", () => {
+    // Simply supported beam under uniform load: ratio ∝ 4ξ(1−ξ), peak 404/235, 20 samples.
+    const peak = 404 / 235;
+    const raw = Array.from({ length: 21 }, (_, k) => {
+      const xi = k / 20;
+      const ratio = peak * 4 * xi * (1 - xi);
+      return { offset: xi, ratio, stress: ratio * 235 };
+    });
+    const stops = beam_fill_stops(raw, 1000);
+    const black = stops.filter((s) => s.color === STRESS_OVERSTRESS_COLOR).map((s) => s.offset);
+    const start = Math.min(...black);
+    const end = Math.max(...black);
+    expect(start).toBeCloseTo(1 - end, 12);
+    expect(start).toBeGreaterThan(0.15);
+    expect(start).toBeLessThan(0.2);
   });
 
   it("a beam that never crosses stays in overstress end to end — no spurious step", () => {

@@ -962,27 +962,30 @@ export function magnitude_stress_fill_stops(
 
 /**
  * Converts `stress_utilization_stops`'/`shear_utilization_stops`' raw readings into the beam's gradient stops, stepping — never fading — across every point where `ratio` crosses 1: the elastic limit (or `τ_adm`) is a real physical boundary, not a place for the ramp to blend into `STRESS_OVERSTRESS_COLOR` over a span of samples.
- * `field.samples` carries no station there (it isn't a discontinuity of the internal-force field itself, only of where this overlay's color happens to jump), so the step is snapped to the first sample past the crossing rather than the exact abscissa — close enough at the sample density `compute_cohesion_field` already uses, and far simpler than root-finding through `max_fiber_stress`'s/`max_shear_stress`'s non-smooth terms.
+ * `field.samples` carries no station there (it isn't a discontinuity of the internal-force field itself, only of where this overlay's color happens to jump), so the step's abscissa is found by linear interpolation of `ratio` between the two bracketing samples — far simpler than root-finding through `max_fiber_stress`'s/`max_shear_stress`'s non-smooth terms, and unbiased: a symmetric field draws a symmetric overstress zone.
  */
 export function beam_fill_stops(
   rawStops: { offset: number; ratio: number; stress: number }[],
   scaleMaxStress: number,
 ): BeamFillStop[] {
   const result: BeamFillStop[] = [];
-  let prevRatio: number | undefined;
+  let prev: (typeof rawStops)[number] | undefined;
   for (const stop of rawStops) {
     const color = stress_ramp_color(stop.ratio, stop.stress, scaleMaxStress);
-    if (prevRatio !== undefined && prevRatio >= 1 !== stop.ratio >= 1) {
-      const justBefore =
-        stop.ratio >= 1
-          ? // Entering overstress: the ramp's own color one instant before it steps to black.
-            stress_ramp_color(0.999999, stop.stress, scaleMaxStress)
-          : // Leaving overstress: black right up to the boundary, then straight into the ramp.
-            STRESS_OVERSTRESS_COLOR;
-      result.push({ offset: stop.offset, color: justBefore });
+    if (prev !== undefined && prev.ratio >= 1 !== stop.ratio >= 1) {
+      // Snapping to either sample instead would bias every boundary the same way along the beam, shifting the whole black zone towards one end of a symmetric part.
+      const t = (1 - prev.ratio) / (stop.ratio - prev.ratio);
+      const valid = Number.isFinite(t) && t >= 0 && t <= 1;
+      const offset = valid ? prev.offset + t * (stop.offset - prev.offset) : stop.offset;
+      const stress = valid ? prev.stress + t * (stop.stress - prev.stress) : stop.stress;
+      const ramp = stress_ramp_color(0.999999, stress, scaleMaxStress);
+      const entering = stop.ratio >= 1;
+      // Entering overstress: the ramp's own color one instant before it steps to black. Leaving: black right up to the boundary, then straight into the ramp.
+      result.push({ offset, color: entering ? ramp : STRESS_OVERSTRESS_COLOR });
+      result.push({ offset, color: entering ? STRESS_OVERSTRESS_COLOR : ramp });
     }
     result.push({ offset: stop.offset, color });
-    prevRatio = stop.ratio;
+    prev = stop;
   }
   return result;
 }

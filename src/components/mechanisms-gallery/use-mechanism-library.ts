@@ -76,6 +76,10 @@ const openMechanismsDB = (): Promise<IDBPDatabase<SlidepDB>> => {
           );
         }
       },
+      // The browser closed the connection on its own: the next call opens a fresh one instead of reusing a dead handle.
+      terminated() {
+        dbPromise = null;
+      },
       // A blocked or failed open must not wedge every later call behind the same broken promise.
     }).catch((error) => {
       dbPromise = null;
@@ -84,6 +88,33 @@ const openMechanismsDB = (): Promise<IDBPDatabase<SlidepDB>> => {
   }
   return dbPromise;
 };
+
+/** Safari drops its IndexedDB connection after a sleep or a long stay in the background, without firing `terminated`: every later transaction on it then fails with one of these. */
+const isConnectionLost = (error: unknown) => {
+  const name = (error as { name?: unknown } | null)?.name;
+  return name === "InvalidStateError" || name === "UnknownError";
+};
+
+/**
+ * Runs `operation` against the library, reopening the connection and trying once more if the browser has dropped it.
+ * The only way to reach the database: `operation` may run twice, so it must be safe to repeat — a single transaction, or idempotent writes.
+ */
+async function withMechanismsDB<T>(
+  operation: (db: IDBPDatabase<SlidepDB>) => Promise<T>,
+): Promise<T> {
+  const opening = openMechanismsDB();
+  const db = await opening;
+  try {
+    return await operation(db);
+  } catch (error) {
+    if (!isConnectionLost(error)) throw error;
+    console.warn("IndexedDB connection lost, reopening:", error);
+    // Another call may already have reopened it: only the dead connection is discarded.
+    if (dbPromise === opening) dbPromise = null;
+    db.close();
+    return operation(await openMechanismsDB());
+  }
+}
 
 /** Every stored mechanism, raised to the current file format. The only way to read the library. */
 const read_all_records = async (db: IDBPDatabase<SlidepDB>) =>
@@ -156,23 +187,22 @@ export function useMechanismLibrary({
     // A failure still shows, whatever caused the save — a store that cannot be written to concerns every later edit too.
     if (touch) setSaveStatus("saving");
     try {
-      const db = await openMechanismsDB();
-      const mechanismToSave = {
+      const mechanismToSave = serialize_mechanism({
         ...mechanismRef.current,
         metadata: touch
           ? { ...mechanismRef.current.metadata, modifiedAt: Date.now() }
           : mechanismRef.current.metadata,
-      };
-      await db.put("mechanisms", serialize_mechanism(mechanismToSave));
+      });
+      await withMechanismsDB((db) => db.put("mechanisms", mechanismToSave));
       if (touch) setSaveStatus("saved");
 
       if (galleryOpenRef.current) {
         // The full library is a lot of cards to mount at once: deprioritized so it doesn't block the rest of the app while it renders.
-        const records = await read_all_records(db);
+        const records = await withMechanismsDB(read_all_records);
         startTransition(() => setSavedMechanisms(records));
       }
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde :", error);
+      console.error("Autosave failed:", error);
       setSaveStatus("error");
     }
   }, [mechanismRef]);
@@ -196,27 +226,26 @@ export function useMechanismLibrary({
 
   /** App starts: only greet with the gallery when there is something to load. */
   useEffect(() => {
-    (async () => {
-      const db = await openMechanismsDB();
-      const records = await read_all_records(db);
-      if (records.length === 0) return;
-      // A large library is a lot of cards to mount at once: deprioritized so the app stays responsive while they render, instead of a single blocking frame.
-      startTransition(() => {
-        setSavedMechanisms(records);
-        setGalleryOpen(true);
-      });
-    })();
+    withMechanismsDB(read_all_records)
+      .then((records) => {
+        if (records.length === 0) return;
+        // A large library is a lot of cards to mount at once: deprioritized so the app stays responsive while they render, instead of a single blocking frame.
+        startTransition(() => {
+          setSavedMechanisms(records);
+          setGalleryOpen(true);
+        });
+      })
+      // Storage refused from the start (private browsing, blocked site data): the editor still works, and the first autosave reports the failure.
+      .catch((error) => console.error("Mechanism library unavailable:", error));
   }, []);
 
   // Opens on whatever `savedMechanisms` already holds — however stale — rather than waiting on a fresh read, so the click feels as instant as any other menu action.
   // The read still happens, just after: a card lands on outdated data only when something changed the record while the gallery was closed, and even then only until this resolves and replaces the list a moment later.
   const handleOpenGallery = useCallback(() => {
     setGalleryOpen(true);
-    void (async () => {
-      const db = await openMechanismsDB();
-      const records = await read_all_records(db);
-      startTransition(() => setSavedMechanisms(records));
-    })();
+    withMechanismsDB(read_all_records)
+      .then((records) => startTransition(() => setSavedMechanisms(records)))
+      .catch((error) => console.error("Mechanism library unreadable:", error));
   }, []);
 
   const closeGallery = useCallback(() => setGalleryOpen(false), []);
@@ -263,12 +292,14 @@ export function useMechanismLibrary({
         Pick<MechanismMetadata, "name" | "description" | "author" | "tags">
       >,
     ) => {
-      const db = await openMechanismsDB();
-      const record = await db.get("mechanisms", createdAtId);
-      if (!record) return;
-
-      const updated = { ...record, metadata: { ...record.metadata, ...patch } };
-      await db.put("mechanisms", updated);
+      const updated = await withMechanismsDB(async (db) => {
+        const record = await db.get("mechanisms", createdAtId);
+        if (!record) return undefined;
+        const patched = { ...record, metadata: { ...record.metadata, ...patch } };
+        await db.put("mechanisms", patched);
+        return patched;
+      });
+      if (!updated) return;
 
       setSavedMechanisms((prev) =>
         prev.map((r) => (r.metadata.createdAt === createdAtId ? updated : r)),
@@ -300,8 +331,7 @@ export function useMechanismLibrary({
     async (createdAtId: number) => {
       if (!window.confirm(t("mechanism_delete_confirm"))) return;
 
-      const db = await openMechanismsDB();
-      await db.delete("mechanisms", createdAtId);
+      await withMechanismsDB((db) => db.delete("mechanisms", createdAtId));
 
       setSavedMechanisms((prev) =>
         prev.filter((r) => r.metadata.createdAt !== createdAtId),
@@ -313,31 +343,34 @@ export function useMechanismLibrary({
 
   const handleDuplicateFromGallery = useCallback(
     async (createdAtId: number) => {
-      const db = await openMechanismsDB();
-      const record = await db.get("mechanisms", createdAtId);
-      if (!record) return undefined;
+      // One transaction, so a retry after a lost connection cannot store the copy twice.
+      const duplicated = await withMechanismsDB(async (db) => {
+        const tx = db.transaction("mechanisms", "readwrite");
+        const record = await tx.store.get(createdAtId);
+        if (!record) return undefined;
 
-      const existing = await db.getAll("mechanisms");
-      const takenIds = new Set(existing.map((r) => r.metadata.createdAt));
-      const takenNames = new Set(existing.map((r) => r.metadata.name));
+        const existing = await tx.store.getAll();
+        const takenIds = new Set(existing.map((r) => r.metadata.createdAt));
+        const takenNames = new Set(existing.map((r) => r.metadata.name));
 
-      let id = Date.now();
-      while (takenIds.has(id)) id++;
+        let id = Date.now();
+        while (takenIds.has(id)) id++;
 
-      const base = record.metadata.name || t("untitled");
-      const name = unique_copy_name(base, takenNames);
-
-      const now = Date.now();
-      const duplicated: SerializedMechanism = {
-        ...record,
-        metadata: {
-          ...record.metadata,
-          createdAt: id,
-          name,
-          modifiedAt: now,
-        },
-      };
-      await db.put("mechanisms", duplicated);
+        const base = record.metadata.name || t("untitled");
+        const copy: SerializedMechanism = {
+          ...record,
+          metadata: {
+            ...record.metadata,
+            createdAt: id,
+            name: unique_copy_name(base, takenNames),
+            modifiedAt: Date.now(),
+          },
+        };
+        await tx.store.put(copy);
+        await tx.done;
+        return copy;
+      });
+      if (!duplicated) return undefined;
 
       setSavedMechanisms((prev) => [...prev, duplicated]);
       return duplicated;
@@ -375,13 +408,7 @@ export function useMechanismLibrary({
   // An import never overwrites a stored mechanism: it enters the library as a copy, next to the original.
   const storeImportedRecords = useCallback(
     async (records: SerializedMechanism[]) => {
-      const db = await openMechanismsDB();
-      const existing = await db.getAll("mechanisms");
-      const takenIds = new Set(existing.map((r) => r.metadata.createdAt));
-      const takenNames = new Set(existing.map((r) => r.metadata.name));
-
       // Importing is an entry, so records are repaired before anything is written: a known-broken entry must not land in the library when the sound version is already in hand.
-      // Reading them all up front also keeps an archive importing fully or not at all.
       const repairs: Repair[] = [];
       const sound = records.map((record) => {
         const loaded = load_mechanism(record);
@@ -389,29 +416,36 @@ export function useMechanismLibrary({
         return serialize_mechanism(loaded.mechanism);
       });
 
-      const stored: SerializedMechanism[] = [];
-      for (const record of sound) {
-        const metadata = { ...record.metadata, modifiedAt: Date.now() };
+      // One transaction keeps an archive importing fully or not at all, and lets a retry after a lost connection start over without leaving half the archive behind as extra copies.
+      const stored = await withMechanismsDB(async (db) => {
+        const tx = db.transaction("mechanisms", "readwrite");
+        const existing = await tx.store.getAll();
+        const takenIds = new Set(existing.map((r) => r.metadata.createdAt));
+        const takenNames = new Set(existing.map((r) => r.metadata.name));
 
-        if (takenIds.has(metadata.createdAt)) {
-          let id = Date.now();
-          while (takenIds.has(id)) id++;
-          metadata.createdAt = id;
+        const entries = sound.map((record) => {
+          const metadata = { ...record.metadata, modifiedAt: Date.now() };
 
-          const base = record.metadata.name || t("untitled");
-          let name = t("copy_of", { name: base });
-          for (let n = 2; takenNames.has(name); n++)
-            name = t("copy_of_n", { name: base, n });
-          metadata.name = name;
-        }
+          if (takenIds.has(metadata.createdAt)) {
+            let id = Date.now();
+            while (takenIds.has(id)) id++;
+            metadata.createdAt = id;
 
-        takenIds.add(metadata.createdAt);
-        takenNames.add(metadata.name);
+            const base = record.metadata.name || t("untitled");
+            let name = t("copy_of", { name: base });
+            for (let n = 2; takenNames.has(name); n++)
+              name = t("copy_of_n", { name: base, n });
+            metadata.name = name;
+          }
 
-        const entry = { ...record, metadata };
-        await db.put("mechanisms", entry);
-        stored.push(entry);
-      }
+          takenIds.add(metadata.createdAt);
+          takenNames.add(metadata.name);
+          return { ...record, metadata };
+        });
+
+        await Promise.all([...entries.map((e) => tx.store.put(e)), tx.done]);
+        return entries;
+      });
       return { stored, repairs };
     },
     [],
@@ -470,31 +504,35 @@ export function useMechanismLibrary({
     ],
   );
 
-  const handleMenuButtonUpload = useCallback(() => {
-    load_mechanisms_from_file()
-      .then(importFiles)
-      .catch(() =>
-        setSnackbar({
-          open: true,
-          message: t("file_unreadable"),
-          severity: "warning",
-        }),
-      );
-  }, [importFiles, setSnackbar]);
-
-  const handleFilesDropped = useCallback(
-    (files: FileList | File[]) => {
-      load_mechanisms_from_filelist(files)
-        .then(importFiles)
-        .catch(() =>
-          setSnackbar({
-            open: true,
-            message: t("file_unreadable"),
-            severity: "warning",
+  /** Imports what `reading` yields, telling a file that cannot be parsed apart from a library that cannot be written to. */
+  const importFrom = useCallback(
+    (reading: Promise<FileImport>) => {
+      const warn = (message: string) =>
+        setSnackbar({ open: true, message, severity: "warning" });
+      reading.then(
+        (parsed) =>
+          importFiles(parsed).catch((error) => {
+            console.error("Import could not be stored:", error);
+            warn(t("import_storage_failed"));
           }),
-        );
+        (error) => {
+          console.error("Import could not be read:", error);
+          warn(t("file_unreadable"));
+        },
+      );
     },
     [importFiles, setSnackbar],
+  );
+
+  const handleMenuButtonUpload = useCallback(
+    () => importFrom(load_mechanisms_from_file()),
+    [importFrom],
+  );
+
+  const handleFilesDropped = useCallback(
+    (files: FileList | File[]) =>
+      importFrom(load_mechanisms_from_filelist(files)),
+    [importFrom],
   );
 
   // Export from the gallery, whose records are already serialized.
@@ -516,16 +554,16 @@ export function useMechanismLibrary({
 
   // Puts back whichever examples are missing (deleted), by their fixed createdAt — one still present, even edited by the user, is left alone rather than reset to its pristine state.
   const handleRestoreExamples = useCallback(async () => {
-    const db = await openMechanismsDB();
-    const existingIds = new Set(await db.getAllKeys("mechanisms"));
-    const missing = EXAMPLE_MECHANISMS.filter(
-      (example) => !existingIds.has(example.metadata.createdAt),
-    );
+    const { missing, records } = await withMechanismsDB(async (db) => {
+      const existingIds = new Set(await db.getAllKeys("mechanisms"));
+      const absent = EXAMPLE_MECHANISMS.filter(
+        (example) => !existingIds.has(example.metadata.createdAt),
+      );
+      for (const example of absent) await db.put("mechanisms", example);
+      return { missing: absent, records: await read_all_records(db) };
+    });
     if (missing.length === 0) return;
 
-    for (const example of missing) await db.put("mechanisms", example);
-
-    const records = await read_all_records(db);
     startTransition(() => setSavedMechanisms(records));
     setSnackbar({
       open: true,

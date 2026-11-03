@@ -413,7 +413,7 @@ function beam_end_reaction(
 }
 
 /**
- * What the beam ends fused into `nodeID`'s dof apply there, summed — `undefined` when no beam reaches it.
+ * What the beams reaching `nodeID` apply there, summed — the ends fused into its dof and the spans it sits on — `undefined` when no beam reaches it.
  * A node carries no torsor of its own, so this is the honest reading of one: opposed where it is anchored, the sum is the classical support reaction (one beam or several); where it is not, Newton's third law makes it zero, and the transmitted effort lives on the beam ends themselves, one reading per side.
  * The fusion is only visible through `LinkReaction.key`, which is why the parts are read from there rather than from the mechanism.
  *
@@ -434,19 +434,27 @@ function node_reaction_from_beams(
       break;
     }
   }
-  if (!parts) return undefined;
 
   let vector = new Point2(0, 0);
   let moment = 0;
   let any = false;
-  for (const cohesion of cohesions)
+  for (const cohesion of cohesions) {
     for (const which of ["start", "end"] as const) {
-      if (!parts.includes(`${cohesion.beamID}:${which}`)) continue;
+      if (!parts?.includes(`${cohesion.beamID}:${which}`)) continue;
       const end = beam_end_reaction(cohesion, which, at, snapshot);
       vector = vector.add(end.vector);
       moment += end.moment ?? 0;
       any = true;
     }
+    // A node on the span (a slider on its rail, a join): the torsor holds what the beam receives from it, so the beam applies the opposite.
+    // A slider passes its rail's couple this way, which is the only place it is read whole: the solver files the couple of its `KeepOrientation` on the beam's two ends, never on the slider.
+    for (const attached of cohesion.attachedNodes) {
+      if (attached.nodeID !== nodeID) continue;
+      vector = vector.sub(new Point2(attached.fx, attached.fy));
+      moment -= attached.m;
+      any = true;
+    }
+  }
   if (!any) return undefined;
   for (const r of snapshot.reactions ?? []) {
     if (r.type !== "External" || !r.key.split(",").includes(nodeID)) continue;
@@ -512,6 +520,26 @@ function member_axial_reaction(
   };
 }
 
+/**
+ * The support reaction at `nodeID`, as the statics pass solved it — `undefined` where the node is not anchored, or the frame carries no such torsor for it.
+ * Read first, before the beams or the raw impulses: it is the one reading solved from the same frame as the beam torsors and the inertia, so it is the one the force balance closes with, whatever reaches the support (a beam end, a beam span, a gear's axle).
+ */
+function support_reaction(
+  nodeID: ID,
+  at: Point2,
+  snapshot: DynamicSnapshot,
+): ElementReaction | undefined {
+  let vector: Point2 | undefined;
+  let moment = 0;
+  for (const support of snapshot.supports ?? []) {
+    if (!support.nodeKey.split(",").includes(nodeID)) continue;
+    vector = (vector ?? new Point2(0, 0)).add(new Point2(support.fx, support.fy));
+    moment += support.m;
+  }
+  if (!vector) return undefined;
+  return { at, which: "node", vector, moment, atAnchor: true };
+}
+
 /** Which point of an element a reaction is read at: a node/gear/body has only `"node"`, an edge only `"start"`/`"end"` — `element_reaction_at` returns `undefined` for the shape the element doesn't have. */
 export type ReactionPoint = "node" | "start" | "end";
 
@@ -524,6 +552,7 @@ function element_reaction_at(
   if (which === "node") {
     if (!("position" in element)) return undefined;
     return (
+      support_reaction(element.id, element.position, snapshot) ??
       node_reaction_from_beams(element.id, element.position, snapshot) ??
       point_reaction(element.id, "node", element.position, snapshot)
     );

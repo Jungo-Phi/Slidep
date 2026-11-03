@@ -13,6 +13,7 @@ import type {
   MechanicalElement,
   WorldPoint,
 } from "../types";
+import { FRAME_EDGE_TYPES } from "../types/element-refs";
 
 /** `element` as an edge, or undefined when it is not one. */
 export function as_edge(
@@ -21,6 +22,11 @@ export function as_edge(
   return element && "positionStart" in element
     ? (element as EdgeElement)
     : undefined;
+}
+
+/** Whether an edge may orient a load — a belt has no axis of its own to lend. */
+export function can_frame_load(edge: EdgeElement): boolean {
+  return (FRAME_EDGE_TYPES as readonly string[]).includes(edge.type);
 }
 
 /** Local axes of an edge: xhat along start→end, yhat its normal. */
@@ -36,7 +42,8 @@ function frame_edge(
   mechanicalElements: MechanicalElement[],
 ): EdgeElement | undefined {
   if (frame === "world") return undefined;
-  return as_edge(mechanicalElements.find((e) => e.id === frame.edgeID));
+  const edge = as_edge(mechanicalElements.find((e) => e.id === frame.edgeID));
+  return edge && can_frame_load(edge) ? edge : undefined;
 }
 
 /** Convert a vector stored in a load's frame into world coordinates. */
@@ -79,7 +86,7 @@ export function node_candidate_edges(
   const edges: EdgeElement[] = [];
   for (const e of mechanicalElements) {
     const edge = as_edge(e);
-    if (!edge) continue;
+    if (!edge || !can_frame_load(edge)) continue;
     if (
       edge.fixedNodeStartID === node.id ||
       edge.fixedNodeEndID === node.id ||
@@ -102,7 +109,7 @@ export function force_snap_edges(
   if (!target) return [];
   const edge = as_edge(target);
   if (!edge) return node_candidate_edges(target, mechanicalElements);
-  const edges: EdgeElement[] = [edge];
+  const edges: EdgeElement[] = can_frame_load(edge) ? [edge] : [];
   const nodeID = anchor === "end" ? edge.fixedNodeEndID : edge.fixedNodeStartID;
   const node = nodeID
     ? mechanicalElements.find((e) => e.id === nodeID)

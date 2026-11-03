@@ -1,4 +1,4 @@
-import { BeamCohesion, BeltStrand, ID } from "../../../types";
+import { BeamCohesion, BeltStrand, ID, SupportTorsor } from "../../../types";
 import { BeamCohesionSpec } from "../dynamics/beam-cohesion";
 import { StaticsFrame } from "./equilibrium-model";
 import { StaticsSolution, StaticsTorsor } from "./equilibrium-solve";
@@ -85,4 +85,24 @@ export function belt_strands_from_statics(solution: StaticsSolution | undefined)
     tension: strand.tension,
     determined: strand.determined,
   }));
+}
+
+/**
+ * The frame's own torsors, one per anchored node, as a snapshot carries them — see `SupportTorsor`.
+ * A torsor standing for a belt, a mesh or a contact (`foreign`) is no reading and is left out, so its node falls back on the raw impulses.
+ */
+export function supports_from_statics(solution: StaticsSolution | undefined): SupportTorsor[] {
+  return (solution?.torsors ?? []).flatMap((torsor) =>
+    torsor.beamID !== undefined || torsor.gearID !== undefined || torsor.foreign
+      ? []
+      : [
+          {
+            nodeKey: torsor.nodeKey,
+            fx: torsor.fx,
+            fy: torsor.fy,
+            m: torsor.m,
+            determined: torsor.determined.fx && torsor.determined.fy && torsor.determined.m,
+          },
+        ],
+  );
 }

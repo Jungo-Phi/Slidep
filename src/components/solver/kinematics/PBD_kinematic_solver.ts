@@ -557,9 +557,10 @@ export function PBD_solve(
   // Every link from `contactsFrom` on is a collision contact.
   const contactsFrom = dynamics?.contactsFrom ?? links.length;
   const kinematicDirect = !dynamics && solveDirect === true;
-  let grabbed = false;
-  for (let k = 0; k < contactsFrom && !grabbed; k++) grabbed = links[k].type === "HandleGrab";
-  const minSweepsBeforeExit = grabbed ? nbGrabIterations + GRAB_RELEASE_SWEEPS : 0;
+  const grabLinks: number[] = [];
+  for (let k = 0; k < contactsFrom; k++) if (links[k].type === "HandleGrab") grabLinks.push(k);
+  const grabbed = grabLinks.length > 0;
+  let minSweepsBeforeExit = grabbed ? nbGrabIterations + GRAB_RELEASE_SWEEPS : 0;
 
   // Motors are soft drivers: they must yield to hard geometric constraints (grounding, FixedOnSegment, Distance…) rather than fight them at equal strength.
   // With stiffness < 1 a free motor still converges fully to its target over the iterations, but an over-constrained one (e.g. a grounded body node pinning the driven beam) loses the tug-of-war and is reported blocked instead of tearing the node off the beam.
@@ -764,6 +765,44 @@ export function PBD_solve(
     for (let k = contactsFrom; k < links.length; k++) if (live![k]) read_side(k);
     settle();
   }
+
+  // ── A grab ramps again for as long as the last ramp got it closer ──
+  // One ramp leaves the grabbed point short of its target, by up to a tenth of the jump, and an edition drag snapped onto the grid holds its target still: no later frame comes to close the rest.
+  // A point held back (a node on a circle, aimed off it) stalls at the gap it cannot close, and the ramp that shows it is the last.
+  // `constraints` solves only: a running simulation's next frame catches up on its own.
+  /** How far the grabbed points still are from their targets, the worst of them. */
+  const grab_gap = () => {
+    let gap = 0;
+    for (const k of grabLinks) {
+      const link = links[k] as Extract<Link, { type: "HandleGrab" }>;
+      const s = slots[k];
+      let d = 0;
+      if (typeof link.value === "number") {
+        if (s.rad[0] >= 0) d = Math.abs(link.value - nodes.radius[s.rad[0]]);
+      } else if (s.pos[0] >= 0 && nodes.w[s.pos[0]] !== 0) {
+        d = Math.hypot(link.value.x - nodes.x[s.pos[0]], link.value.y - nodes.y[s.pos[0]]);
+      }
+      if (d > gap) gap = d;
+    }
+    return gap;
+  };
+  const rampsAgain = grabbed && !dynamics && exitOn === "constraints";
+  // Held to what a `constraints` solve is held to: a grab is reached once it sits as close as any constraint must.
+  const grabReach = CONSTRAINT_EXIT_SEVERITY * diagnosticTolerance;
+  /** First sweep of the ramp under way. */
+  let grabFrom = 0;
+  /** The gap as that ramp began. */
+  let rampGap = rampsAgain ? grab_gap() : 0;
+  /** Whether the solve, about to end at sweep `i`, should ramp the grab once more instead. */
+  const ramp_again = (i: number) => {
+    if (!rampsAgain) return false;
+    const gap = grab_gap();
+    if (gap <= grabReach || rampGap - gap <= grabReach) return false;
+    rampGap = gap;
+    grabFrom = i + 1;
+    minSweepsBeforeExit = grabFrom + nbGrabIterations + GRAB_RELEASE_SWEEPS;
+    return true;
+  };
 
   for (let i = 0; i < nbIterations; i++) {
     maxError = 0;
@@ -1073,7 +1112,7 @@ export function PBD_solve(
         case "HandleGrab":
           // Transient interaction, not a constraint to report.
           report = false;
-          if (i > nbGrabIterations) break;
+          if (i < grabFrom || i > grabFrom + nbGrabIterations) break;
           err = applyHandleGrabConstraint(
             nodes,
             nodes.radius,
@@ -1175,17 +1214,19 @@ export function PBD_solve(
     // A forward sweep and the backward one after it make a direct solve (see `reversed_sweep_order`): stopping between the two leaves the efforts read off a half-done pair, a whole mass lump short on a plain cantilever.
     if (reversed !== null && i % 2 === 0) continue;
 
-    if (maxError < epsilon) break;
+    if (maxError < epsilon) {
+      if (ramp_again(i)) continue;
+      break;
+    }
 
     if (i < minSweepsBeforeExit) continue;
 
-    if (exitOn === "constraints") {
-      if (maxSeverity < CONSTRAINT_EXIT_SEVERITY) break;
-    } else if (
-      remaining_motion(moved, movedBefore) < remainingThreshold &&
-      remaining_motion(turned, turnedBefore) < REMAINING_RAD
-    )
-      break;
+    const settled =
+      exitOn === "constraints"
+        ? maxSeverity < CONSTRAINT_EXIT_SEVERITY
+        : remaining_motion(moved, movedBefore) < remainingThreshold &&
+          remaining_motion(turned, turnedBefore) < REMAINING_RAD;
+    if (settled && !ramp_again(i)) break;
   }
 
   // ── Dynamics: the frame's velocity, from the whole displacement since `frameStart` ──
@@ -1247,13 +1288,16 @@ export function PBD_solve(
         for (let j = 0; j < k; j++) if (s.pos[j] === slot) return true;
         return false;
       };
+      // A belt strand lists every via of its belt (`link-slots.ts`), yet only ever pushes on its own two ends, `posKeyA`/`posKeyB` — the rest are there for its geometry alone.
+      // Counting the others in would give every strand of a belt with two grounded vias (an anchored end and a fixed pulley) two anchored dofs, leaving both supports unreported.
+      const acting = (k: number): boolean => link.type !== "BeltSegmentNoSlip" || k < 2;
 
       let sumX = 0;
       let sumY = 0;
       let anchoredPos = -1;
       let anchoredPosCount = 0;
       for (let k = 0; k < s.pos.length; k++) {
-        const slot = repeated(k) ? -1 : s.pos[k];
+        const slot = repeated(k) || !acting(k) ? -1 : s.pos[k];
         const w = slot >= 0 ? nodes.w[slot] : 0;
         if (slot >= 0 && w > 0) {
           impulseX[k] = acc.dx[k] / w;
@@ -1294,7 +1338,7 @@ export function PBD_solve(
       if (anchoredAngCount === 1) impulseA[anchoredAng] = -sumA;
 
       for (let k = 0; k < s.pos.length; k++) {
-        const slot = repeated(k) ? -1 : s.pos[k];
+        const slot = repeated(k) || !acting(k) ? -1 : s.pos[k];
         if (slot < 0) continue;
         const w = nodes.w[slot];
         if (w === 0 && anchoredPosCount !== 1) continue; // indeterminate, see above
