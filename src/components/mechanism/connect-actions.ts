@@ -9,6 +9,7 @@ import type {
   LoadElement,
   MechanicalElement,
   NodeElement,
+  PivotElement,
   SlidepElement,
   SliderElement,
   UnionElement,
@@ -30,6 +31,7 @@ import {
 } from "../../utils/belt-path";
 import { belt_junction_id } from "../../utils/belt-rules";
 import { constraint_key } from "../../utils/validate-mechanism";
+import { DEFAULT } from "../../constants/physics-specs";
 
 /** Returns the mechanical element from the id. */
 export function get_mechanical_element_from_id(
@@ -302,6 +304,7 @@ export function disconnect_element(
         connectedElement.id,
       ),
       clockwise: attached?.clockwise ?? false,
+      turns: attached?.turns,
     };
   } else {
     return {
@@ -322,7 +325,7 @@ export function disconnect_element(
  * When one junction node still fuses both terminals, the start is freed so the two ends can part (the disconnection-separation pass slides it along the belt); the end keeps the junction, so the node survives holding a single terminal.
  * Then the closed flag is cleared.
  * A belt already free of its junction only needs the flag.
- * Call it on a belt whose loop no longer holds — see `belt_is_looped`.
+ * Call it on a belt whose loop is broken — see `belt_is_looped`.
  */
 export function open_belt(belt: BeltElement): Action[] {
   const actions: Action[] = [];
@@ -712,6 +715,7 @@ export function apply_to_sim_state(
           : el.attachedGearsIDs.splice(action.index, 0, {
               id: action.connectID,
               clockwise: action.clockwise,
+              ...(action.turns ? { turns: action.turns } : {}),
             });
       break;
     case "ConnectsFixedNodeStart":
@@ -1387,6 +1391,8 @@ export function connect_elements(
   mechanicalElements: MechanicalElement[],
   constraintElements: ConstraintElement[],
   loads: LoadElement[] = [],
+  /** `weld`: two elements meeting where no node holds them yet are welded by a join instead of hinged on a pivot (`connect_two_edges`). */
+  options: { weld?: boolean } = {},
 ): Action[] {
   if (
     hoveredPart.type === "Void" ||
@@ -1497,6 +1503,7 @@ export function connect_elements(
               hoveredPart.position,
               mechanicalElements,
               loads,
+              options.weld,
             ),
           );
           break;
@@ -1511,6 +1518,7 @@ export function connect_elements(
               hoveredPart.position,
               mechanicalElements,
               loads,
+              options.weld,
             ),
           );
           break;
@@ -1542,6 +1550,7 @@ export function connect_elements(
               hoveredPart.position,
               mechanicalElements,
               loads,
+              options.weld,
             ),
           );
           break;
@@ -1785,9 +1794,12 @@ function node_at_edge_part(
 }
 
 /**
- * Connects 2 edges together (beam body / gear perimeter) by creating a join at the contact point.
+ * Connects 2 edges together (ends, beam body, gear perimeter) by creating a node at the contact point.
  *
- * Idempotent: two ends already held by the same node are left alone, rather than given a second join that would orphan the first.
+ * The node is a pivot: what is hooked onto the mechanism hinges on it.
+ * It is a join when `weld` asks for one — bars drawn in one stroke —, and whenever a belt is one of the two, its terminals being held by joins only (a closing belt takes such a join for its junction).
+ *
+ * Idempotent: two ends already held by the same node are left alone, rather than given a second node that would orphan the first.
  */
 function connect_two_edges(
   edge1: EdgeElement | GearElement,
@@ -1797,23 +1809,26 @@ function connect_two_edges(
   position: Point2,
   mechanicalElements: MechanicalElement[],
   loads: LoadElement[] = [],
+  weld = false,
 ): Action[] {
   const node1 = node_at_edge_part(edge1, edgePart1);
   if (node1 && node1 === node_at_edge_part(edge2, edgePart2)) return [];
 
-  const join: JoinElement = {
-    type: "join",
-    id: crypto.randomUUID(),
-    probes: [],
-    overlays: {},
-    fixedEdgesIDs: [],
-    position,
-    isGrounded: false,
-  };
+  const base = { id: crypto.randomUUID(), probes: [], overlays: {}, position, isGrounded: false };
+  const node: JoinElement | PivotElement =
+    weld || edge1.type === "belt" || edge2.type === "belt"
+      ? { ...base, type: "join", fixedEdgesIDs: [] }
+      : {
+          ...base,
+          type: "pivot",
+          rotatingEdgesIDs: [],
+          fixedGearsIDs: [],
+          rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
+        };
   return [
-    { type: "CreateElement", element: join },
-    ...connect_node_and_edge(join, edge1, edgePart1, mechanicalElements, loads),
-    ...connect_node_and_edge(join, edge2, edgePart2, mechanicalElements, loads),
+    { type: "CreateElement", element: node },
+    ...connect_node_and_edge(node, edge1, edgePart1, mechanicalElements, loads),
+    ...connect_node_and_edge(node, edge2, edgePart2, mechanicalElements, loads),
   ];
 }
 
@@ -1877,6 +1892,86 @@ export function attach_gear_to_belt(
  * Both directions are cut, not just the belt's list: `attachedBeltID` is written by the connect that follows, but undoing that write clears it to `undefined` rather than back to the old belt.
  * Cutting the gear→belt side here makes the eviction reversible — the undo restores the previous belt on both sides.
  */
+/**
+ * The actions that lay `belt` over `route` instead of its own pulleys: the stretch that differs taken off, the new one put on, and the whole turns of the pulleys both share brought in line.
+ * Pulleys the route takes from another belt leave it, as a pulley carries one belt.
+ */
+export function belt_route_actions(
+  belt: BeltElement,
+  route: BeltElement["attachedGearsIDs"],
+  mechanicalElements: MechanicalElement[],
+): Action[] {
+  const old = belt.attachedGearsIDs;
+  let head = 0;
+  while (head < old.length && head < route.length && old[head].id === route[head].id) head++;
+  let tail = 0;
+  while (
+    tail < old.length - head &&
+    tail < route.length - head &&
+    old[old.length - 1 - tail].id === route[route.length - 1 - tail].id
+  )
+    tail++;
+
+  const actions: Action[] = [];
+  for (const leaving of old.slice(head, old.length - tail))
+    actions.push(
+      {
+        type: "ConnectsAttachedGears",
+        disconnect: true,
+        elementID: belt.id,
+        connectID: leaving.id,
+        index: head,
+        clockwise: leaving.clockwise,
+        turns: leaving.turns,
+      },
+      {
+        type: "ConnectsAttachedBelt",
+        disconnect: true,
+        elementID: leaving.id,
+        connectID: belt.id,
+      },
+    );
+  route.slice(head, route.length - tail).forEach((coming, i) =>
+    actions.push(
+      ...evict_belt_from_gear(coming.id, belt.id, mechanicalElements),
+      {
+        type: "ConnectsAttachedGears",
+        disconnect: false,
+        elementID: belt.id,
+        connectID: coming.id,
+        index: head + i,
+        clockwise: coming.clockwise,
+        turns: coming.turns,
+      },
+      {
+        type: "ConnectsAttachedBelt",
+        disconnect: false,
+        elementID: coming.id,
+        connectID: belt.id,
+      },
+    ),
+  );
+  const kept = [
+    ...route.slice(0, head).map((entry, i) => ({ entry, before: old[i], index: i })),
+    ...route.slice(route.length - tail).map((entry, i) => ({
+      entry,
+      before: old[old.length - tail + i],
+      index: route.length - tail + i,
+    })),
+  ];
+  for (const { entry, before, index } of kept) {
+    if ((entry.turns ?? 0) !== (before.turns ?? 0))
+      actions.push({
+        type: "SetAttachedGearTurns",
+        id: belt.id,
+        index,
+        turns: entry.turns ?? 0,
+        oldTurns: before.turns ?? 0,
+      });
+  }
+  return actions;
+}
+
 export function evict_belt_from_gear(
   gearID: ID,
   incomingBeltID: ID,

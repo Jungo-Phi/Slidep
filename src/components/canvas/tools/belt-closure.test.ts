@@ -19,6 +19,7 @@ import {
 } from "../../mechanism/connection-rules";
 import { DEFAULT_FLOOR, ViewportState } from "../../../types";
 import { bundle_geometry } from "../../mechanism/action-geometry";
+import { connect_elements } from "../../mechanism/connect-actions";
 
 const P = (x: number, y: number) => new Point2(x, y);
 const AX_A = "ax-a" as ID;
@@ -320,6 +321,78 @@ describe("the gear a belt is started on", () => {
       VIEWPORT,
     );
     expect(attached(actions)).toEqual([G_A, G_B]);
+  });
+});
+
+describe("a belt end landing on the pulley it wraps there", () => {
+  const BELT = "blt" as ID;
+  const belt: BeltElement = {
+    type: "belt",
+    id: BELT,
+    probes: [],
+    overlays: {},
+    positionStart: P(-100, 200),
+    positionEnd: P(400, 200),
+    fixedNodeStartID: undefined,
+    fixedNodeEndID: undefined,
+    attachedGearsIDs: [
+      { id: G_A, clockwise: false },
+      { id: G_B, clockwise: false },
+    ],
+    closed: false,
+  };
+  const mech = [...MECH, belt];
+  const rimOfB = P(340, 0);
+  const onB: HoveredPart = { type: "GearTooth", id: G_B, position: rimOfB, deleting: false };
+  const dragging_end: CanvasState = { type: "MovingEdgeEndPoint", elementID: BELT };
+
+  it("is offered the pulley next to that end, and only that one", () => {
+    const legal = legality_for_state(dragging_end, mech);
+    expect(legal(mech[3])).toMatchObject({ allowed: true });
+    expect(legal(mech[1])).toMatchObject({ allowed: false });
+    expect(
+      get_hovered_part(mech, [], [], new Map(), rimOfB, dragging_end, VIEWPORT, DEFAULT_FLOOR),
+    ).toMatchObject({ type: "GearTooth", id: G_B });
+  });
+
+  it("is pinned to it by a join when dropped there", () => {
+    const actions = connect_elements(
+      onB,
+      belt,
+      { type: "Edge", id: BELT, position: belt.positionEnd, deleting: false, part: "end" },
+      mech,
+      [],
+    );
+    const join = actions.find((a) => a.type === "CreateElement")!.element;
+    expect(join.type).toBe("join");
+    expect(actions).toContainEqual(
+      expect.objectContaining({ type: "ConnectsFixedNodesBody", elementID: G_B, connectID: join.id }),
+    );
+    expect(actions).toContainEqual(
+      expect.objectContaining({ type: "ConnectsFixedNodeEnd", elementID: BELT, connectID: join.id }),
+    );
+  });
+
+  it("ends a belt being placed pinned on its last pulley, not wrapping it twice", () => {
+    const placing: Extract<CanvasState, { type: "PlacingBeltEnd" }> = {
+      type: "PlacingBeltEnd",
+      startHover: { type: "Void", position: P(-100, 200) },
+      attachedGearsIDs: [
+        { id: G_A, clockwise: false },
+        { id: G_B, clockwise: false },
+      ],
+    };
+    expect(legality_for_state(placing, MECH)(MECH[3])).toMatchObject({ allowed: true });
+    const { actions, newCanvasState } = handle_placing_element(placing, onB, MECH, [], [], [], [], VIEWPORT);
+    expect(newCanvasState).toEqual({ type: "PlacingBeltStart" });
+    expect(
+      actions.filter((a) => a.type === "ConnectsAttachedGears").map((a) => a.connectID),
+    ).toEqual([G_A, G_B]);
+    const created = actions.flatMap((a) => (a.type === "CreateElement" ? [a.element] : []));
+    const join = created.find((e) => e.type === "join")!;
+    expect(actions).toContainEqual(
+      expect.objectContaining({ type: "ConnectsFixedNodesBody", elementID: G_B, connectID: join.id }),
+    );
   });
 });
 

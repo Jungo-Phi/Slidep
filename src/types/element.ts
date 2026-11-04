@@ -289,7 +289,8 @@ export interface DamperElement extends BaseEdgeElement {
  */
 export interface BeltElement extends BaseEdgeElement {
   type: "belt";
-  attachedGearsIDs: { id: ID; clockwise: boolean }[];
+  /** `turns`: whole turns the belt winds the pulley by beyond the wrap its geometry shows — a winch's drum carrying rope to pay out. Absent for none. */
+  attachedGearsIDs: { id: ID; clockwise: boolean; turns?: number }[];
   closed: boolean;
   /** Rendering only (simulation): indices into `attachedGearsIDs` of pulleys that lost belt contact this run, so the belt is drawn straight past them.
    * Undefined in edition. */

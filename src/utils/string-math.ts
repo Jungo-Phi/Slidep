@@ -178,6 +178,11 @@ const date_formatter = (lang: Lang): Intl.DateTimeFormat => {
   return formatter;
 };
 
+// The locale puts a separator such as ", " (or " à ") between the date and the time; it is replaced by a plain space.
 export function format_date(timestamp: number): string {
-  return date_formatter(get_language()).format(new Date(timestamp));
+  const parts = date_formatter(get_language()).formatToParts(new Date(timestamp));
+  const firstTime = parts.findIndex((p) => p.type === "hour");
+  return parts
+    .map((p, i) => (i === firstTime - 1 && p.type === "literal" ? " " : p.value))
+    .join("");
 }

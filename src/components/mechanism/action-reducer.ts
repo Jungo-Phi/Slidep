@@ -270,6 +270,18 @@ export function actionReducer(
         belt.attachedGearsIDs[action.index].clockwise =
           action.clockwise !== revert;
         break;
+      case "SetAttachedGearTurns": {
+        const wound = (
+          get_mechanical_element_from_id(
+            action.id,
+            mechanicalElements,
+          ) as BeltElement
+        ).attachedGearsIDs[action.index];
+        const turns = revert ? action.oldTurns : action.turns;
+        if (turns > 0) wound.turns = turns;
+        else delete wound.turns;
+        break;
+      }
       case "ConnectsFixedEdges":
         element = get_mechanical_element_from_id(
           action.elementID,
@@ -382,6 +394,7 @@ export function actionReducer(
           element.attachedGearsIDs.splice(action.index, 0, {
             id: action.connectID,
             clockwise: action.clockwise,
+            ...(action.turns ? { turns: action.turns } : {}),
           });
         }
         break;

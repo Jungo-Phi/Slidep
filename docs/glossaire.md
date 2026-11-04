@@ -34,6 +34,13 @@ suite de vias.
 continue (non repliée modulo 2π) : au-delà de 2π, la courroie s'est enroulée sur la poulie
 (tours supplémentaires dessinés en spirale).
 
+**Turns** — les tours entiers dont une courroie enroule une poulie en édition, au-delà de ce que
+montre la géométrie (`attachedGearsIDs[i].turns`). Ils comptent dans la longueur (2πr chacun), se
+dessinent en spirale et amorcent le wrap continu de la simulation (`belt_wound_wraps`). Réglables
+dans les connexions poulie ↔ courroie, en tournant autour de la poulie pendant le tracé, ou en
+tirant une extrémité de courroie autour d'elle — l'extrémité elle-même ou le nœud qui la
+tient.
+
 **Strand** (brin) — le segment de courroie tendu en ligne droite entre deux vias
 consécutifs, par opposition à l'arc de contact sur une poulie.
 

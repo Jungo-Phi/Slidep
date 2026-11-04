@@ -16,6 +16,7 @@ import {
   DEFAULT_FLOOR,
   DistributedForceElement,
   EdgeElement,
+  NodeElement,
   FloorConfig,
   ForceElement,
   GearElement,
@@ -36,7 +37,9 @@ import {
 import type { OwnPartKind } from "../../mechanism/connect-actions";
 import {
   attach_gear_to_belt,
+  belt_route_actions,
   connect_elements,
+  start_simulation,
   connect_meshed_gears,
   own_part,
   delete_element,
@@ -82,6 +85,12 @@ import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
 import { build_measure, measure_anchor, ruler_step_back } from "./measure";
 import { snapped } from "../snapping/point-snap";
+import {
+  rope_pulled_by,
+  trace_belt_drag,
+  trace_belt_terminal,
+} from "./belt-trace";
+import { terminal_pulley } from "../../mechanism/connection-rules";
 import {
   DEFAULT_SNAP_SETTINGS,
   angle_ray_count,
@@ -182,7 +191,7 @@ function held_by_press(previous: CanvasState, next: CanvasState): CanvasState {
 }
 
 /**
- * The state after a click put down the end of a beam: with a mouse, the next beam of a series starting on that end, welded to it.
+ * The state after a click put down the end of a beam: with a mouse, the next beam of a series starting on that end, welded to it — one stroke is one bent piece.
  * A series ends on a beam put down onto an existing element — closing on its own first beam included; Escape and the right click end it too (see `step_back`).
  * A finger draws each beam in one gesture instead, where a series would only be one more thing to end.
  */
@@ -207,7 +216,7 @@ function beam_series_next(
       deleting: false,
       part: "end",
     },
-    inSeries: true,
+    series: [...(state.series ?? []), beam.id],
   };
 }
 
@@ -218,7 +227,7 @@ function series_start_resolved<S extends CanvasState>(
 ): S {
   if (
     state.type !== "PlacingBeamEnd" ||
-    !state.inSeries ||
+    !state.series ||
     state.startHover.type !== "Edge"
   )
     return state;
@@ -665,9 +674,43 @@ export function canvasStateReducer(
         }
       }
       break;
-    case "MouseMove":
+    case "MouseMove": {
       if (mouseButtonDown !== "left") break;
+      // A loose belt's terminal — dragged itself, or by the node holding it — pulls the belt as a rope, over the pulleys it comes to touch; the route that makes waits for the drop.
+      const pull_rope = (
+        dragging: Extract<
+          CanvasState,
+          { type: "MovingNode" | "MovingEdgeStartPoint" | "MovingEdgeEndPoint" }
+        >,
+      ) => {
+        const rope = rope_pulled_by(dragging, mechanicalElements);
+        if (!rope) return;
+        setCanvasState({
+          ...dragging,
+          route: trace_belt_terminal(
+            rope.belt,
+            rope.which,
+            dragging.route,
+            hoveredPart.position,
+            mechanicalElements,
+            viewport,
+          ),
+        });
+      };
       switch (state.type) {
+        // Only the drag that opened the belt traces it: between two clicks, the pointer merely aims.
+        // Traced to the point the preview draws the belt's end at, snap included: read off the raw cursor instead, the two could fall either side of a tangency, and the preview would wrap the pulley the wrong way round, a whole turn.
+        case "PlacingBeltEnd":
+          if (state.pressHeld)
+            setCanvasState(
+              trace_belt_drag(
+                state,
+                hoveredPart.position,
+                mechanicalElements,
+                viewport,
+              ),
+            );
+          break;
         case "Selecting":
           if (!names_element(hoveredPart)) break;
           const constraint = constraintElements.find(
@@ -830,12 +873,31 @@ export function canvasStateReducer(
                   break;
               }
               break;
-            case "GearTooth":
+            case "GearTooth": {
+              if (!hit.body) {
+                setCanvasState({
+                  type: "ChangingGearRadius",
+                  elementID: hit.id,
+                });
+                break;
+              }
+              // Dragged by its body, a gear moves with its axle, held where it was grabbed.
+              const gear = get_mechanical_element_from_id(
+                hit.id,
+                mechanicalElements,
+              ) as GearElement;
+              const axle = get_mechanical_element_from_id(
+                gear.parentAxleID,
+                mechanicalElements,
+              ) as NodeElement;
               setCanvasState({
-                type: "ChangingGearRadius",
-                elementID: hit.id,
+                type: "MovingNode",
+                elementID: axle.id,
+                grabOffset: state.downPos.sub(axle.position),
+                selects: gear.id,
               });
               break;
+            }
             case "BeltBody":
               const belt = get_mechanical_element_from_id(
                 hit.id,
@@ -887,33 +949,38 @@ export function canvasStateReducer(
           }
           break;
         }
-        case "MovingNode":
+        case "MovingNode": {
           if (hoveredPart.position.equals(oldPosition)) break;
+          // Grabbed away from itself, the node was not under the last hover: where it stood is read off the node.
+          const from = state.grabOffset
+            ? (
+                get_mechanical_element_from_id(
+                  state.elementID,
+                  mechanicalElements,
+                ) as NodeElement
+              ).position
+            : oldPosition;
           actions.push({
             type: "MoveNode",
             id: state.elementID,
             newPosition: hoveredPart.position,
-            oldPosition,
+            oldPosition: from,
           });
+          pull_rope(state);
           break;
+        }
         case "MovingEdgeStartPoint":
+        case "MovingEdgeEndPoint": {
           if (hoveredPart.position.equals(oldPosition)) break;
           actions.push({
-            type: "MoveEdgeStart",
+            type: state.type === "MovingEdgeStartPoint" ? "MoveEdgeStart" : "MoveEdgeEnd",
             id: state.elementID,
             newPosition: hoveredPart.position,
             oldPosition,
           });
+          pull_rope(state);
           break;
-        case "MovingEdgeEndPoint":
-          if (hoveredPart.position.equals(oldPosition)) break;
-          actions.push({
-            type: "MoveEdgeEnd",
-            id: state.elementID,
-            newPosition: hoveredPart.position,
-            oldPosition,
-          });
-          break;
+        }
         case "MovingEdgeBody":
           if (hoveredPart.position.equals(oldPosition)) break;
           actions.push({
@@ -1201,6 +1268,7 @@ export function canvasStateReducer(
           break;
       }
       break;
+    }
     case "MouseButtonUp":
       if (mouseButtonDown !== "left") break;
       switch (state.type) {
@@ -1217,7 +1285,8 @@ export function canvasStateReducer(
         case "PlacingDistributedForce":
         case "PlacingMomentEnd": {
           if (!state.pressHeld) break;
-          const waiting = { ...state, pressHeld: undefined };
+          // The trace stops with the drag: the route put down is the one the preview showed.
+          const waiting = { ...state, pressHeld: undefined, trace: undefined };
           // A mouse click leaves the second step waiting for a click of its own; a finger never leaves a placement waiting, and drops what it does not put down now.
           const touch = pointer_kind() === "touch";
           const unplaced = touch ? step_back(waiting) : waiting;
@@ -1228,11 +1297,12 @@ export function canvasStateReducer(
               : undefined;
           else if (hoveredPart.type === "Void" && hoveredPart.rejected)
             target = undefined;
-          // A finger draws a belt as one straight run, its pulleys added afterwards by dragging the run onto them: a gear it ends on takes no wrap.
+          // A dragged belt wraps the gears its run caught on, and no other: a gear it is released over takes no wrap.
+          // Its last pulley is the exception, the belt then ending pinned on its rim.
           else if (
-            touch &&
             waiting.type === "PlacingBeltEnd" &&
-            hoveredPart.type === "GearTooth"
+            hoveredPart.type === "GearTooth" &&
+            hoveredPart.id !== terminal_pulley(waiting, mechanicalElements)
           )
             target = { type: "Void", position: hoveredPart.position };
           else target = hoveredPart;
@@ -1289,7 +1359,25 @@ export function canvasStateReducer(
         case "MovingNode":
         case "MovingEdgeStartPoint":
         case "MovingEdgeEndPoint":
-        case "MovingEdgeBody":
+        case "MovingEdgeBody": {
+          // The route a belt's terminal laid its belt over while dragged: put on first, so the terminal then lands on the belt it ends.
+          const sim = start_simulation(
+            mechanicalElements,
+            constraintElements,
+            loadElements,
+          );
+          const pulled =
+            state.type !== "MovingEdgeBody" && state.route
+              ? mechanicalElements.find((e) => e.id === state.route!.beltID)
+              : undefined;
+          if (pulled?.type === "belt" && state.type !== "MovingEdgeBody" && state.route)
+            sim.step(
+              belt_route_actions(
+                pulled,
+                state.route.attachedGearsIDs,
+                mechanicalElements,
+              ),
+            );
           const draggedKind: OwnPartKind =
             state.type === "MovingNode"
               ? "node"
@@ -1298,27 +1386,32 @@ export function canvasStateReducer(
                 : state.type === "MovingEdgeEndPoint"
                   ? "end"
                   : "body";
-          actions.push(
-            ...connect_elements(
+          sim.step(
+            connect_elements(
               hoveredPart,
               get_mechanical_element_from_id(
                 state.elementID,
-                mechanicalElements,
+                sim.mechanicalElements,
               ),
               own_part(state.elementID, draggedKind, hoveredPart),
-              mechanicalElements,
-              constraintElements,
-              loadElements,
+              sim.mechanicalElements,
+              sim.constraintElements,
+              sim.loads,
             ),
+          );
+          actions.push(...sim.actions,
           );
           if (actions.length === 0) {
             actions.push({ type: "Blank" });
           }
           setCanvasState({
             type: "SelectedElement",
-            elementID: state.elementID,
+            elementID:
+              (state.type === "MovingNode" ? state.selects : undefined) ??
+              state.elementID,
           });
           break;
+        }
         case "MovingBeltBody": {
           const belt = get_mechanical_element_from_id(
             state.elementID,
@@ -1345,6 +1438,7 @@ export function canvasStateReducer(
                 connectID: removed.id,
                 index: removing,
                 clockwise: removed.clockwise,
+                turns: removed.turns,
               },
             );
           }

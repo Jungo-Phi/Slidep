@@ -43,7 +43,8 @@ export type HoveredPart =
     }
   | (HoveredElement & { type: "Node"; beamBodyHover: boolean })
   | (HoveredElement & { type: "Edge"; part: "start" | "end" | "body" })
-  | (HoveredElement & { type: "GearTooth" })
+  /** `body`: aimed at the inside of the gear rather than at its rim — the gear taken whole, to select or move it. */
+  | (HoveredElement & { type: "GearTooth"; body?: true })
   | (HoveredElement & { type: "BeltBody"; section: number })
   | { type: "BeltClosure"; position: WorldPoint }
   /** The floor's handles — no `id`, like `BeltClosure`: it names no `MechanicalElement`.

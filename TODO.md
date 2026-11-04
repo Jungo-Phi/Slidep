@@ -23,39 +23,30 @@
 
 **Lisibilité**
 
-
-2. Connecter la fin sur une poulie ne crée pas de join !
-4. Tracé de courroie par chemin.
-5. Outil engrenage sur un brin dès la première étape.
-6. Pivot par défaut.
-
-Themes
-- 🔨 Theme blueprint : Bords tags plus lisibles, luminosité plus basse et moins saturé sur les bords
-- 🔨 Theme slidep dark : la couleur de sélection est trop saturée
-- 🔨 Theme classic dark : la couleur de stroke est trop bleu
-
+- 🔨 Discontinuité dans la lecture au détachement des courroies
 - 🔨 Après avoir changé une valeur dans un NumberInput, cliquer sur le canvas (sans avoir cliquer sur enter) annule la modif
 
-- Les DDL ne prennent pas en compte les déconnexions de courroies
-- Collision à répétition avec "Pince.slidep"
-- Mauvais bilan des forces avec "Poulie tombante.slidep"
+- 🚨 Les DDL ne prennent pas en compte les déconnexions de courroies
+- 🚨 Mauvais bilan des forces avec "Poulie tombante.slidep"
+- 🚨 Contact manquant poulie-join dans "Poulie tombante.slidep"
+- 🚨 Blocages/déblocages moteur à répétition avec "Pince.slidep"
 
-- 🔨 Mieux différencier visuellement les joins et les pivots
-- 🔨 Donner des titres à toutes les sections du panneau latéral
 - 🤔 Les mécaniciens on tendance à penser avec des conditions aux limites et sont donc confus par le slider ou slidep, car ce sont des liaisons. Faudrait-il faire quelque chose pour clarifier ça ? Créer de vraies conditions limites ? Ou ne rien faire ?
 - 🤔 Fusionner statique et cinématique ?
 - 🤔 Outil "déconnecter" ?
 - 🤔 Outil "couper" (les poutres) ?
+- 🔨 Donner des titres à toutes les sections du panneau latéral
 - 🔨 Changer icon des collisions de groupe
-- 🔨 Connexion/déconnexion moteur ! (Pince.slidep)
-- 🔨 Rendre les hitbox exactes (contraintes, noeuds)
 - 🔨 Finir les traits de DimensionAngle
 - 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
 - 🔨 Modifier les dimensions du profilé d'une poutre dans le panneau de la poutre elle-même
-- 🔨 Pouvoir attraper les engrenages / poulies par le corps (pas seulement par le bord)
-- 🔨 N’arrive pas bien à connecter une courroie (l’attrape par les bouts)
-- 🆕 Placer une courroie en traçant un chemin
-- 🆕 Placer une courroie en commençant par les engrenages (au lieu du vide)
+- 🔨 Rendre les hitbox exactes (contraintes, noeuds)
+
+**Themes**
+
+- 🔨 Blueprint : Bords tags plus lisibles, luminosité plus basse et moins saturé sur les bords
+- 🔨 Slidep dark : la couleur de sélection est trop saturée
+- 🔨 Classic dark : la couleur de stroke est trop bleu
 
 **Découvrabilité et onboarding**
 

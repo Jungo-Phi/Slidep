@@ -80,6 +80,8 @@ type NodeProbe =
 type GearProbe =
   /** Rim point under the cursor. */
   | "rim"
+  /** Rim point under the cursor, or the gear as a whole from anywhere inside it (`body`). */
+  | "rim+body"
   /** Rim point facing the gear being sized — the tangency of the two. */
   | "rim-toward-ref"
   /** The gear as a whole, designated by its centre. */
@@ -107,7 +109,9 @@ export type BeltProbe =
   /** Straight runs only, at the tangency of the gear being sized. */
   | "runs-tangent"
   /** Ends only. */
-  | "ends";
+  | "ends"
+  /** Ends, and straight runs at the point under the cursor. */
+  | "ends+runs";
 
 /** Which of the overlays drawn over the mechanism — constraints and loads —
  * a tool may pick. */
@@ -135,7 +139,7 @@ export type HoverTargets = {
 /** What a tool may pick, stated once for all six target families. */
 const SELECT_ALL: HoverTargets = {
   node: "centre",
-  gear: "rim",
+  gear: "rim+body",
   edge: "ends+body",
   belt: "full",
   overlays: "all",
@@ -237,7 +241,8 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   PlacingJoin: ATTACHING,
   PlacingMass: ATTACHING,
   PlacingGround: ATTACHING,
-  PlacingGearStart: ATTACHING,
+  // A gear started on a run is laid against it, the click being where it touches.
+  PlacingGearStart: { ...ATTACHING, belt: "ends+runs" },
   PlacingGearRadius: SIZING_GEAR,
 
   PlacingForceStart: { node: "centre", edge: "ends+beam-body" },
@@ -447,10 +452,18 @@ function probe_gear(
   gearRef: WorldPoint | undefined,
   viewport: ViewportState,
 ): HoveredPart | null {
-  // Only the rim answers: the whole inside of a gear is a dead zone.
+  // Only the rim answers, unless the tool takes the gear by its body: elsewhere the whole inside of a gear is a dead zone.
   const center = world2screen(gear.position, viewport);
   const radius = world2screen_length(gear.radius, viewport);
   const distance = mouseScreen.distance_to(center);
+  if (mode === "rim+body" && distance < radius - hit_tolerance().NODE / 2)
+    return {
+      type: "GearTooth",
+      position: screen2world(mouseScreen, viewport),
+      id: gear.id,
+      deleting,
+      body: true,
+    };
   if (
     distance > radius + hit_tolerance().NODE / 2 ||
     distance < radius - hit_tolerance().NODE / 2
@@ -549,7 +562,7 @@ function probe_belt(
   mechanicalElements: MechanicalElement[],
   viewport: ViewportState,
 ): HoveredPart | null {
-  if (mode === "ends" || mode === "full") {
+  if (mode === "ends" || mode === "ends+runs" || mode === "full") {
     if (
       mousePos.distance_to(belt.positionStart) <=
       hit_tolerance().NODE / viewport.scale
@@ -659,7 +672,11 @@ function get_hovered_part_of_element(
 ): HoveredPart | null {
   // TODO: at "PlacingBeltEnd", ignore the gears sharing a parentAxle.
 
-  const targets = HOVER_TARGETS[state.type];
+  // A gear laid against a run is sized from the run, its centre still to be found: nothing else is a target to grow it to.
+  const targets =
+    state.type === "PlacingGearRadius" && state.startHover.type === "BeltBody"
+      ? NOTHING
+      : HOVER_TARGETS[state.type];
   const deleting = state.type === "Erasing";
 
   switch (element.type) {

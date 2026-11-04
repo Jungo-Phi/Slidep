@@ -57,6 +57,7 @@ const ACTION_GEOMETRY: Record<
   GroundNode: NONE,
   CloseBelt: AFTER,
   SwitchAttachedGearDirection: NONE,
+  SetAttachedGearTurns: NONE,
   ChangeGearRadius: BEFORE_PULL,
   ChangeEdgeLength: BEFORE_PULL,
   ChangeEdgeAngle: BEFORE_PULL,

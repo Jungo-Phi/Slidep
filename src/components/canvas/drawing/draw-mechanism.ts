@@ -33,7 +33,6 @@ import {
   beam_fill_stops,
   draw_belt_loop,
   draw_belt_open,
-  BeltWinding,
   draw_hover_circle,
   draw_damper,
   draw_gear,
@@ -79,6 +78,8 @@ import { RedundancySymbol } from "../../solver/analysis/redundancy-symbols";
 import { offset_ends, parallel_edge_offsets } from "./parallel-edges";
 import { weld_groups } from "./weld-groups";
 import { beam_end, draw_weld, type WeldDrawing } from "./draw-weld";
+import { gear_on_run } from "../tools/gear-on-run";
+import { dragged_route } from "../tools/belt-trace";
 import {
   deletion_closure,
   get_mechanical_element_from_id,
@@ -94,6 +95,7 @@ import {
   get_belt_vias,
   belt_wrap_direction,
   belt_without_gear,
+  route_wraps,
   screen2world_length,
   world2screen,
   world2screen_angle,
@@ -112,6 +114,7 @@ import {
   geometric_badge_positions,
 } from "../utils";
 import {
+  belt_windings,
   screen_vias,
   open_belt_vias,
   draw_belt_closure_marks,
@@ -127,7 +130,6 @@ import {
 } from "../../solver/recording/cohesion-field";
 import { beam_strength } from "../../../utils/section-properties";
 
-const TAU = 2 * Math.PI;
 
 /** Shared empty set, so a frame with nothing doomed allocates none. */
 const EMPTY_IDS: ReadonlySet<ID> = new Set<ID>();
@@ -168,32 +170,13 @@ function parent_beam_screen_angle(
   return world2screen_angle(beam.positionEnd.sub(beam.positionStart).angle());
 }
 
-/**
- * Per-via winding spec for a belt: a pulley wound past a full turn (|wrap| ≥ 2π) gets a coil growing one BELT_WIDTH per turn.
- * It grows OUTWARD on the departure side by default; on a winch (a terminal pinned to the first/last pulley) it grows INWARD so the free (load) run stays on the rim and doesn't visually lean.
- * `viaWraps` is index-aligned to the belt's vias (0 for the two terminals).
- */
-function belt_windings(
-  viaWraps: (number | undefined)[],
-  startExternal: boolean,
-  endExternal: boolean,
-): (BeltWinding | undefined)[] {
-  const n = viaWraps.length;
-  return viaWraps.map((w, v) => {
-    if (w === undefined || Math.abs(w) < TAU) return undefined;
-    const growth = (Math.abs(w) / TAU) * 4;
-    if (startExternal && v === 1) return { growth: -growth, atStart: true };
-    if (endExternal && v === n - 2) return { growth: -growth, atStart: false };
-    return { growth, atStart: false };
-  });
-}
 
 function is_selected(elementID: ID, state: CanvasState): boolean {
   return (
     (state.type === "SelectedElement" && state.elementID === elementID) ||
     // Its metric popover is open: the element being measured reads as selected, the cursor having left the canvas for the popover.
     (state.type === "PlacingProbeMetrics" && state.elementID === elementID) ||
-    (state.type === "MovingNode" && state.elementID === elementID) ||
+    (state.type === "MovingNode" && (state.selects ?? state.elementID) === elementID) ||
     (state.type === "MovingEdgeStartPoint" && state.elementID === elementID) ||
     (state.type === "MovingEdgeEndPoint" && state.elementID === elementID) ||
     (state.type === "MovingEdgeBody" && state.elementID === elementID) ||
@@ -1009,7 +992,14 @@ export function draw_mechanism(
 
     // Thicken the stroke if element is hovered.
     // Loads are left out: they pick their width per sub-part below, from loadRestWidth / loadHoverWidth.
-    if (isHovered && !isEdgeEndHovered && !isLoadElement)
+    // So is a gear aimed at by its body: the rim thickens only under the cursor, being what a drag there resizes, and the body shows its hover by its fill alone.
+    const gearBodyAimed =
+      hoveredPart.type === "GearTooth" &&
+      hoveredPart.body === true &&
+      hoveredPart.id === element.id &&
+      !focused.has(element.id) &&
+      !faulty.has(element.id);
+    if (isHovered && !isEdgeEndHovered && !isLoadElement && !gearBodyAimed)
       ctx.lineWidth += STROKE_WIDTHS.HOVER_GAIN;
     // Add blue halo and blue stroke if element is selected
     if (isSelected) {
@@ -1476,16 +1466,23 @@ export function draw_mechanism(
             removingGearIndex === undefined
               ? element
               : belt_without_gear(element, removingGearIndex);
-          const attachedGears = element.attachedGearsIDs
-            .map(({ id, clockwise }) => {
-              return {
-                gear: get_mechanical_element_from_id(
-                  id,
-                  mechanicalElements,
-                ) as GearElement,
-                clockwise,
-              };
-            })
+          // A terminal being dragged — itself or by its node — lays the belt over the route it is pulling, which the drop applies.
+          const pulled = dragged_route(state, element.id);
+          const routeShown = pulled?.attachedGearsIDs ?? element.attachedGearsIDs;
+          // Each entry keeps its whole turns, so the wraps follow the route as drawn, whatever pulley a gesture previews into it or takes out.
+          const attachedGears: {
+            gear: GearElement;
+            clockwise: boolean;
+            turns?: number;
+          }[] = routeShown
+            .map(({ id, clockwise, turns }) => ({
+              gear: get_mechanical_element_from_id(
+                id,
+                mechanicalElements,
+              ) as GearElement,
+              clockwise,
+              turns,
+            }))
             .filter((_, i) => !disconnectedGears.has(i));
           // Preview the pulley where the commit will actually put it.
           // An arc section takes none, and the belt is then previewed unchanged.
@@ -1571,6 +1568,43 @@ export function draw_mechanism(
               break;
             }
             case "PlacingGearRadius": {
+              // Laid against one of this belt's runs: the run wraps it as the drop will make it.
+              if (
+                state.startHover.type === "BeltBody" &&
+                state.startHover.id === element.id
+              ) {
+                const laid = gear_on_run(
+                  state.startHover,
+                  hoveredPart.position,
+                  mechanicalElements,
+                  viewport,
+                );
+                if (!laid) break;
+                preview_pulley(state.startHover.section, {
+                  gear: {
+                    type: "gear",
+                    id: "----",
+                    probes: [],
+                    overlays: {},
+                    position: laid.center,
+                    angle: 0,
+                    radius: laid.radius,
+                    parentAxleID: "----",
+                    fixedNodesBodyIDs: [],
+                    meshedGearsIDs: [],
+                    attachedBeltID: element.id,
+                    surfaceMass: 0,
+                  },
+                  clockwise: belt_wrap_direction(
+                    laid.center,
+                    element,
+                    state.startHover.section,
+                    mechanicalElements,
+                    "gear-onto-belt",
+                  ),
+                });
+                break;
+              }
               if (
                 hoveredPart.type !== "BeltBody" ||
                 hoveredPart.id !== element.id
@@ -1628,12 +1662,23 @@ export function draw_mechanism(
           }
           // A terminal dragged onto the other one shows the loop the drop makes, not an open path whose two ends sit on the same point.
           const isClosing = is_closing_belt(element, hoveredPart, state);
+          // A simulation tracks each pulley's wrap; in edition, the route drawn gives it, whole turns included.
+          const wraps = element.gearWraps
+            ? element.gearWraps.filter((_, i) => !disconnectedGears.has(i))
+            : route_wraps(
+                element.positionStart,
+                attachedGears,
+                element.positionEnd,
+                element.closed || isClosing,
+                pulled && {
+                  index: pulled.which === "start" ? 0 : attachedGears.length - 1,
+                  traced: pulled.trace.lastWrap,
+                },
+              );
           if ((element.closed || isClosing) && attachedGears.length > 0) {
             // Closed belt: continuous closed loop around the pulleys, drawn independently of the junction position (no free ends).
             // In simulation, pass the tracked continuous wraps (filtered to the still-connected gears, same as attachedGears) so a pulley about to disconnect is drawn straight-past, not wrapped a full turn.
-            const loopWraps = element.gearWraps
-              ? element.gearWraps.filter((_, i) => !disconnectedGears.has(i))
-              : [];
+            const loopWraps = wraps ?? [];
             const loopVias = screen_vias(
               attachedGears.map(({ gear, clockwise }) => ({
                 pos: gear.position,
@@ -1657,9 +1702,7 @@ export function draw_mechanism(
                 terminalNodeID === undefined,
               );
           } else {
-            const openWraps = element.gearWraps
-              ? element.gearWraps.filter((_, i) => !disconnectedGears.has(i))
-              : undefined;
+            const openWraps = wraps;
             const vias = screen_vias(
               open_belt_vias(
                 element.positionStart,

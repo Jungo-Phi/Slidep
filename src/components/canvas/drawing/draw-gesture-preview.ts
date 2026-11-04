@@ -39,7 +39,9 @@ import {
   draw_motor,
   draw_probe,
   draw_dimension_belt,
+  draw_hover_circle,
 } from "./drawing-functions";
+import { gear_on_run } from "../tools/gear-on-run";
 import { spring_coil_pitch } from "./coil-pitch";
 import { get_mechanical_element_from_id } from "../../mechanism/connect-actions";
 import {
@@ -72,7 +74,14 @@ import {
   axle_under,
 } from "../tools/placing-element-actions";
 import { node_on_beam_body, probe_badge_position } from "../utils";
-import { screen_vias, open_belt_vias, draw_belt_closure_marks } from "./belt-vias";
+import {
+  belt_windings,
+  screen_vias,
+  open_belt_vias,
+  draw_belt_closure_marks,
+} from "./belt-vias";
+import { belt_wraps, type BeltVia } from "../../../utils/belt-path";
+import { terminal_pulley } from "../../mechanism/connection-rules";
 import { FORCE, LOAD_INTENSITY } from "../../../utils/quantity-format";
 
 /**
@@ -98,6 +107,22 @@ function draw_probe_under_cursor(
   ctx.strokeStyle = COLORS.ACCENT;
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   draw_probe(ctx, world2screen(position, viewport));
+}
+
+/**
+ * The wraps a belt being placed is drawn with, per via: what its geometry shows, plus 2π per whole turn a pulley is wound by (`turns`, index-aligned to the pulleys).
+ * The last pulley is held to the wrap the trace found there (`BeltTrace.lastWrap`): the end drawn can lag the one traced by a frame, and a pulley just caught then reads as wrapped by a whole turn, its wrap just under zero — drawn as no wrap at all instead.
+ */
+export function dragged_wraps(
+  vias: BeltVia<"screen">[],
+  traced: number | undefined,
+  turns: readonly (number | undefined)[] = [],
+): number[] {
+  const shown = belt_wraps(vias);
+  const last = vias.length - 2;
+  if (traced !== undefined && last >= 1 && Math.abs(shown[last] - traced) > Math.PI)
+    shown[last] = 0;
+  return shown.map((wrap, v) => wrap + 2 * Math.PI * (turns[v - 1] ?? 0));
 }
 
 /**
@@ -157,6 +182,11 @@ export function draw_gesture_preview(
       draw_belt_end(ctx, world2screen(hoveredPart.position, viewport));
       break;
     case "PlacingGearStart":
+      // On a run, the click is where the gear will touch it: which side it grows on, the drag decides.
+      if (hoveredPart.type === "BeltBody") {
+        draw_hover_circle(ctx, world2screen(hoveredPart.position, viewport));
+        break;
+      }
       draw_gear(
         ctx,
         world2screen(hoveredPart.position, viewport),
@@ -209,6 +239,19 @@ export function draw_gesture_preview(
       draw_pivot(ctx, world2screen(hoveredPart.position, viewport), false);
       break;
     case "PlacingGearRadius": {
+      if (state.startHover.type === "BeltBody") {
+        const laid = gear_on_run(
+          state.startHover,
+          hoveredPart.position,
+          mechanicalElements,
+          viewport,
+        );
+        if (!laid) break;
+        const at = world2screen(laid.center, viewport);
+        draw_gear(ctx, at, world2screen_length(laid.radius, viewport), 0);
+        draw_pivot(ctx, at, true);
+        break;
+      }
       const center = world2screen(state.startHover.position, viewport);
       const radius = world2screen(hoveredPart.position, viewport).distance_to(
         center,
@@ -248,9 +291,14 @@ export function draw_gesture_preview(
       );
       break;
     case "PlacingBeltEnd": {
-      // Cursor back on the start: so preview the closed loop The route the click commits: the pulleys already routed, the gear under the cursor appended as clicking it would, and the gear the gesture started on folded in exactly as finalisation does.
+      // The route the click commits: the pulleys already routed, the gear under the cursor appended as clicking it would, and the gear the gesture started on folded in exactly as finalisation does.
+      // A drag commits no gear it is released over, so none is appended while it lasts; nor is the last pulley, which the belt then ends pinned on.
       const routed = [...state.attachedGearsIDs];
-      if (hoveredPart.type === "GearTooth") {
+      if (
+        hoveredPart.type === "GearTooth" &&
+        !state.pressHeld &&
+        hoveredPart.id !== terminal_pulley(state, mechanicalElements)
+      ) {
         const hoveredGear = get_mechanical_element_from_id(
           hoveredPart.id,
           mechanicalElements,
@@ -273,11 +321,13 @@ export function draw_gesture_preview(
           ),
         });
       }
-      const attachedGears = attached_gears_with_start(
+      const route = attached_gears_with_start(
         { ...state, attachedGearsIDs: routed },
         hoveredPart.position,
         mechanicalElements,
-      ).map(({ id, clockwise }) => ({
+      );
+      const attachedTurns = route.map(({ turns }) => turns);
+      const attachedGears = route.map(({ id, clockwise }) => ({
         gear: get_mechanical_element_from_id(
           id,
           mechanicalElements,
@@ -304,7 +354,12 @@ export function draw_gesture_preview(
         );
         break;
       }
-      draw_belt_open(ctx, vias, [], []);
+      const wraps = dragged_wraps(
+        vias,
+        state.trace?.lastWrap,
+        attachedTurns,
+      );
+      draw_belt_open(ctx, vias, wraps, belt_windings(wraps, false, false));
       break;
     }
     case "PlacingForceStart": {

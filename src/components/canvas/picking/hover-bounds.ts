@@ -73,7 +73,7 @@ export function clamp_to_bounds(
         (bounded, { edge, which }) =>
           clamp_edge_terminal(
             bounded,
-            edge,
+            pulled_edge(edge, state),
             which,
             mechanicalElements,
             viewport,
@@ -83,9 +83,10 @@ export function clamp_to_bounds(
 
     case "MovingEdgeStartPoint":
     case "MovingEdgeEndPoint": {
-      const edge = mechanicalElements.find(
+      const found = mechanicalElements.find(
         (el) => el.id === state.elementID && "positionStart" in el,
       ) as EdgeElement | undefined;
+      const edge = found && pulled_edge(found, state);
       return edge
         ? clamp_edge_terminal(
             point,
@@ -113,8 +114,11 @@ function sizing_bound(
   viewport: ViewportState,
 ): { centre: Point2; minRadius: number } | undefined {
   const minRadius = screen2world_length(DIM.MIN_GEAR_RADIUS, viewport);
+  // A gear laid against a belt run has no centre yet to measure from: `gear_on_run` holds the minimum itself.
   if (state.type === "PlacingGearRadius")
-    return { centre: state.startHover.position, minRadius };
+    return state.startHover.type === "BeltBody"
+      ? undefined
+      : { centre: state.startHover.position, minRadius };
   if (state.type !== "ChangingGearRadius") return undefined;
   const gear = element_of_type(state.elementID, "gear", mechanicalElements);
   return gear
@@ -217,6 +221,14 @@ function element_of_type<T extends MechanicalElement["type"]>(
 /** `point` pushed away from `base` until it is at least `minLength` from it. */
 function from_base(point: Point2, base: Point2, minLength: number): Point2 {
   return base.add(point.sub(base).limit_length_min(minLength));
+}
+
+/** A belt is kept to the route its dragged terminal is pulling, not to the one it started from: the terminal stays out of the pulley next to it on that route. */
+function pulled_edge(edge: EdgeElement, state: CanvasState): EdgeElement {
+  const route = "route" in state ? state.route : undefined;
+  return edge.type === "belt" && route && route.beltID === edge.id
+    ? { ...edge, attachedGearsIDs: route.attachedGearsIDs }
+    : edge;
 }
 
 /**

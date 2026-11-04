@@ -36,6 +36,7 @@ export type OtherActionType =
   | "GroundNode"
   | "CloseBelt"
   | "SwitchAttachedGearDirection"
+  | "SetAttachedGearTurns"
   | "Blank";
 export type ChangeConstantActionType =
   | "ChangeMass"
@@ -145,6 +146,13 @@ export type Action =
       id: ID;
       index: number;
       clockwise: boolean;
+    }
+  | {
+      type: "SetAttachedGearTurns";
+      id: ID;
+      index: number;
+      turns: number;
+      oldTurns: number;
     }
   | {
       type: "ChangeGearRadius";
@@ -289,6 +297,8 @@ export type Action =
       connectID: ID;
       index: number;
       clockwise: boolean;
+      /** The pulley's whole turns, so undoing its detachment winds it back as it was. */
+      turns?: number;
     }
   | {
       type: "ConnectsFixedGears";

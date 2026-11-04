@@ -23,7 +23,7 @@ Les six branches de l'élément : **nœud** (`pivot`/`slider`/`slidep`/`join`/`m
 
 | État                | nœud | engrenage | edge             | courroie                | contrainte | charge |
 | ------------------- | ---- | --------- | ---------------- | ----------------------- | ---------- | ------ |
-| `Selecting`         | ✅   | ✅ jante  | ✅ bouts + corps | ✅ bouts + arcs + brins | ✅         | ✅     |
+| `Selecting`         | ✅   | ✅ jante + corps | ✅ bouts + corps | ✅ bouts + arcs + brins | ✅         | ✅     |
 | `SelectedElement`   | ✅   | ✅        | ✅               | ✅                      | ✅         | ✅     |
 | `SelectedMultiple`  | ✅   | ✅        | ✅               | ✅                      | ✅         | ✅     |
 | `Erasing`           | ✅   | ✅        | ✅               | ✅                      | ✅         | ✅     |
@@ -34,7 +34,7 @@ Les six branches de l'élément : **nœud** (`pivot`/`slider`/`slidep`/`join`/`m
 
 Les deux derniers sortent en `null` dès l'entrée de la fonction : une sélection au rectangle ne
 survole rien. Le corps d'un edge est ici cible **quel que soit son type** (barre, ressort,
-amortisseur), contrairement aux états de placement.
+amortisseur), contrairement aux états de placement. L'intérieur d'un engrenage aussi (`GearTooth` marqué `body`) : un clic sélectionne l'engrenage, un glisser le déplace avec son axe, tenu là où il a été pris (`MovingNode` et son `grabOffset`) ; la jante, elle, change toujours le rayon.
 
 ## Placement d'éléments mécaniques
 
@@ -52,10 +52,12 @@ amortisseur), contrairement aux états de placement.
 | `PlacingJoin`                | ✅   | ✅        | ✅ bouts + corps¹  | ✅ bouts  |
 | `PlacingMass`                | ✅   | ✅        | ✅ bouts + corps¹  | ✅ bouts  |
 | `PlacingGround`              | ✅   | ✅        | ✅ bouts + corps¹  | ✅ bouts  |
-| `PlacingGearStart`           | ✅   | ✅        | ✅ bouts + corps¹  | ✅ bouts  |
+| `PlacingGearStart`           | ✅   | ✅        | ✅ bouts + corps¹  | ✅ bouts + ◆ i brins |
 | `PlacingGearRadius`          | ✅   | ◆ b       | ✅ **bouts seuls** | ◆ c brins |
 
 ¹ le corps n'est cible que si l'edge est une `beam` — jamais un ressort ni un amortisseur.
+
+Commencé sur un brin (◆ i), `PlacingGearRadius` ne voit **rien** : l'engrenage se pose contre le brin et n'a pas encore de centre d'où mesurer une tangence.
 
 ## Charges
 
@@ -188,10 +190,11 @@ charges — une force n'est pas une chose que l'outil de cotation manipule.
   denture sur ce qu'elle rencontre, et ne retombe sur le curseur libre que sur du vide. Les nœuds
   que l'engrenage porte (`fixedNodesBodyIDs`) et son axe sont exclus du survol pour cette raison —
   ils suivent la jante, et répondraient avec le rayon courant, le figeant sur sa propre valeur.
+- **i — `PlacingGearStart` sur brin de courroie.** Position = la projection du curseur sur le brin : le point où l'engrenage le touchera. Le glisser qui suit le fait grossir du côté du curseur, sa jante passant par le curseur et mordant le brin de `GEAR_ON_BELT_GROW` (`gear_on_run`).
 
 Toute la face intérieure d'un engrenage est morte : la branche exige que le curseur soit à
-`HIT_TOLERANCE.NODE / 2` près de la jante. Seul le cas **d** perce ce trou, et uniquement en passant
-par l'axe.
+`HIT_TOLERANCE.NODE / 2` près de la jante. Les outils de sélection et la gomme (`"rim+body"`) le
+prennent en entier ; ailleurs, seul le cas **d** perce ce trou, et uniquement en passant par l'axe.
 
 ---
 
@@ -347,7 +350,8 @@ Ce qui reste vide l'est par décision, pas par oubli.
 - **Aucun état de contrainte ne vise une courroie**, `…Start` compris : une courroie prend la forme
   que ses poulies lui imposent, l'aligner n'a pas de sens. `element-refs.ts` le dit aussi —
   `ALIGNABLE_EDGE_TYPES` exclut la courroie des cibles d'un alignement.
-- **Toute la face intérieure d'un engrenage est morte**, sauf par le cas **d**.
+- **Toute la face intérieure d'un engrenage est morte**, sauf pour la sélection et la gomme, et par
+  le cas **d**.
 - **Les états « …End » des charges et `PlacingDistributedForce` ne visent rien** : le geste définit
   un vecteur, pas une cible. Idem pour les `Moving…` de charges et de contraintes.
 - **Une courroie sans poulie ne se referme pas sur son départ**, mais ce n'est pas un refus : la

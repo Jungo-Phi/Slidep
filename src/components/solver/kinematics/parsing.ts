@@ -16,7 +16,7 @@ import {
   ProfileDef,
   SpringElement,
 } from "../../../types";
-import { measure_belt_length } from "../../../utils/belt-geom";
+import { belt_wound_wraps, measure_belt_length } from "../../../utils/belt-geom";
 import { BeltVia, belt_project } from "../../../utils/belt-path";
 import { buildBeltSegmentNoSlipLinks } from "../experimental/belt-noslip-q";
 import {
@@ -517,6 +517,7 @@ export function belt_length_link(
     directions.push(clockwise);
   }
 
+  const wound = belt_wound_wraps(belt, mechanicalElements);
   const base = {
     type: "BeltLength" as const,
     ddl: 1 as const,
@@ -527,6 +528,8 @@ export function belt_length_link(
     radii,
     directions,
     length: length ?? measure_belt_length(belt, mechanicalElements),
+    // A pulley wound by whole turns is a reference the geometry cannot give: seeded here, it is what the length unwraps each arc against.
+    ...(wound ? { wraps: wound } : {}),
     closed: belt.closed, // closed → gear cycle; open → terminal chain
     // Edition: let the length also resize the pulleys (radii become DOFs).
     ...(editable ? { radKeys: gears.map(({ id }) => id) } : {}),

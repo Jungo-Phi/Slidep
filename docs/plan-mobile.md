@@ -88,12 +88,22 @@ c'est son affichage et son moment qui changent.
   la pose.
   - **Au doigt, une pose n'attend jamais de second tap.** Un tap sans glisser pose ce que l'aperçu de la
     première étape montrait déjà en entier (engrenage au rayon par défaut, force, charge répartie,
-    moment), et rien pour un segment, dont l'aperçu ne montrait qu'une extrémité. La courroie se trace
-    en un brin droit ; ses poulies s'ajoutent ensuite en tirant le brin sur l'engrenage.
+    moment), et rien pour un segment, dont l'aperçu ne montrait qu'une extrémité.
+  - **La courroie se trace comme une corde autour de piquets** (doigt et souris, `belt-trace.ts`) : le
+    brin libre va droit de son dernier point de contact au curseur. Un engrenage s'enroule dès que ce
+    brin devient tangent à lui, du côté d'où venait le brin, aussi loin de sa jante que soit le curseur :
+    on tourne autour, on ne passe pas dessus. La dernière poulie se déroule dès que le brin, tendu
+    depuis le contact d'avant, repasse la tangence du côté où elle était enroulée — on se rattrape en
+    revenant en arrière. Le curseur qui traverse un engrenage l'ignore. Pendant le glisser, un
+    engrenage sous le curseur n'est ni prévisualisé ni enroulé au lever : seule la corde décide.
   - **À la souris**, un clic sans glisser laisse la fin attendre un second clic. Pour la courroie, ce
     clic sur une poulie l'enroule, ailleurs il pose la fin. Des clics successifs enchaînent une **série
     de poutres** soudées bout à bout (finie par Échap, le clic droit, ou en posant une poutre sur un
     élément existant). Échap et le clic droit ramènent toute pose en deux étapes à sa première.
+  - **Ce qui se trace d'un seul trait est soudé, ce qui s'accroche à l'existant pivote.** Les poutres
+    d'une série sont soudées entre elles, fermeture sur une poutre de la série comprise ; deux éléments
+    qui se rencontrent là où aucun nœud ne les tient encore pivotent l'un sur l'autre. Un nœud existant
+    garde son type. Une extrémité de courroie reste tenue par une jointure.
 
 **Le doigt cache ce qu'il vise.** Le retour du snap doit se voir *autour* du doigt : surligner
 l'élément accroché en entier, pas seulement le point. Si ça ne suffit pas, une loupe décalée — différée,
@@ -401,8 +411,6 @@ Le modèle tient s'ils se font en 3 gestes sans lever la feuille :
   téléphone comme sur desktop, rouvrable depuis « À propos » : installer l'app (le bouton du navigateur
   quand il en offre un, sinon les étapes de son menu, rien s'il ne sait pas installer ou si c'est
   fait) et où vivent les mécanismes. Pas d'aide aux gestes.
-- **Tracer une courroie en suivant un chemin** (doigt et souris) : chaque engrenage traversé pendant le
-  glisser s'enroule. À définir : ce que « traverser » veut dire, le sens d'enroulement, et comment se
-  rattraper d'un engrenage touché par erreur.
+- ~~Tracer une courroie en suivant un chemin.~~ Fait : voir « Éléments en deux étapes » plus haut.
 - Un tap sans glisser sur un segment ne pose rien : l'indice « glisser pour tracer » relève de l'aide
   au premier lancement.

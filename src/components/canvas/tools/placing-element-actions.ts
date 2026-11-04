@@ -1,6 +1,6 @@
 import type { CanvasState } from "../../../types/canvas-state";
 import type { Action } from "../../../types/actions";
-import type { HoveredPart } from "../../../types/hovered-part";
+import { names_element, type HoveredPart } from "../../../types/hovered-part";
 import {
   BeltElement,
   ConstraintElement,
@@ -34,6 +34,8 @@ import { get_belt_path } from "../../../utils";
 import { belt_wrap_arriving, belt_wrap_leaving } from "../../../utils/belt-geom";
 import { belt_project } from "../../../utils/belt-path";
 import { nodes_under_segment } from "../picking/body-crossings";
+import { gear_on_run } from "./gear-on-run";
+import { terminal_pulley } from "../../mechanism/connection-rules";
 import { DEFAULT } from "../../../constants/physics-specs";
 
 /** A node named as a hover, for the connection helpers that speak in hovers. */
@@ -333,7 +335,12 @@ function handle_place_element(
 
   // Add a gear to the belt route being defined.
   // The gear the gesture started on is folded in only at finalisation (`attached_gears_with_start`), so it never needs a next-gear click to be caught.
-  if (state.type === "PlacingBeltEnd" && hoveredPart.type === "GearTooth") {
+  // The last pulley of the route is not added again: the belt ends on its rim, pinned there (`terminal_pulley`).
+  if (
+    state.type === "PlacingBeltEnd" &&
+    hoveredPart.type === "GearTooth" &&
+    hoveredPart.id !== terminal_pulley(state, mechanicalElements)
+  ) {
     const newAttachedGearsIDs = [...state.attachedGearsIDs];
     const hoveredGear = get_mechanical_element_from_id(
       hoveredPart.id,
@@ -366,6 +373,16 @@ function handle_place_element(
   }
 
   // Create a gear on its axle atomically, the axle being a fresh pivot unless the gesture started on one that can already carry it.
+  if (state.type === "PlacingGearRadius" && state.startHover.type === "BeltBody")
+    return place_gear_on_run(
+      state.startHover,
+      hoveredPart,
+      mechanicalElements,
+      constraintElements,
+      loads,
+      viewport,
+    );
+
   if (state.type === "PlacingGearRadius") {
     const existingAxle = axle_under(state.startHover, mechanicalElements);
     const axleId = existingAxle ? existingAxle.id : (crypto.randomUUID() as ID);
@@ -630,6 +647,7 @@ function handle_place_element(
           connectID: attachedGears[i].id,
           index: i,
           clockwise: attachedGears[i].clockwise,
+          turns: attachedGears[i].turns,
         },
         {
           type: "ConnectsAttachedBelt",
@@ -640,6 +658,11 @@ function handle_place_element(
       ]);
     }
   }
+
+  // A beam of a series is welded to the stroke it continues, and to whatever beam of that stroke it closes on; anything else it is hooked onto hinges.
+  const series = state.type === "PlacingBeamEnd" ? state.series : undefined;
+  const closesSeries =
+    series !== undefined && names_element(hoveredPart) && series.includes(hoveredPart.id);
 
   if (
     "startHover" in state &&
@@ -658,6 +681,7 @@ function handle_place_element(
         sim.mechanicalElements,
         sim.constraintElements,
         sim.loads,
+        { weld: series !== undefined },
       ),
     );
   }
@@ -682,6 +706,7 @@ function handle_place_element(
         sim.mechanicalElements,
         sim.constraintElements,
         sim.loads,
+        { weld: closesSeries },
       ),
     );
 
@@ -748,7 +773,7 @@ export function attached_gears_with_start(
   state: Extract<CanvasState, { type: "PlacingBeltEnd" }>,
   endPosition: Point2,
   mechanicalElements: MechanicalElement[],
-): { id: ID; clockwise: boolean }[] {
+): { id: ID; clockwise: boolean; turns?: number }[] {
   const start = state.startHover;
   const routed = state.attachedGearsIDs;
   if (start.type !== "GearTooth" || routed.some((g) => g.id === start.id))
@@ -769,6 +794,70 @@ export function attached_gears_with_start(
       : endPosition;
   const clockwise = belt_wrap_leaving(startGear, start.position, nextPos);
   return [{ id: startGear.id, clockwise }, ...routed];
+}
+
+/** A gear started on a belt run: laid against it (`gear_on_run`) on a free axle of its own, the run wrapping it. */
+function place_gear_on_run(
+  contact: Extract<HoveredPart, { type: "BeltBody" }>,
+  rim: HoveredPart,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+  loads: LoadElement[],
+  viewport: ViewportState,
+): MouseDownResult {
+  const laid = gear_on_run(contact, rim.position, mechanicalElements, viewport);
+  const belt = mechanicalElements.find(
+    (e): e is BeltElement => e.type === "belt" && e.id === contact.id,
+  );
+  if (!laid || !belt)
+    return { actions: [], newCanvasState: { type: "PlacingGearStart" } };
+  const axleId = crypto.randomUUID() as ID;
+  const gearId = crypto.randomUUID() as ID;
+  const sim = start_simulation(mechanicalElements, constraintElements, loads);
+  sim.step([
+    {
+      type: "CreateElement",
+      element: {
+        type: "pivot",
+        id: axleId,
+        probes: [],
+        overlays: {},
+        position: laid.center,
+        isGrounded: false,
+        rotatingEdgesIDs: [],
+        fixedGearsIDs: [gearId],
+        rotationalFriction: DEFAULT.ROTATIONAL_FRICTION,
+      },
+    },
+    {
+      type: "CreateElement",
+      element: {
+        type: "gear",
+        id: gearId,
+        probes: [],
+        overlays: {},
+        position: laid.center,
+        angle: 0,
+        radius: laid.radius,
+        parentAxleID: axleId,
+        fixedNodesBodyIDs: [],
+        meshedGearsIDs: [],
+        attachedBeltID: undefined,
+        surfaceMass: DEFAULT.SURFACE_MASS,
+      },
+    },
+  ]);
+  sim.step(
+    attach_gear_to_belt(
+      gearId,
+      laid.center,
+      belt,
+      contact.section,
+      sim.mechanicalElements,
+      "gear-onto-belt",
+    ),
+  );
+  return { actions: sim.actions, newCanvasState: { type: "PlacingGearStart" } };
 }
 
 function handle_place_ground(

@@ -282,6 +282,28 @@ function dragged_element_id(state: CanvasState): ID | undefined {
   }
 }
 
+/**
+ * The pulley a belt terminal being put down or dragged can be pinned to: the one next to it on its own route, which the belt already wraps there.
+ * Landing the terminal on its rim holds it there by a join, the way a winch holds its rope's end.
+ */
+export function terminal_pulley(
+  state: CanvasState,
+  mechanicalElements: MechanicalElement[],
+): ID | undefined {
+  if (state.type === "PlacingBeltEnd") {
+    const route = state.attachedGearsIDs;
+    return route.length > 0 ? route[route.length - 1].id : undefined;
+  }
+  if (state.type !== "MovingEdgeStartPoint" && state.type !== "MovingEdgeEndPoint")
+    return undefined;
+  const belt = mechanicalElements.find((e) => e.id === state.elementID);
+  if (belt?.type !== "belt" || belt.closed) return undefined;
+  // The route the terminal is pulling, when its drag has changed it.
+  const route = state.route?.attachedGearsIDs ?? belt.attachedGearsIDs;
+  if (route.length === 0) return undefined;
+  return state.type === "MovingEdgeStartPoint" ? route[0].id : route[route.length - 1].id;
+}
+
 /** Every element `element` is currently linked to, whatever the container. */
 function connected_ids(element: MechanicalElement): Set<ID> {
   const ids = new Set<ID>();
@@ -332,12 +354,14 @@ export function legality_for_state(
   };
 
   const carried = carried_belts(state, draggedElement, mechanicalElements);
+  const pinnable = terminal_pulley(state, mechanicalElements);
   const junctions = belt_junctions(mechanicalElements);
   const attaching = ATTACHING_STATES.has(state.type);
 
   return (candidate: UnionElement, part?: HoveredPart): Legality => {
     // Re-linking a pair changes nothing, and offering it would let a useless target sit in front of a useful one.
-    if (alreadyLinked.has(candidate.id))
+    // A belt terminal and the pulley it wraps are linked already, but not at that terminal: pinning it there is a link of its own.
+    if (alreadyLinked.has(candidate.id) && candidate.id !== pinnable)
       return refuse("rule_already_connected");
 
     // A junction holds its belt and nothing else, whichever way the two would meet.
@@ -462,6 +486,7 @@ export function legality_for_state(
       }
 
       case "PlacingBeltEnd":
+        if (candidate.id === pinnable) break;
         if (state.attachedGearsIDs.some(({ id }) => id === candidate.id))
           return refuse("rule_gear_already_on_belt");
         if (

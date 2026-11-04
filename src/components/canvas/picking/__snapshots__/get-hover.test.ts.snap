@@ -4,7 +4,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
 "── Selecting
    axle centre            → Node axle (0, 0)
    gear rim               → GearTooth gear (60, 0)
-   gear inside            → Void (30, 0)
+   gear inside            → GearTooth gear (30, 0)
    join centre            → Node join (200, 0)
    beam body              → Edge beam (300, 0) [body]
    beam end               → Edge beam (400, 0) [end]
@@ -42,7 +42,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
 ── SelectedMultiple
    axle centre            → Node axle (0, 0)
    gear rim               → GearTooth gear (60, 0)
-   gear inside            → Void (30, 0)
+   gear inside            → GearTooth gear (30, 0)
    join centre            → Node join (200, 0)
    beam body              → Edge beam (300, 0) [body]
    beam end               → Edge beam (400, 0) [end]
@@ -61,7 +61,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
 ── SelectedElement
    axle centre            → Node axle (0, 0)
    gear rim               → GearTooth gear (60, 0)
-   gear inside            → Void (30, 0)
+   gear inside            → GearTooth gear (30, 0)
    join centre            → Node join (200, 0)
    beam body              → Edge beam (300, 0) [body]
    beam end               → Edge beam (400, 0) [end]
@@ -270,7 +270,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
 ── Erasing
    axle centre            → Node axle (0, 0) [deleting]
    gear rim               → GearTooth gear (60, 0) [deleting]
-   gear inside            → Void (30, 0)
+   gear inside            → GearTooth gear (30, 0) [deleting]
    join centre            → Node join (200, 0) [deleting]
    beam body              → Edge beam (300, 0) [body, deleting]
    beam end               → Edge beam (400, 0) [end, deleting]
@@ -565,7 +565,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
    mass centre            → Node mass (600, 0)
    belt start             → Edge belt (0, -300) [start]
    belt arc               → GearTooth belt-gear (300, -320)
-   plain belt run         → Void (300, -500)
+   plain belt run         → BeltBody plain-belt (300, -500) [section 0]
    plain belt end         → Edge plain-belt (600, -500) [end]
    dimension              → Void (300, 80)
    force arrow            → Void (600, 40)
@@ -726,7 +726,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
 ── PlacingProbeMetrics
    axle centre            → Node axle (0, 0)
    gear rim               → GearTooth gear (60, 0)
-   gear inside            → Void (30, 0)
+   gear inside            → GearTooth gear (30, 0)
    join centre            → Node join (200, 0)
    beam body              → Edge beam (300, 0) [body]
    beam end               → Edge beam (400, 0) [end]
@@ -1125,7 +1125,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
 ── PlacingValue
    axle centre            → Node axle (0, 0)
    gear rim               → GearTooth gear (60, 0)
-   gear inside            → Void (30, 0)
+   gear inside            → GearTooth gear (30, 0)
    join centre            → Node join (200, 0)
    beam body              → Edge beam (300, 0) [body]
    beam end               → Edge beam (400, 0) [end]
@@ -1144,7 +1144,7 @@ exports[`get_hovered_part > pique la même chose qu'avant sur toute la matrice �
 ── EditingValue
    axle centre            → Node axle (0, 0)
    gear rim               → GearTooth gear (60, 0)
-   gear inside            → Void (30, 0)
+   gear inside            → GearTooth gear (30, 0)
    join centre            → Node join (200, 0)
    beam body              → Edge beam (300, 0) [body]
    beam end               → Edge beam (400, 0) [end]

@@ -27,6 +27,7 @@ import { HoveredPart } from "../../../types/hovered-part";
 import { ID } from "../../../types/element";
 import ElementDisplay from "./ElementDisplay";
 import StructureOnly from "./StructureOnly";
+import TurnsInput from "./TurnsInput";
 import { t } from "../../../i18n";
 
 interface ConnectionProps {
@@ -143,24 +144,32 @@ const Connection: React.FC<ConnectionProps> = ({
       element.type === "belt" &&
       containerType === "ConnectsAttachedGears") ||
     containerType === "ConnectsAttachedBelt";
-  let clockwise = false;
-  if (showDirectionButton) {
-    if (element.type === "belt") {
-      clockwise =
-        element.attachedGearsIDs[
-          get_connections(element, "ConnectsAttachedGears").indexOf(
-            connectedElement.id,
-          )
-        ].clockwise;
-    } else if (connectedElement.type === "belt") {
-      clockwise =
-        connectedElement.attachedGearsIDs[
-          get_connections(connectedElement, "ConnectsAttachedGears").indexOf(
-            element.id,
-          )
-        ].clockwise;
-    }
-  }
+  // The pulley's entry on its belt, read from whichever side of the pair this row shows.
+  const wound =
+    element.type === "belt"
+      ? { belt: element, gearID: connectedElement.id }
+      : connectedElement.type === "belt"
+        ? { belt: connectedElement, gearID: element.id }
+        : undefined;
+  const woundIndex =
+    showDirectionButton && wound
+      ? get_connections(wound.belt, "ConnectsAttachedGears").indexOf(wound.gearID)
+      : -1;
+  const attached =
+    wound && woundIndex >= 0 ? wound.belt.attachedGearsIDs[woundIndex] : undefined;
+  const clockwise = attached?.clockwise ?? false;
+  const handleTurns = (turns: number) => {
+    if (!wound || !attached) return;
+    applyActions([
+      {
+        type: "SetAttachedGearTurns",
+        id: wound.belt.id,
+        index: woundIndex,
+        turns,
+        oldTurns: attached.turns ?? 0,
+      },
+    ]);
+  };
   const DirectionIcon = clockwise ? RotateRight : RotateLeft;
   const showDisconnectButton =
     containerType !== "ConnectsParentAxle" &&
@@ -180,6 +189,7 @@ const Connection: React.FC<ConnectionProps> = ({
         <StructureOnly
           actions={[
             "SwitchAttachedGearDirection",
+            "SetAttachedGearTurns",
             "ConnectsParentBeam",
             containerType,
             "CloseBelt",
@@ -207,6 +217,9 @@ const Connection: React.FC<ConnectionProps> = ({
                 />
               </IconButton>
             </Tooltip>
+          )}
+          {attached && (
+            <TurnsInput value={attached.turns ?? 0} onChange={handleTurns} />
           )}
           {(takesRail || dropsRail) && (
             <Tooltip title={t(dropsRail ? "unset_rail" : "set_rail")}>

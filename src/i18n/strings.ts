@@ -2196,6 +2196,12 @@ export const STRINGS = {
     de: "Umkehren",
     es: "Invertir",
   },
+  wound_turns: {
+    fr: "Enroulements",
+    en: "Windings",
+    de: "Wicklungen",
+    es: "Vueltas",
+  },
   open_belt: {
     fr: "Ouvrir la courroie",
     en: "Open the belt",

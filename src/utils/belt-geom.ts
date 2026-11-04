@@ -1,6 +1,6 @@
 import { get_mechanical_element_from_id } from "../components/mechanism/connect-actions";
 import { BeltElement, GearElement, ID, MechanicalElement, Point2 } from "../types";
-import { BeltVia, belt_pieces } from "./belt-path";
+import { BeltVia, belt_pieces, belt_wraps } from "./belt-path";
 
 /**
  * Build the ordered via-points of a belt (start terminal → gears → end terminal) from the mechanism, resolving each attached gear.
@@ -172,7 +172,63 @@ export function measure_belt_length(
 ): number {
   // Open chain: a terminal resting on its pulley's rim needs no special case — its tangent run is simply of length 0 and the arc already reaches it.
   const { vias, closed } = get_belt_path(belt, mechanicalElements);
-  return belt_pieces(vias, closed).reduce((acc, p) => acc + p.length, 0);
+  const shown = belt_pieces(vias, closed).reduce((acc, p) => acc + p.length, 0);
+  // The whole turns a pulley carries are belt too, wound where the drawing coils it.
+  return belt.attachedGearsIDs.reduce((acc, { id, turns }) => {
+    const gear = mechanicalElements.find((el) => el.id === id);
+    return gear?.type === "gear" && turns ? acc + 2 * Math.PI * gear.radius * turns : acc;
+  }, shown);
+}
+
+/**
+ * The wraps a route is drawn with in edition, in its own order: what the geometry shows, plus 2π per whole turn a pulley carries.
+ * `held` keeps one pulley to a wrap a drag traced there: the end drawn can lag the one traced by a frame, and a pulley just caught then reads as wrapped by a whole turn, its wrap just under zero — drawn as no wrap at all instead.
+ * `undefined` when neither changes anything, the geometry then saying it all.
+ */
+export function route_wraps(
+  start: Point2,
+  route: readonly { gear: GearElement; clockwise: boolean; turns?: number }[],
+  end: Point2,
+  closed: boolean,
+  held?: { index: number; traced: number | undefined },
+): number[] | undefined {
+  if (!route.some(({ turns }) => turns) && held?.traced === undefined) return undefined;
+  const pulleys: BeltVia[] = route.map(({ gear, clockwise }) => ({
+    pos: gear.position,
+    radius: gear.radius,
+    clockwise,
+  }));
+  const vias = closed
+    ? pulleys
+    : [{ pos: start, radius: 0, clockwise: false }, ...pulleys, { pos: end, radius: 0, clockwise: false }];
+  const shown = belt_wraps(vias, closed).slice(closed ? 0 : 1, closed ? undefined : -1);
+  if (
+    held?.traced !== undefined &&
+    held.index >= 0 &&
+    held.index < shown.length &&
+    Math.abs(shown[held.index] - held.traced) > Math.PI
+  )
+    shown[held.index] = 0;
+  return shown.map((wrap, i) => wrap + 2 * Math.PI * (route[i].turns ?? 0));
+}
+
+/**
+ * The wrap of each pulley of `belt`, in `attachedGearsIDs` order, its whole turns included: what the geometry shows, plus 2π per turn.
+ * `undefined` when no pulley carries any, the geometry then saying it all.
+ * Edition's counterpart of the continuous wraps a simulation tracks: both the drawing's coils and the length's own reference read it.
+ */
+export function belt_wound_wraps(
+  belt: BeltElement,
+  mechanicalElements: MechanicalElement[],
+): number[] | undefined {
+  if (!belt.attachedGearsIDs.some(({ turns }) => turns)) return undefined;
+  const { vias, closed } = get_belt_path(belt, mechanicalElements);
+  if (vias.length !== belt.attachedGearsIDs.length + (closed ? 0 : 2)) return undefined;
+  const shown = belt_wraps(vias, closed);
+  const first = closed ? 0 : 1;
+  return belt.attachedGearsIDs.map(
+    ({ turns }, i) => shown[first + i] + 2 * Math.PI * (turns ?? 0),
+  );
 }
 
 /**

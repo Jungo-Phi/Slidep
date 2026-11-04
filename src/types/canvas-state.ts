@@ -13,6 +13,27 @@ export interface HeldPress {
   pressHeld?: true;
 }
 
+/** Where a belt drag has gone so far, read by `trace_belt_drag`. */
+export interface BeltTrace {
+  /** The last point of the drag taken into account. */
+  last: WorldPoint;
+  /** The wrap on the last pulley there, which the preview holds its own drawing to (`trace_belt_drag`). */
+  lastWrap?: number;
+}
+
+/** The route a loose belt is pulled over while one of its terminals is dragged, as a rope (`trace_belt_terminal`): applied at the drop. */
+export interface DraggedBeltRoute {
+  beltID: ID;
+  which: "start" | "end";
+  attachedGearsIDs: { id: ID; clockwise: boolean; turns?: number }[];
+  trace: BeltTrace;
+}
+
+/** Carried by a drag that moves a belt terminal: the terminal itself, or the node holding it. */
+export interface DraggedTerminal {
+  route?: DraggedBeltRoute;
+}
+
 // Define the possible types of canvas states
 export type CanvasStateType =
   | "Selecting"
@@ -101,9 +122,16 @@ export type CanvasState =
       pendingHit?: HoveredPart;
       downPos?: WorldPoint;
     }
-  | { type: "MovingNode"; elementID: ID }
-  | { type: "MovingEdgeStartPoint"; elementID: ID }
-  | { type: "MovingEdgeEndPoint"; elementID: ID }
+  | ({
+      type: "MovingNode";
+      elementID: ID;
+      /** Where the node was grabbed from, when not by itself: a gear's axle, dragged by the gear's body. The cursor is read this far back, so the node keeps its distance from it instead of jumping under it. */
+      grabOffset?: WorldPoint;
+      /** The element the drag was started on, when it is not the node it moves: that gear stays the selection, through the drag and after it. */
+      selects?: ID;
+    } & DraggedTerminal)
+  | ({ type: "MovingEdgeStartPoint"; elementID: ID } & DraggedTerminal)
+  | ({ type: "MovingEdgeEndPoint"; elementID: ID } & DraggedTerminal)
   | { type: "MovingEdgeBody"; elementID: ID; t: number }
   | {
       type: "MovingBeltBody";
@@ -139,8 +167,8 @@ export type CanvasState =
   | ({
       type: "PlacingBeamEnd";
       startHover: HoveredPart;
-      /** Set while beams are clicked one after another as a series, `startHover` being the end of the last one. */
-      inSeries?: true;
+      /** While beams are clicked one after another as a series: the beams drawn so far in that stroke, `startHover` being the end of the last one. */
+      series?: ID[];
     } & HeldPress)
   | { type: "PlacingSpringStart" }
   | ({ type: "PlacingSpringEnd"; startHover: HoveredPart } & HeldPress)
@@ -150,7 +178,9 @@ export type CanvasState =
   | ({
       type: "PlacingBeltEnd";
       startHover: HoveredPart;
-      attachedGearsIDs: { id: ID; clockwise: boolean }[];
+      attachedGearsIDs: { id: ID; clockwise: boolean; turns?: number }[];
+      /** While the belt is drawn by dragging, every gear the drag goes round is wrapped (`trace_belt_drag`). */
+      trace?: BeltTrace;
     } & HeldPress)
   | { type: "PlacingMotor" }
   | { type: "PlacingPivot" }
@@ -253,6 +283,7 @@ export function state_under_probe_metrics(state: CanvasState): CanvasState {
  * most states (drag, edit, single selection), several under a multiple selection. */
 export function selected_ids(state: CanvasState): ID[] {
   if ("elementIDs" in state) return state.elementIDs;
+  if (state.type === "MovingNode" && state.selects) return [state.selects];
   if ("elementID" in state) return [state.elementID];
   return [];
 }

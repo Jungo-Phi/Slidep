@@ -1347,8 +1347,13 @@ const MechanicalCanvasView = forwardRef<
 
       // Bounded here, where the cursor enters the system, so that hit-testing and the gestures reading the raw mouse share one bounded point.
       // TODO: why bound?
+      // A node grabbed away from itself is aimed with the cursor read back by that offset: what it lands on is what lies under it, not under the cursor.
+      const grabbing = canvasStateRef.current;
+      const rawMouse = screen2world(mousePositionRef.current, currMech.viewport);
       const worldMousePos = clamp_to_bounds(
-        screen2world(mousePositionRef.current, currMech.viewport),
+        grabbing.type === "MovingNode" && grabbing.grabOffset
+          ? rawMouse.sub(grabbing.grabOffset)
+          : rawMouse,
         canvasStateRef.current,
         currMech.mechanicalElements,
         currMech.viewport,

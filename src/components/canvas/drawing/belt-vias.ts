@@ -1,7 +1,7 @@
 import { GearElement, ScreenPoint, ViewportState, WorldPoint } from "../../../types";
 import { BeltVia, belt_project } from "../../../utils/belt-path";
 import { world2screen, world2screen_length } from "../../../utils";
-import { draw_belt_end, draw_hover_circle } from "./drawing-functions";
+import { draw_belt_end, draw_hover_circle, type BeltWinding } from "./drawing-functions";
 
 /**
  * A belt's vias in screen space.
@@ -51,4 +51,24 @@ export function draw_belt_closure_marks(
   draw_belt_end(ctx, junction);
   if (!withHandle) return;
   draw_hover_circle(ctx, cursor);
+}
+
+/**
+ * Per-via winding spec for a belt: a pulley wound past a full turn (|wrap| ≥ 2π) gets a coil growing one BELT_WIDTH per turn.
+ * It grows OUTWARD on the departure side by default; on a winch (a terminal pinned to the first/last pulley) it grows INWARD so the free (load) run stays on the rim and doesn't visually lean.
+ * `viaWraps` is index-aligned to the belt's vias (0 for the two terminals).
+ */
+export function belt_windings(
+  viaWraps: (number | undefined)[],
+  startExternal: boolean,
+  endExternal: boolean,
+): (BeltWinding | undefined)[] {
+  const n = viaWraps.length;
+  return viaWraps.map((w, v) => {
+    if (w === undefined || Math.abs(w) < (2 * Math.PI)) return undefined;
+    const growth = (Math.abs(w) / (2 * Math.PI)) * 4;
+    if (startExternal && v === 1) return { growth: -growth, atStart: true };
+    if (endExternal && v === n - 2) return { growth: -growth, atStart: false };
+    return { growth, atStart: false };
+  });
 }

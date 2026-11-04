@@ -1557,6 +1557,9 @@ export function draw_gear(
   ctx.arc(position.x, position.y, radius, 0, TAU);
   ctx.stroke();
 
+  // Only the rim thickens under the cursor, being what a drag there resizes: the holes keep the gear's own width.
+  const rimWidth = ctx.lineWidth;
+  ctx.lineWidth = Math.min(rimWidth, STROKE_WIDTHS.GEAR);
   for (let i = 0; i < holesNb; i++) {
     ctx.beginPath();
     const angleA = (i / holesNb) * TAU + angle;
@@ -1569,6 +1572,7 @@ export function draw_gear(
     );
     ctx.stroke();
   }
+  ctx.lineWidth = rimWidth;
 }
 
 /**
