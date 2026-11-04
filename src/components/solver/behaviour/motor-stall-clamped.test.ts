@@ -12,7 +12,7 @@ import {
 
 // A motor closes two jaws on a free disc, collisions on, gravity off.
 // The jaws reach the disc at 1.28 s and bounce on it until about 2 s, the motor thrown back and catching up with its command by turns; by 3 s they hold it shut and the motor sits at its torque limit, standing still but for the contacts' jitter — about 1e-7 rad/s from frame to frame.
-// That jitter once read as a restart every other frame, and the bounce as a dozen restarts in under a second: the motor flickered between stalled and running.
+// Neither the jitter nor the bounce may read as the motor running again.
 
 describe("a motor clamped shut at its torque limit (Pince)", () => {
   it("stalls once, on the first contact, and stays stalled", () => {

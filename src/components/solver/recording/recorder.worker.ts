@@ -16,7 +16,7 @@ import {
  * It does **not** answer one request per displayed frame: that would leave it idle between frames and buy no throughput at all.
  * It runs towards a target the main thread keeps moving, in slices, and posts what it produced as it goes.
  *
- * A slice is bounded by the same budget the synchronous loop used — not to protect a display it no longer blocks, but so that pending messages (a new target, a grab, an edit) get a turn between two slices.
+ * A slice is bounded by a time budget so that pending messages (a new target, a grab, an edit) get a turn between two slices.
  * Yielding through a `MessageChannel` is what lets them through: the message queue is only served between macrotasks, and unlike `setTimeout` a port round-trip carries no minimum delay.
  */
 
@@ -86,6 +86,7 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
             belts: layout.belts.map((id, r) => ({
               id,
               pulleys: layout.beltStart[r + 1] - layout.beltStart[r],
+              geometry: layout.beltGeometry?.[r],
             })),
             epoch,
           });

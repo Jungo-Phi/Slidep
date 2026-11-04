@@ -178,7 +178,7 @@ const STALL_SPEED_FRACTION = 0.05;
  * Above this acceleration, as a share of the commanded speed per second, a slow motor is still starting rather than stalled: 0.1 % would take it some 17 minutes to reach its command.
  *
  * Scaled to the command rather than absolute because the noise it must clear is not the solver's alone.
- * A joint held still by tight contacts at the torque limit jitters by some 1e-7 rad/s from one frame to the next, which reads as ±1.5e-5 rad/s² — under the former 1e-6 floor, every other frame of a gripper clamped shut read as a restart (`Pince`, where this threshold is 4e-4).
+ * A joint held still by tight contacts at the torque limit jitters by some 1e-7 rad/s from one frame to the next, which reads as ±1.5e-5 rad/s²: well under this threshold on `Pince` (4e-4 there), where a floor at the solver's own noise would read every other frame as a restart.
  * Low enough still for a heavy load to be starting: a 1 N·m motor spinning up 10 kg·m² towards 10 rad/s gains 0.1 rad/s², ten times this.
  */
 const GAIN_RATE = 1e-3;
@@ -192,7 +192,7 @@ const HOLD_SPEED_FLOOR = 1e-3;
 /**
  * How long, s, a stalled motor must run again without a break before it reads as running.
  * A stall only ever starts at once; this is its release.
- * Jaws closing on a part bounce on it, and the motor behind them alternates between being thrown back and catching up with its command — up to its full speed for 50 to 75 ms at a time on `Pince` — which read as a stall flickering on and off a dozen times in under a second.
+ * Jaws closing on a part bounce on it, and the motor behind them alternates between being thrown back and catching up with its command — up to its full speed for 50 to 75 ms at a time on `Pince` — a release on every catch-up would flicker the stall a dozen times in under a second.
  */
 const STALL_RELEASE_TIME = 0.10;
 

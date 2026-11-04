@@ -192,6 +192,19 @@ export interface SupportTorsor {
  *
  * Keys are solver keys: bare "${id}" for nodes/bodies, "${id}:start"/"${id}:end" for edges, plus the reserved grab-bridge slots (`GRAB_KEYS`), which hold NaN on frames without a grab.
  */
+/**
+ * A belt's fixed path, by snapshot key: its free ends when it is open, and its pulleys' centres in belt order, each with its radius and the way the belt wraps it.
+ * Fixed for the recording like the pulley count: a pulley that leaves keeps its place here, only its contact flag changes.
+ */
+export interface BeltGeometry {
+  closed: boolean;
+  startKey?: string;
+  endKey?: string;
+  pulleyKeys: string[];
+  radii: number[];
+  clockwise: boolean[];
+}
+
 export interface SnapshotLayout {
   keys: string[];
   index: Map<string, number>;
@@ -207,6 +220,11 @@ export interface SnapshotLayout {
   belts: ID[];
   beltIndex: Map<ID, number>;
   beltStart: Int32Array;
+  /**
+   * Each belt's path as the solver runs it, in `belts` order — what a reader needs to tell, between two recorded instants, when a pulley actually left the belt or came back onto it.
+   * Absent on a layout built without it (a test's hand-made one), which then reads contact changes at the recorded instants alone.
+   */
+  beltGeometry?: (BeltGeometry | undefined)[];
   wrapBase: number;
   detachBase: number;
   arrivalBase: number;

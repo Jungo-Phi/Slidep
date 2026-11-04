@@ -33,10 +33,10 @@ describe("stall hysteresis", () => {
     expect(verdicts(bounce).every((s) => s)).toBe(true);
   });
 
-  it("lets go once the motor has run again for a quarter of a second", () => {
+  it("lets go once the motor has run again for a tenth of a second", () => {
     const frames = verdicts([0, ...Array(40).fill(1)]);
-    // 0.25 s at 120 Hz is 30 frames; the last one held is the 29th after the stall.
-    expect(frames.slice(0, 30).every((s) => s)).toBe(true);
-    expect(frames.slice(30).every((s) => !s)).toBe(true);
+    // 0.1 s at 120 Hz is 12 frames; the last one held is the 11th after the stall.
+    expect(frames.slice(0, 12).every((s) => s)).toBe(true);
+    expect(frames.slice(12).every((s) => !s)).toBe(true);
   });
 });

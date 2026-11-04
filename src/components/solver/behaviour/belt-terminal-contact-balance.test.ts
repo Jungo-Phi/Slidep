@@ -45,7 +45,7 @@ describe("a belt's free end resting on its pulley's rim (Poulie tombante)", () =
     }
     // The scenario still happens: without it this test would pass on nothing.
     expect(resting).toBeGreaterThan(10);
-    // Against a 1.9 N total weight; the missing contact read 0.6 N here.
+    // Against a 1.9 N total weight, of which the contact carries up to 0.6 N.
     expect(worstForce).toBeLessThan(1e-3);
     expect(worstMoment).toBeLessThan(1e-3);
   }, 30_000);

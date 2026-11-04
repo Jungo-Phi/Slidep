@@ -302,11 +302,16 @@ export type RewireState = {
     s0: number;
     thetaRef0: number;
   }[];
+  /** Each belt's `bakedDisconnected`: what tells the frame after a rewind whether the change it lands before is still to be baked. */
+  baked: { link: BeltLengthLink; mask: boolean[] | undefined }[];
 };
+
+type BeltLengthLink = Extract<Link, { type: "BeltLength" }>;
 
 function capture_rewire_state(model: SimulationModel): RewireState {
   const pins: RewireState["pins"] = [];
-  for (const link of model.links)
+  const baked: RewireState["baked"] = [];
+  for (const link of model.links) {
     if (link.type === "BeltPin")
       pins.push({
         link,
@@ -315,7 +320,18 @@ function capture_rewire_state(model: SimulationModel): RewireState {
         s0: link.s0,
         thetaRef0: link.thetaRef0,
       });
-  return { links: model.links, pins };
+    if (link.type === "BeltLength") baked.push({ link, mask: link.bakedDisconnected });
+  }
+  return { links: model.links, pins, baked };
+}
+
+/** Whether a belt's contact mask has changed since its links were baked, so the next frame has to bake them again. */
+function belt_needs_rewire(link: BeltLengthLink): boolean {
+  const now = link.disconnected;
+  const baked = link.bakedDisconnected;
+  for (let i = 0; i < link.gearPosKeys.length; i++)
+    if ((now?.[i] ?? false) !== (baked?.[i] ?? false)) return true;
+  return false;
 }
 
 /** Put a captured `RewireState` back on the model it came from. */
@@ -330,6 +346,7 @@ export function restore_rewire_state(
     pin.link.s0 = pin.s0;
     pin.link.thetaRef0 = pin.thetaRef0;
   }
+  for (const { link, mask } of state.baked) link.bakedDisconnected = mask;
 }
 
 /** A grab during simulation: a node/endpoint key, an edge body at ratio t, or a gear tooth (rotate the gear so the perimeter point at `angleOffset` follows). */
@@ -609,6 +626,7 @@ export function rewire_belts(
   const angles = new Map(model.nodes.angles);
   share_belt_disconnections(model.links, belts);
   rebake_belt_pin_refs(model.links, belts, positions, angles);
+  for (const belt of belts) belt.bakedDisconnected = [...(belt.disconnected ?? [])];
   for (const belt of belts)
     model.links = sort_links(
       rebuild_belt_q_links(model.links, belt, positions, angles),
@@ -783,10 +801,23 @@ export function compile_simulation_model(
   start[fusedKeys.length] = slotList.length;
 
   // Each belt's pulley count, fixed for the recording: a detachment raises a flag, it never shortens `gearPosKeys`.
+  // Its path too, by snapshot key: any part of a fused key holds the same position, and the first one always has a slot.
   const belts: BeltShape[] = [];
+  const slotOf = (fused: string) => fused.split(",")[0];
   for (const link of links)
     if (link.type === "BeltLength" && link.owner !== undefined)
-      belts.push({ id: link.owner, pulleys: link.gearPosKeys.length });
+      belts.push({
+        id: link.owner,
+        pulleys: link.gearPosKeys.length,
+        geometry: {
+          closed: link.closed,
+          startKey: link.closed ? undefined : slotOf(link.startKey),
+          endKey: link.closed ? undefined : slotOf(link.endKey),
+          pulleyKeys: link.gearPosKeys.map(slotOf),
+          radii: [...link.radii],
+          clockwise: [...link.directions],
+        },
+      });
 
   const beamCohesionSpecs = build_beam_cohesion_specs(mechanism, links, (beamID) => {
     const beam = mechanism.mechanicalElements.find((e) => e.id === beamID);
@@ -1340,16 +1371,18 @@ export function step_simulation(
         link.alpha = link.alpha + wrap_angle(raw - link.alpha);
       }
     } else if (link.type === "BeltLength") {
-      if (update_belt_disconnects(link, positions))
-        beltsToRewire.push(link);
+      // Contact is decided at the end of a frame, on the pose it solved (below); the first frame only seeds the belt's continuous state.
+      if (!link.wraps) update_belt_disconnects(link, positions);
+      if (belt_needs_rewire(link)) beltsToRewire.push(link);
     }
   });
 
-  // A pulley just left the belt, or came back onto it → re-bake the closed-belt junction refs onto the new loop (its arc-length origin has shifted, and it would otherwise JUMP), then rebuild the belt's no-slip links against the new topology.
+  // A pulley left the belt, or came back onto it, at the end of the last frame → re-bake the closed-belt junction refs onto the new loop (its arc-length origin has shifted, and it would otherwise JUMP), then rebuild the belt's no-slip links against the new topology.
   // Both mutate the model, and both are reset on recompile.
   if (beltsToRewire.length > 0) {
     onRewire?.(capture_rewire_state(model));
     rebake_belt_pin_refs(model.links, beltsToRewire, positions, angles);
+    for (const belt of beltsToRewire) belt.bakedDisconnected = [...(belt.disconnected ?? [])];
     // Drop the belt's no-slip links for THIS frame: they describe the belt as it was, so letting them pull against the new topology spoils the very state the rebuild is about to bake against.
     // The frame runs on `BeltLength` alone and the links come back at the end of it — measured, that is what makes the transition frame come out with no violated constraint at all instead of three stuck at 1.3 px forever.
     if (beltContact.rebuildQLinks) {
@@ -1449,6 +1482,17 @@ export function step_simulation(
         model.nodes.posMasses,
       );
   }
+
+  // ── Belt contact, on the pose this frame solved ──
+  // Recorded with that pose, so a snapshot never shows a pulley inside a belt it is marked off, or off a belt it is marked on.
+  // The links follow at the start of the next frame (`belt_needs_rewire`), which starts from this very pose: deciding here rather than there changes no solve, only which snapshot carries the change.
+  for (const link of model.links)
+    if (link.type === "BeltLength" && link.owner !== undefined) {
+      update_belt_disconnects(link, result.positions);
+      if (link.wraps) wrapsByBelt.set(link.owner, link.wraps);
+      if (link.arrivals) arrivalsByBelt.set(link.owner, link.arrivals);
+      if (link.disconnected) disconnectedByBelt.set(link.owner, link.disconnected);
+    }
 
   // ── Into the snapshot's slots, fused keys decoupled back to one slot per original key ──
   const layout = model.layout;
@@ -2270,7 +2314,7 @@ function compute_energy_sample(
  * Two states that each satisfy the constraints do not average into one that does — a beam gets marginally shorter across the interpolation.
  * The error is second-order in the step and measured in `snapshot-interpolation.test.ts`; it is not a solve, only a drawing.
  *
- * Topology is never interpolated: across a frame where a pulley leaves or rejoins a belt, the earlier snapshot is held rather than drawing a half-detached belt.
+ * Topology is never interpolated: across a frame where a pulley leaves or rejoins a belt, the belt's state is the nearer instant's whole rather than a half-detached belt — while the poses still blend, so the mechanism does not stop for an interval and jump.
  */
 export function snapshot_at(
   snapshots: KinematicSnapshot[],
@@ -2286,16 +2330,15 @@ export function snapshot_at(
   if (u <= 0) return a;
   // Slot i means one thing on each side of an edit, so two layouts never average.
   if (a.layout !== b.layout) return a;
-  if (!same_belt_topology(a, b)) return a;
 
   const positions = new Float64Array(a.positions.length);
   for (let i = 0; i < positions.length; i++)
     positions[i] = a.positions[i] + (b.positions[i] - a.positions[i]) * u;
-  // Belt wraps are continuous like the angles and share their array, so they interpolate in the same pass.
-  // The contact flags do too, harmlessly: the topology check above is what guarantees they are equal on both sides, so they come out unchanged.
+  // Belt wraps are continuous like the angles and share their array, so they interpolate in the same pass; the contact flags come out unchanged while the topology is.
+  // Across a pulley leaving or rejoining a belt, the belt block switches at the moment it does (`belt_block_between`).
   const angles = new Float64Array(a.angles.length);
-  for (let i = 0; i < angles.length; i++)
-    angles[i] = a.angles[i] + (b.angles[i] - a.angles[i]) * u;
+  for (let i = 0; i < angles.length; i++) angles[i] = a.angles[i] + (b.angles[i] - a.angles[i]) * u;
+  if (!same_belt_topology(a, b)) angles.set(belt_block_between(a, b, u).block, a.layout.wrapBase);
   return {
     t,
     layout: a.layout,
@@ -2697,7 +2740,6 @@ export function dynamic_snapshot_at(
   if (u <= 0) return a;
   // Slot i means one thing on each side of an edit, so two layouts never average.
   if (a.layout !== b.layout) return a;
-  if (!same_belt_topology(a, b)) return a;
 
   const lerp = (from: Float64Array, to: Float64Array) => {
     const out = new Float64Array(from.length);
@@ -2716,8 +2758,34 @@ export function dynamic_snapshot_at(
   );
   const angles = new Float64Array(a.angles.length);
   angles.set(gearAngles, 0);
-  angles.set(lerp(a.angles.subarray(wrapBase), b.angles.subarray(wrapBase)), wrapBase);
   const nearest = u <= 0.5 ? a : b;
+
+  // A pulley leaves or rejoins a belt between the two: the motion still blends, the belt's state switches at the moment it changes (`belt_block_between`).
+  // The readings solved on a topology are not blended across it either: they are those of the instant whose topology is drawn.
+  if (!same_belt_topology(a, b)) {
+    const { block, readings } = belt_block_between(a, b, u);
+    angles.set(block, wrapBase);
+    return {
+      ...readings,
+      t,
+      positions,
+      angles,
+      velocities: hermite_rate(a.positions, b.positions, a.velocities, b.velocities, span, u),
+      angleVelocities: hermite_rate(
+        a.angles.subarray(0, wrapBase),
+        b.angles.subarray(0, wrapBase),
+        a.angleVelocities,
+        b.angleVelocities,
+        span,
+        u,
+      ),
+      accelerations: lerp(a.accelerations, b.accelerations),
+      angleAccelerations: lerp(a.angleAccelerations, b.angleAccelerations),
+      contacts: b.contacts,
+    };
+  }
+
+  angles.set(lerp(a.angles.subarray(wrapBase), b.angles.subarray(wrapBase)), wrapBase);
   return {
     t,
     layout: a.layout,
@@ -2833,6 +2901,127 @@ export function parameter_snapshot_at(
     else hi = mid;
   }
   return snapshots[lo];
+}
+
+/**
+ * A position between two recorded instants, interpolated as the playback draws it: on the Hermite curve when both carry velocities (dynamic), on a straight line otherwise (kinematic).
+ * `undefined` where the key has no slot or no value.
+ */
+function interpolated_point<S extends SimulationSnapshot>(a: S, b: S, key: string, u: number): Point2 | undefined {
+  const slot = a.layout.index.get(key);
+  if (slot === undefined) return undefined;
+  const x0 = a.positions[2 * slot];
+  const y0 = a.positions[2 * slot + 1];
+  const x1 = b.positions[2 * slot];
+  const y1 = b.positions[2 * slot + 1];
+  if (Number.isNaN(x0) || Number.isNaN(x1)) return undefined;
+  const va = (a as Partial<DynamicSnapshot>).velocities;
+  const vb = (b as Partial<DynamicSnapshot>).velocities;
+  const span = b.t - a.t;
+  if (!va || !vb || !(span > 0) || Number.isNaN(va[2 * slot]) || Number.isNaN(vb[2 * slot]))
+    return new Point2(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u);
+  const { h00, h10, h01, h11 } = hermite_weights(u);
+  return new Point2(
+    h00 * x0 + h10 * span * va[2 * slot] + h01 * x1 + h11 * span * vb[2 * slot],
+    h00 * y0 + h10 * span * va[2 * slot + 1] + h01 * y1 + h11 * span * vb[2 * slot + 1],
+  );
+}
+
+/**
+ * Where between `a` and `b`, as a fraction of the interval, pulley `p` of belt row `r` leaves the belt or comes back onto it — `undefined` when the two instants cannot tell.
+ *
+ * Read on the interpolated pose with the solver's own test (`update_belt_disconnects`, `reattach_belt_pulleys`): the arc the belt wraps on that pulley against its threshold.
+ * The wrap is taken on its short side, so a pulley the belt has left reads a negative wrap rather than one just short of a full turn.
+ * Only `p` changes contact here; every other pulley keeps the contact it has in `a`.
+ */
+export function belt_contact_switch<S extends SimulationSnapshot>(
+  a: S,
+  b: S,
+  r: number,
+  p: number,
+): number | undefined {
+  const geometry = a.layout.beltGeometry?.[r];
+  if (!geometry) return undefined;
+  const { detachBase, beltStart } = a.layout;
+  const off = (q: number) => a.angles[detachBase + beltStart[r] + q] === 1;
+  const ratio = off(p) ? beltContact.reattachRatio : beltContact.detachRatio;
+
+  /** Positive while the pulley holds the belt at `u`. */
+  const contact = (u: number): number | undefined => {
+    const vias: BeltVia[] = [];
+    let index = -1;
+    const via = (key: string | undefined, radius: number, clockwise: boolean) => {
+      const pos = key === undefined ? undefined : interpolated_point(a, b, key, u);
+      if (!pos) return false;
+      vias.push({ pos, radius, clockwise });
+      return true;
+    };
+    if (!geometry.closed && !via(geometry.startKey, 0, false)) return undefined;
+    for (let q = 0; q < geometry.pulleyKeys.length; q++) {
+      if (q !== p && off(q)) continue;
+      if (q === p) index = vias.length;
+      if (!via(geometry.pulleyKeys[q], geometry.radii[q], geometry.clockwise[q])) return undefined;
+    }
+    if (!geometry.closed && !via(geometry.endKey, 0, false)) return undefined;
+    let wrap: number | undefined;
+    let around = 0;
+    for (const piece of belt_pieces(vias, geometry.closed)) {
+      if (piece.kind === "arc" && piece.gearIndex === index) wrap = piece.wrap;
+      if (piece.kind === "segment" && (piece.gearIndexA === index || piece.gearIndexB === index))
+        around += piece.length;
+    }
+    if (wrap === undefined) return undefined;
+    const signed = wrap < Math.PI ? wrap : wrap - 2 * Math.PI;
+    return signed * geometry.radii[p] - ratio * around;
+  };
+
+  const start = contact(0);
+  const end = contact(1);
+  if (start === undefined || end === undefined || start > 0 === end > 0) return undefined;
+  let lo = 0;
+  let hi = 1;
+  for (let k = 0; k < 24; k++) {
+    const mid = (lo + hi) / 2;
+    const value = contact(mid);
+    if (value === undefined) return undefined;
+    if (value > 0 === start > 0) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+
+/**
+ * The belt block — wraps, contact flags, arrivals — drawn at `u` between two instants whose belt topology differs, and the instant whose solved readings go with it.
+ *
+ * Each pulley that changes contact switches at the moment `belt_contact_switch` finds; where it cannot tell, the pulley is drawn off the belt over the whole interval, so a belt never follows a pulley that is leaving it.
+ * The other pulleys blend like any continuous reading.
+ */
+function belt_block_between<S extends SimulationSnapshot>(
+  a: S,
+  b: S,
+  u: number,
+): { block: Float64Array; readings: S } {
+  const { wrapBase, detachBase, arrivalBase, beltStart, belts } = a.layout;
+  const pulleys = detachBase - wrapBase;
+  const block = new Float64Array(3 * pulleys);
+  for (let k = 0; k < 3 * pulleys; k++) {
+    const i = wrapBase + k;
+    block[k] = a.angles[i] + (b.angles[i] - a.angles[i]) * u;
+  }
+  let fromA = 0;
+  let fromB = 0;
+  for (let r = 0; r < belts.length; r++)
+    for (let q = beltStart[r]; q < beltStart[r + 1]; q++) {
+      const before = a.angles[detachBase + q];
+      if (before === b.angles[detachBase + q]) continue;
+      const at = belt_contact_switch(a, b, r, q - beltStart[r]) ?? (before === 1 ? 1 : 0);
+      const side = u < at ? a : b;
+      if (side === a) fromA++;
+      else fromB++;
+      for (const base of [wrapBase, detachBase, arrivalBase]) block[base - wrapBase + q] = side.angles[base + q];
+    }
+  const readings = fromA === fromB ? (u <= 0.5 ? a : b) : fromA > fromB ? a : b;
+  return { block, readings };
 }
 
 /**

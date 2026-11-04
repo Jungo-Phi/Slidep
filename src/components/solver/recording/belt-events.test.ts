@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import decon from "../../../../test-mechanisms/Déconnexion courroie.slidep?raw";
 import { Point2 } from "../../../types";
-import { DynamicSnapshot, KinematicSnapshot } from "../../../types/runtime-state";
+import { DynamicSnapshot, KinematicSnapshot, SimulationSnapshot } from "../../../types/runtime-state";
 import { load_mechanism } from "../../../utils/load-mechanism";
 import {
   RECORD_DT,
@@ -9,7 +9,7 @@ import {
   step_dynamic_simulation,
   step_simulation,
 } from "../dynamics/simulation-engine";
-import { belt_events } from "./belt-events";
+import { BeltEvent, belt_events } from "./belt-events";
 import { snapshot_belt_detached } from "../snapshot";
 
 /** `n` recorded frames of the belt-disconnection mechanism. */
@@ -42,6 +42,23 @@ function recordDynamic(n: number): DynamicSnapshot[] {
   return snapshots;
 }
 
+/** Each event sits within the interval the change happened in, ends included: between the last frame without it and the first frame carrying it. */
+function expect_within_change(snapshots: SimulationSnapshot[], events: BeltEvent[]) {
+  const off = (s: SimulationSnapshot, event: BeltEvent) =>
+    (snapshot_belt_detached(s, event.belt) ?? []).includes(event.gearIndex);
+  for (const event of events) {
+    const at = snapshots.findIndex(
+      (s, i) =>
+        i > 0 &&
+        off(s, event) === (event.kind === "detach") &&
+        off(snapshots[i - 1], event) === (event.kind === "reattach") &&
+        snapshots[i - 1].t <= event.t &&
+        event.t <= s.t,
+    );
+    expect(at).toBeGreaterThan(0);
+  }
+}
+
 describe("belt_events", () => {
   it("un enregistrement sans changement de contact ne dit rien", () => {
     expect(belt_events(record(40))).toEqual([]);
@@ -52,17 +69,7 @@ describe("belt_events", () => {
     const events = belt_events(snapshots);
     expect(events.length).toBeGreaterThan(0);
 
-    // Each event lands on the first frame carrying the change, not one frame later: that is what allows a mark to be placed at that instant.
-    for (const event of events) {
-      const at = snapshots.findIndex((s) => s.t === event.t);
-      expect(at).toBeGreaterThan(0);
-      const now = new Set(snapshot_belt_detached(snapshots[at], event.belt) ?? []);
-      const before = new Set(
-        snapshot_belt_detached(snapshots[at - 1], event.belt) ?? [],
-      );
-      expect(now.has(event.gearIndex)).toBe(event.kind === "detach");
-      expect(before.has(event.gearIndex)).toBe(event.kind === "reattach");
-    }
+    expect_within_change(snapshots, events);
   }, 30_000);
 
   it("les instants sont croissants", () => {
@@ -105,17 +112,7 @@ describe("belt_events, en dynamique", () => {
     const snapshots = recordDynamic(150);
     const events = belt_events(snapshots);
     expect(events.length).toBeGreaterThan(0);
-
-    for (const event of events) {
-      const at = snapshots.findIndex((s) => s.t === event.t);
-      expect(at).toBeGreaterThan(0);
-      const now = new Set(snapshot_belt_detached(snapshots[at], event.belt) ?? []);
-      const before = new Set(
-        snapshot_belt_detached(snapshots[at - 1], event.belt) ?? [],
-      );
-      expect(now.has(event.gearIndex)).toBe(event.kind === "detach");
-      expect(before.has(event.gearIndex)).toBe(event.kind === "reattach");
-    }
+    expect_within_change(snapshots, events);
   }, 30_000);
 
   it("les instants sont croissants", () => {

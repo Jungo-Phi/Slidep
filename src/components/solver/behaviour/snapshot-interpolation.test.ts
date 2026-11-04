@@ -10,6 +10,7 @@ import { Mechanism, Point2 } from "../../../types";
 import { load_mechanism } from "../../../utils/load-mechanism";
 import {
   RECORD_DT,
+  belt_contact_switch,
   apply_dynamic_snapshot_to_mechanism,
   apply_snapshot_to_mechanism,
   compile_simulation_model,
@@ -174,7 +175,8 @@ describe("interpolation des snapshots", () => {
   }, 60_000);
 
   it("ne franchit pas un changement de topologie de courroie", () => {
-    // `Déconnexion courroie` drops a pulley mid-run: across that frame the earlier snapshot must be held, never a half-detached belt.
+    // `Déconnexion courroie` drops a pulley mid-run: across that frame the belt is one snapshot's whole, never a half-detached one, while the poses still blend rather than the mechanism stopping for the interval and jumping.
+    // Each snapshot records the contact its own pose has, so the moment the pulley changes contact lies inside the interval where the flags change.
     const { snaps } = record(disconnect, 400);
     const detached = (s: KinematicSnapshot) =>
       s.layout.belts
@@ -184,7 +186,23 @@ describe("interpolation des snapshots", () => {
     for (let i = 0; i < snaps.length - 1; i++) {
       if (detached(snaps[i]) === detached(snaps[i + 1])) continue;
       transitions++;
-      expect(snapshot_at(snaps, (i + 0.5) * RECORD_DT)).toBe(snaps[i]);
+      snaps[i].layout.belts.forEach((id, r) => {
+        const before = snapshot_belt_detached(snaps[i], id) ?? [];
+        const after = snapshot_belt_detached(snaps[i + 1], id) ?? [];
+        const pulleys = snaps[i].layout.beltStart[r + 1] - snaps[i].layout.beltStart[r];
+        for (let p = 0; p < pulleys; p++)
+          if (before.includes(p) !== after.includes(p))
+            expect(belt_contact_switch(snaps[i], snaps[i + 1], r, p)).toBeDefined();
+      });
+      for (const u of [0.25, 0.75]) {
+        const shown = snapshot_at(snaps, (i + u) * RECORD_DT)!;
+        expect([detached(snaps[i]), detached(snaps[i + 1])]).toContain(detached(shown));
+        for (let k = 0; k < shown.positions.length; k++) {
+          const from = snaps[i].positions[k];
+          if (Number.isNaN(from)) continue;
+          expect(shown.positions[k]).toBeCloseTo(from + (snaps[i + 1].positions[k] - from) * u, 12);
+        }
+      }
     }
     console.log(`  ${transitions} transition(s) de topologie traversée(s)`);
     expect(transitions).toBeGreaterThan(0);

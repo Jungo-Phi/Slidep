@@ -1,6 +1,7 @@
 import { ID } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import {
+  BeltGeometry,
   ContactSample,
   DynamicSnapshot,
   SimulationSnapshot,
@@ -34,10 +35,11 @@ export function make_snapshot_layout(
   return snapshot_layout([...keys, ...GRAB_KEYS], angleKeys, belts);
 }
 
-/** A belt and how many pulleys it carries — fixed for the whole recording. */
+/** A belt and how many pulleys it carries — fixed for the whole recording — with its path when the compile knows it. */
 export interface BeltShape {
   id: ID;
   pulleys: number;
+  geometry?: BeltGeometry;
 }
 
 /** A layout over exactly these slots, grab keys included: the form the wire carries, where the reserved slots are already part of `keys`. */
@@ -67,6 +69,7 @@ export function snapshot_layout(
     belts: belts.map((b) => b.id),
     beltIndex,
     beltStart,
+    beltGeometry: belts.map((b) => b.geometry),
     wrapBase,
     detachBase: wrapBase + pulleys,
     arrivalBase: wrapBase + 2 * pulleys,

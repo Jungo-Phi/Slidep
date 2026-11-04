@@ -13,11 +13,15 @@
 
 import { ID } from "../../../types";
 import { SimulationSnapshot } from "../../../types/runtime-state";
+import { belt_contact_switch } from "../dynamics/simulation-engine";
 import { snapshot_belt_detached } from "../snapshot";
 import { extends_recording } from "./recording-growth";
 
 export type BeltEvent = {
-  /** Simulated time of the first snapshot that records the change. */
+  /**
+   * Simulated time of the change, found between the two snapshots that frame it the way the playback draws it (`belt_contact_switch`).
+   * Where they cannot tell, a detachment sits at the earlier one and a reattachment at the later one, as the playback draws those too.
+   */
   t: number;
   belt: ID;
   /** Index into the belt's `attachedGearsIDs`, whose length is fixed for the whole run. */
@@ -43,6 +47,8 @@ export interface BeltEventScan {
   count: number;
   /** Detached indices per belt, as of the last snapshot that knew the belt. */
   previous: Map<ID, Set<number>>;
+  /** That snapshot itself, per belt: the earlier end of the interval a change is placed in. */
+  previousSnapshot: Map<ID, SimulationSnapshot>;
 }
 
 /**
@@ -56,23 +62,35 @@ export function extend_belt_events<S extends SimulationSnapshot>(
   const resumes = scan !== null && extends_recording(snapshots, scan.source, scan.count);
   const events = resumes ? scan.events : [];
   const previous = resumes ? scan.previous : new Map<ID, Set<number>>();
+  const previousSnapshot = resumes ? scan.previousSnapshot : new Map<ID, SimulationSnapshot>();
 
   for (let i = resumes ? scan.count : 0; i < snapshots.length; i++) {
     const snapshot = snapshots[i];
     for (const belt of snapshot.layout.belts) {
       const detached = new Set(snapshot_belt_detached(snapshot, belt) ?? []);
       const before = previous.get(belt);
+      const earlier = previousSnapshot.get(belt);
       previous.set(belt, detached);
+      previousSnapshot.set(belt, snapshot);
       // First sight of a belt states no event: whatever it arrives with is its starting condition, not something that just happened.
-      if (before === undefined) continue;
+      if (before === undefined || earlier === undefined) continue;
+      /** When the change happened between `earlier` and `snapshot`; `fallback` is the share of the interval used where the two cannot tell. */
+      const at = (gearIndex: number, fallback: number) => {
+        const r = snapshot.layout.beltIndex.get(belt);
+        const u =
+          earlier.layout === snapshot.layout && r !== undefined
+            ? belt_contact_switch(earlier, snapshot, r, gearIndex)
+            : undefined;
+        return earlier.t + (u ?? fallback) * (snapshot.t - earlier.t);
+      };
       for (const gearIndex of detached)
         if (!before.has(gearIndex))
-          events.push({ t: snapshot.t, belt, gearIndex, kind: "detach" });
+          events.push({ t: at(gearIndex, 0), belt, gearIndex, kind: "detach" });
       for (const gearIndex of before)
         if (!detached.has(gearIndex))
-          events.push({ t: snapshot.t, belt, gearIndex, kind: "reattach" });
+          events.push({ t: at(gearIndex, 1), belt, gearIndex, kind: "reattach" });
     }
   }
 
-  return { events, source: snapshots, count: snapshots.length, previous };
+  return { events, source: snapshots, count: snapshots.length, previous, previousSnapshot };
 }

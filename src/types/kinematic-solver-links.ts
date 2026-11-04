@@ -207,6 +207,9 @@ export type Link = {
       // Tracked each frame alongside `wraps`.
       arrivals?: number[];
       disconnected?: boolean[];
+      // The contact mask the belt's junction references and no-slip links were last baked against; absent means every pulley in contact, as compiled.
+      // Kinematic: `disconnected` is decided at the end of a frame and the links follow at the start of the next, when it differs from this.
+      bakedDisconnected?: boolean[];
       // ── Open-belt terminal handling (unused when closed) ──
       // The two terminals are just FREE ends: the length moves them (each along its belt tangent) and the no-slip differential couples them to the belt travel φ. They do NOT grip/wind — winding is done by attaching a terminal to a gear with a JOIN (its GearPerimeterPin carries it around).
       // A terminal JOINED to its adjacent pulley (winch).
