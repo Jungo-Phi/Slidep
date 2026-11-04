@@ -175,10 +175,13 @@ export function motor_samples(
 const STALL_SPEED_FRACTION = 0.05;
 
 /**
- * Above this acceleration, rad/s², in the commanded sense, a slow motor is still starting rather than stalled.
- * Far above the solver's own noise at a standstill (measured under 1e-10), far below any start a reader could see.
+ * Above this acceleration, as a share of the commanded speed per second, a slow motor is still starting rather than stalled: 0.1 % would take it some 17 minutes to reach its command.
+ *
+ * Scaled to the command rather than absolute because the noise it must clear is not the solver's alone.
+ * A joint held still by tight contacts at the torque limit jitters by some 1e-7 rad/s from one frame to the next, which reads as ±1.5e-5 rad/s² — under the former 1e-6 floor, every other frame of a gripper clamped shut read as a restart (`Pince`, where this threshold is 4e-4).
+ * Low enough still for a heavy load to be starting: a 1 N·m motor spinning up 10 kg·m² towards 10 rad/s gains 0.1 rad/s², ten times this.
  */
-const GAIN_ACCELERATION_FLOOR = 1e-6;
+const GAIN_RATE = 1e-3;
 
 /**
  * Above this speed, rad/s, a motor commanded to stand still is slipping — about a turn in an hour and three quarters.
@@ -186,43 +189,67 @@ const GAIN_ACCELERATION_FLOOR = 1e-6;
  */
 const HOLD_SPEED_FLOOR = 1e-3;
 
+/**
+ * How long, s, a stalled motor must run again without a break before it reads as running.
+ * A stall only ever starts at once; this is its release.
+ * Jaws closing on a part bounce on it, and the motor behind them alternates between being thrown back and catching up with its command — up to its full speed for 50 to 75 ms at a time on `Pince` — which read as a stall flickering on and off a dozen times in under a second.
+ */
+const STALL_RELEASE_TIME = 0.10;
+
 export type StallTuning = {
   stallSpeedFraction?: number;
-  gainAccelerationFloor?: number;
+  gainRate?: number;
   holdSpeedFloor?: number;
+  releaseTime?: number;
 };
 
 /**
  * The motors the mechanism is not following at the end of a frame, by pivot ID.
  * A turning motor stalls when its joint is near standstill or turning backwards and not gaining speed the commanded way, whatever holds it there; one commanded to stand still stalls when its load makes it slip past its torque limit.
  * Overspeed is not a stall: a load driving the joint faster than commanded still turns it the commanded way.
- * `samples` must be `motor_samples(motors, …)`'s output, in the same order; `previous` is the last frame's, absent at a standing start.
+ * A stall holds until the motor has run again for `STALL_RELEASE_TIME` without a break; the time it has run so far is written into its sample's `freeFor`.
+ * `samples` must be `motor_samples(motors, …)`'s output, in the same order; `previous` and `previousStalled` are the last frame's, absent at a standing start.
  */
 export function stalled_motors(
   motors: CompiledMotor[],
   samples: MotorSample[],
   previous: MotorSample[] | undefined,
+  previousStalled: ID[] | undefined,
   dt: number,
   tuning: StallTuning = {},
 ): ID[] {
   const {
     stallSpeedFraction = STALL_SPEED_FRACTION,
-    gainAccelerationFloor = GAIN_ACCELERATION_FLOOR,
+    gainRate = GAIN_RATE,
     holdSpeedFloor = HOLD_SPEED_FLOOR,
+    releaseTime = STALL_RELEASE_TIME,
   } = tuning;
-  const stalled: ID[] = [];
-  motors.forEach((motor, i) => {
-    const { speed, saturated } = samples[i];
-    if (motor.omega === 0) {
-      if (saturated && Math.abs(speed) > holdSpeedFloor) stalled.push(motor.pivotID);
-      return;
-    }
+  /** What this frame alone says, before the hysteresis. */
+  const stalledNow = (motor: CompiledMotor, sample: MotorSample, before: MotorSample | undefined) => {
+    const { speed, saturated } = sample;
+    if (motor.omega === 0) return saturated && Math.abs(speed) > holdSpeedFloor;
     const sense = Math.sign(motor.omega);
     const along = speed * sense;
-    if (along >= stallSpeedFraction * Math.abs(motor.omega)) return;
-    const before = (previous?.find((p) => p.pivotID === motor.pivotID)?.speed ?? 0) * sense;
-    const gaining = along > 0 && (along - before) / dt > gainAccelerationFloor;
-    if (!gaining) stalled.push(motor.pivotID);
+    if (along >= stallSpeedFraction * Math.abs(motor.omega)) return false;
+    const gaining =
+      along > 0 && (along - (before?.speed ?? 0) * sense) / dt > gainRate * Math.abs(motor.omega);
+    return !gaining;
+  };
+
+  const stalled: ID[] = [];
+  motors.forEach((motor, i) => {
+    const sample = samples[i];
+    const before = previous?.find((p) => p.pivotID === motor.pivotID);
+    if (stalledNow(motor, sample, before)) {
+      stalled.push(motor.pivotID);
+      return;
+    }
+    if (!previousStalled?.includes(motor.pivotID)) return;
+    const freeFor = (before?.freeFor ?? 0) + dt;
+    // A sum of steps lands a hair short of the time it adds up to.
+    if (freeFor >= releaseTime - 1e-9) return;
+    sample.freeFor = freeFor;
+    stalled.push(motor.pivotID);
   });
   return stalled;
 }

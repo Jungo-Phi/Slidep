@@ -67,6 +67,11 @@ export interface MotorSample {
   speed: number;
   /** The motor is giving its whole `torque` limit: the speed is no longer its command but whatever the load leaves it. */
   saturated: boolean;
+  /**
+   * s — how long a motor still reported stalled has been running again, absent when it is not waiting on that.
+   * The stall's hysteresis (`stalled_motors`): carried from frame to frame here because a snapshot is all the next frame is given.
+   */
+  freeFor?: number;
 }
 
 /**

@@ -23,11 +23,9 @@
 
 **Lisibilité**
 
-- 🚨 Blocages/déblocages moteur à répétition avec "Pince.slidep"
 - 🚨 Discontinuité dans la lecture au détachement des courroies
 - 🚨 Après avoir changé une valeur dans un NumberInput, cliquer sur le canvas (sans avoir cliquer sur enter) annule la modif
 
-- 🤔 Les mécaniciens on tendance à penser avec des conditions aux limites et sont donc confus par le slider ou slidep, car ce sont des liaisons. Faudrait-il faire quelque chose pour clarifier ça ? Créer de vraies conditions limites ? Ou ne rien faire ?
 - 🤔 Fusionner statique et cinématique ?
 - 🤔 Activer les contacts par défaut ?
 - 🤔 Outil "déconnecter" ?
@@ -54,6 +52,7 @@
 - 🤔 Mieux distinguer les modes édition / simulation / simulation reset
 - 🤔 Montrer qu'on peut interagir pendant la simulation
 - 🤔 Faire apparaitre "un indice" qui pointe vers l'outil DDL quand il y a un blocage (ou au premier)
+- 🤔 Les mécaniciens on tendance à penser avec des conditions aux limites. Comment leur faire comprendre que slidep fonctionne avec des liaisons ?
 - 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
 
 **Solveur géométrique**
@@ -102,6 +101,7 @@
 - 🤔 Donner une élasticité aux courroies ?
 - 🤔 Passer la cinématique et édition en solver direct ?
 - 🆕 Ajouter les constantes de frottement / rebond des collisions (CONTACT_EPS ?)
+- 🔨 Réduire la bounciness par défaut (Pince)
 - 🔨 Vérifier que les contacts "émettent" des force dans les 2 sens
 - 🚨 Vérifier ce que fait la bande de contact (0.5 unité) des collisions (et l'enlever ?)
 - 🔨 Ajouter un filtre géométrique grossier (bounding box, grille spatiale) pour les collisions (recalculé peu souvent)

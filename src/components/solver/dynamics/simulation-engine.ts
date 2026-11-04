@@ -2012,7 +2012,10 @@ function solve_dynamic_frame(
   // `substeps` is always >= 1, so the loop above ran at least once.
   const finalResult = result!;
   // The re-projection step (`dt = 0`) moves nothing, so every turning motor would read as standing still.
-  const stalledMotors = dt > 0 ? stalled_motors(model.compiledMotors, motor, prev?.motor, dt) : [];
+  const stalledMotors =
+    dt > 0
+      ? stalled_motors(model.compiledMotors, motor, prev?.motor, prev?.stalledMotors, dt)
+      : [];
 
   // ── Belt topology changed this frame → rebuild its no-slip links, AFTER every substep has run — same reasoning as `step_simulation`: baking against the warm start instead would freeze in whatever the frame's own solve was about to correct.
   if (beltsToRewire.size > 0 && beltContact.rebuildQLinks) {
