@@ -22,7 +22,7 @@ export type PruneReason =
   | "inert"
   /**
    * Redundant by construction — present for solver conditioning, adds no rank.
-   * `BeltSubChainAggregate`, `BeltLoopClosure`, and one strand law per closed belt loop.
+   * `BeltSubChainAggregate`, `BeltLoopClosure`, and the strand laws `belt_strand_surplus` names.
    */
   | "conditioning"
   /** A driver, not a joint: counted separately. */
@@ -143,16 +143,16 @@ export function variable_keys_of(link: Link): string[] {
       return [
         link.startKey,
         link.endKey,
-        ...link.gearPosKeys,
-        ...link.gearAngleKeys,
+        ...still_wrapped(link.gearPosKeys, link.disconnected),
+        ...still_wrapped(link.gearAngleKeys, link.disconnected),
       ];
     case "BeltJunction":
       return [link.nodeKey, ...link.gearPosKeys];
     case "BeltPin":
       return [
         link.nodeKey,
-        ...link.gearPosKeys,
-        ...link.gearAngleKeys,
+        ...still_wrapped(link.gearPosKeys, link.disconnected),
+        ...still_wrapped(link.gearAngleKeys, link.disconnected),
         link.refAngleKey,
       ];
     case "BeltSegmentNoSlip":
@@ -177,30 +177,67 @@ export function variable_keys_of(link: Link): string[] {
   }
 }
 
+/**
+ * The pulley keys of a belt link the belt still runs on.
+ *
+ * Both laws walk the reduced loop, so a pulley the belt has come off is not part of them.
+ * Listing it would tie it to the rest in the chain partition: a pulley falling on its own would read as part of the mechanism it has left.
+ */
+function still_wrapped(keys: string[], disconnected: boolean[] | undefined): string[] {
+  return disconnected ? keys.filter((_, i) => !disconnected[i]) : keys;
+}
+
 const is_driver = (l: Link) =>
   l.type === "MotorBeam" || l.type === "MotorAngle";
 
+type Strand = Extract<Link, { type: "BeltSegmentNoSlip" }>;
+
 /**
- * One strand law per **closed** belt: the loop's own redundancy, not the design's.
+ * Strand laws a belt carries on top of its independent rows: the belt's own redundancy, not the design's.
  *
- * Each strand of a belt carries a no-slip law tying two consecutive pulleys.
- * Walk a closed loop and those laws compose back into the identity, so `N` strands only ever carry `N − 1` independent rows.
- * Counted whole they invent one degree of hyperstaticity per belt, which the panel would then report on a perfectly sound mechanism — measured on four of the gallery's belt drives, and each of them falls to `h = 0` once this row is dropped, with the mobility unchanged.
+ * Each strand carries a no-slip law `q_a − q_b = h − h₀`.
+ * Summed over every strand, the `q` telescope away — around a closed loop, and on an open belt too, since a terminal has `q = 0` — and what is left is the belt's length law.
+ * So `BeltLength` and the full set of strands carry one row fewer than they count.
+ *
+ * A terminal pinned on the rim of the pulley it runs onto adds one more: its strand has no length, and its law only restates the pin.
  *
  * Same family as `BeltSubChainAggregate` and `BeltLoopClosure`: the solver wants every strand for conditioning, the rank count must not have them all.
- * Open belts have no loop to close and keep theirs.
- *
- * Which one goes is decided by `segIndex`, a property of the belt's own geometry — never by the order links happen to be parsed in.
+ * Which strand goes is decided by `segIndex`, a property of the belt's own geometry — never by the order links happen to be parsed in.
  */
-function closed_loop_surplus(links: Link[]): Set<Link> {
-  const strongest = new Map<ID, Link & { type: "BeltSegmentNoSlip" }>();
+function belt_strand_surplus(links: Link[]): Set<Link> {
+  const surplus = new Set<Link>();
+  const strandsByBelt = new Map<ID, Strand[]>();
+  const lengthByBelt = new Map<ID, Extract<Link, { type: "BeltLength" }>>();
+  const pinned = new Set<string>();
   for (const link of links) {
-    if (link.type !== "BeltSegmentNoSlip" || !link.closed) continue;
+    if (link.type === "GearPerimeterPin") pinned.add(`${link.nodeKey}|${link.angleKey}`);
     if (link.owner === undefined) continue;
-    const held = strongest.get(link.owner);
-    if (!held || link.segIndex > held.segIndex) strongest.set(link.owner, link);
+    if (link.type === "BeltLength") lengthByBelt.set(link.owner, link);
+    if (link.type === "BeltSegmentNoSlip") {
+      const held = strandsByBelt.get(link.owner);
+      if (held) held.push(link);
+      else strandsByBelt.set(link.owner, [link]);
+    }
   }
-  return new Set(strongest.values());
+
+  const pinned_terminal = (strand: Strand) =>
+    (strand.angleKeyA === undefined && strand.angleKeyB !== undefined && pinned.has(`${strand.posKeyA}|${strand.angleKeyB}`)) ||
+    (strand.angleKeyB === undefined && strand.angleKeyA !== undefined && pinned.has(`${strand.posKeyB}|${strand.angleKeyA}`));
+
+  for (const [owner, strands] of strandsByBelt) {
+    for (const strand of strands) if (pinned_terminal(strand)) surplus.add(strand);
+
+    // The sum only closes on the length law when every strand of the route is there to be summed.
+    const length = lengthByBelt.get(owner);
+    if (!length) continue;
+    const wrapped = length.gearPosKeys.filter((_, i) => !length.disconnected?.[i]).length;
+    if (strands.length !== (length.closed ? wrapped : wrapped + 1)) continue;
+    let last: Strand | undefined;
+    for (const strand of strands)
+      if (!surplus.has(strand) && (!last || strand.segIndex > last.segIndex)) last = strand;
+    if (last) surplus.add(last);
+  }
+  return surplus;
 }
 
 /**
@@ -313,7 +350,7 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
   // ── Split the links: what constrains a free variable, and what does not ──
   const links: Link[] = [];
   const pruned: PrunedLink[] = [];
-  const loopSurplus = closed_loop_surplus(allLinks);
+  const strandSurplus = belt_strand_surplus(allLinks);
   for (const link of allLinks) {
     if (is_driver(link)) {
       pruned.push({ link, reason: "driver" });
@@ -326,7 +363,7 @@ export function build_analysis_model(mechanism: Mechanism): AnalysisModel {
     if (
       link.type === "BeltSubChainAggregate" ||
       link.type === "BeltLoopClosure" ||
-      loopSurplus.has(link)
+      strandSurplus.has(link)
     ) {
       pruned.push({ link, reason: "conditioning" });
       continue;

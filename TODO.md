@@ -23,18 +23,16 @@
 
 **Lisibilité**
 
-- 🔨 Discontinuité dans la lecture au détachement des courroies
-- 🔨 Après avoir changé une valeur dans un NumberInput, cliquer sur le canvas (sans avoir cliquer sur enter) annule la modif
-
-- 🚨 Les DDL ne prennent pas en compte les déconnexions de courroies
-- 🚨 Mauvais bilan des forces avec "Poulie tombante.slidep"
-- 🚨 Contact manquant poulie-join dans "Poulie tombante.slidep"
 - 🚨 Blocages/déblocages moteur à répétition avec "Pince.slidep"
+- 🚨 Discontinuité dans la lecture au détachement des courroies
+- 🚨 Après avoir changé une valeur dans un NumberInput, cliquer sur le canvas (sans avoir cliquer sur enter) annule la modif
 
 - 🤔 Les mécaniciens on tendance à penser avec des conditions aux limites et sont donc confus par le slider ou slidep, car ce sont des liaisons. Faudrait-il faire quelque chose pour clarifier ça ? Créer de vraies conditions limites ? Ou ne rien faire ?
 - 🤔 Fusionner statique et cinématique ?
+- 🤔 Activer les contacts par défaut ?
 - 🤔 Outil "déconnecter" ?
 - 🤔 Outil "couper" (les poutres) ?
+
 - 🔨 Donner des titres à toutes les sections du panneau latéral
 - 🔨 Changer icon des collisions de groupe
 - 🔨 Finir les traits de DimensionAngle

@@ -9,6 +9,7 @@ import jansenUp from "../../../../test-mechanisms/Jansen's linkage (upside-down)
 import poulie from "../../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import roues from "../../../../test-mechanisms/Roues isolées.slidep?raw";
 import slider from "../../../../test-mechanisms/Test slider.slidep?raw";
+import treuil from "../../../../test-mechanisms/Treuil court.slidep?raw";
 import vilbrequin from "../../../../test-mechanisms/Vilbrequin.slidep?raw";
 import {
   BeamElement,
@@ -349,27 +350,31 @@ describe("build_analysis_model — mécanismes de référence", () => {
     // Jansen's two welds are what makes it redundant: taking either one out frees two degrees of mobility and drops one of the two redundancies.
     expect(G(jansen)).toEqual([-1]);
     expect(G(jansenUp)).toEqual([0]);
-    // The three closed-loop mechanisms are worth one more than the raw count: one strand law per loop is pruned, see `closed_loop_surplus`.
+    // Every belt is worth one more than the raw count: one strand law per belt is pruned, see `belt_strand_surplus`.
     expect(G(decon)).toEqual([1]);
     expect(G(poulie)).toEqual([0]);
-    expect(G(coreXY)).toEqual([-4]);
-    expect(G(coreXY2)).toEqual([-4]);
+    expect(G(coreXY)).toEqual([-2]);
+    expect(G(coreXY2)).toEqual([-2]);
     expect(G(huygens)).toEqual([6]);
   });
 
-  it("une boucle de courroie fermée perd exactement une loi de brin", () => {
-    for (const json of [decon, poulie, huygens]) {
-      const model = fixture(json);
-      const dropped = model.pruned.filter(
+  it("une courroie, ouverte ou fermée, perd exactement une loi de brin", () => {
+    // Core XY carries two open belts, the others one closed loop.
+    for (const [json, belts] of [[decon, 1], [poulie, 1], [huygens, 1], [coreXY, 2]] as const) {
+      const dropped = fixture(json).pruned.filter(
         (p) => p.link.type === "BeltSegmentNoSlip",
       );
-      expect(dropped).toHaveLength(1);
-      expect(dropped[0].reason).toBe("conditioning");
+      expect(dropped).toHaveLength(belts);
+      for (const p of dropped) expect(p.reason).toBe("conditioning");
     }
-    // Core XY's belts are open: no loop to close, nothing to drop.
-    expect(
-      fixture(coreXY).pruned.filter((p) => p.link.type === "BeltSegmentNoSlip"),
-    ).toHaveLength(0);
+  });
+
+  it("une extrémité épinglée sur sa poulie rend aussi la loi de son brin", () => {
+    // Treuil court: one open belt whose start is pinned on the drum it winds onto — the loop's surplus plus that terminal strand.
+    const dropped = fixture(treuil).pruned.filter(
+      (p) => p.link.type === "BeltSegmentNoSlip",
+    );
+    expect(dropped).toHaveLength(2);
   });
 });
 

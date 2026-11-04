@@ -1749,6 +1749,8 @@ function solve_dynamic_frame(
     distributed: new Map<string, Point2>(),
     torques: new Map<string, number>(),
   };
+  /** The couple each grounded joint's friction passed over the last substep — part of that support's reaction, which the statics has no column for at a hinge. */
+  let groundFriction = new Map<string, number>();
   let result: SolverMaps | undefined;
   /** The grab force this frame drew as an arrow — see `GrabForceSample`. */
   let grabDisplay: GrabForceSample | undefined;
@@ -1896,6 +1898,7 @@ function solve_dynamic_frame(
       for (const [key, t] of frictionContribution.torques)
         passive.torques.set(key, (passive.torques.get(key) ?? 0) + t);
       applied = { ...passive, distributed };
+      groundFriction = frictionContribution.grounded;
     }
 
     // An anchored node never feels the predict step's acceleration (it cannot move regardless of `gx/gy` — see `PBD_kinematic_solver`), so its own weight has to be restated as an ordinary force to reach the anchored-dof reaction fallback — see `groundedWeights` above for what "its own" leaves out.
@@ -2170,7 +2173,7 @@ function solve_dynamic_frame(
       ? beam_cohesion_from_statics(model.beamCohesionSpecs, staticsFrame, statics)
       : undefined,
     beltStrands: collectDiagnostics ? belt_strands_from_statics(statics) : undefined,
-    supports: collectDiagnostics ? supports_from_statics(statics) : undefined,
+    supports: collectDiagnostics ? supports_from_statics(statics, groundFriction) : undefined,
     grab: grabDisplay,
     contacts: touching.size > 0 ? [...touching.values()] : undefined,
   };

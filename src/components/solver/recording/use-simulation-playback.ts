@@ -17,6 +17,7 @@ import {
   EMPTY_STRESS_SCALE_CACHE,
   KinematicSnapshot,
   RuntimeState,
+  SimulationSnapshot,
 } from "../../../types/runtime-state";
 import { CanvasState } from "../../../types/canvas-state";
 import { LiveFrame } from "../../canvas/MechanicalCanvas";
@@ -42,6 +43,7 @@ import {
   parameter_snapshot,
   parameter_snapshot_at,
   snapshot_at,
+  same_belt_topology,
   snapshot_index_at,
 } from "../dynamics/simulation-engine";
 import { motors_blocked_at } from "../kinematics/dead-points";
@@ -194,6 +196,50 @@ export function analysed_mechanism(
   return paramSnapshot
     ? apply_parameter_snapshot_to_mechanism(geometryMechanism, paramSnapshot)
     : geometryMechanism;
+}
+
+/** A recorded instant and the mechanism posed there, as {@link analysed_mechanism} poses it. */
+export type ReferencePose = { snapshot: SimulationSnapshot; mechanism: Mechanism };
+
+/** Shares of a structure's stretch of the recording where its reference poses are taken: away from both ends, which are where a belt grazes the pulley it leaves or rejoins. */
+const REFERENCE_SHARES = [0.25, 0.5, 0.75];
+
+/** Fewest recorded instants a stretch needs before its inside is told apart from its ends. */
+const MIN_STRETCH = 4;
+
+/**
+ * Recorded instants with the same structure as the clock's own, spread across the stretch of recording that structure lasts.
+ *
+ * The structure is what the analysis counts: the layout, which pulleys every belt runs on, and the parameters in effect.
+ * Empty outside a simulation, and on a stretch too short to have an inside.
+ */
+export function structure_references(
+  mechanism: Mechanism,
+  appMode: AppMode,
+  clock: RuntimeState,
+): ReferencePose[] {
+  if (!is_simulating(appMode)) return [];
+  const snapshots = clock.simulationSnapshots;
+  if (snapshots.length === 0) return [];
+  const params = clock.parameterSnapshots;
+  const at = snapshot_index_at(snapshots, clock.time);
+  const same = (a: number, b: number) =>
+    snapshots[a].layout === snapshots[b].layout &&
+    same_belt_topology(snapshots[a], snapshots[b]) &&
+    parameter_snapshot_at(params, snapshots[a].t) === parameter_snapshot_at(params, snapshots[b].t);
+  let lo = at;
+  while (lo > 0 && same(lo - 1, at)) lo--;
+  let hi = at;
+  while (hi < snapshots.length - 1 && same(hi + 1, at)) hi++;
+  if (hi - lo + 1 < MIN_STRETCH) return [];
+
+  return REFERENCE_SHARES.map((share) => {
+    const snapshot = snapshots[lo + Math.round(share * (hi - lo))];
+    return {
+      snapshot,
+      mechanism: analysed_mechanism(mechanism, appMode, { ...clock, time: snapshot.t }),
+    };
+  });
 }
 
 /** {@link analysed_mechanism}, memoised, for a component that already mirrors the clock. */

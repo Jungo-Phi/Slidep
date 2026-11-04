@@ -231,6 +231,12 @@ const COUPLING_EPSILON = 1e-8;
 const RAIL_STOP = 1e-6;
 
 /**
+ * How far off a pulley's rim, as a fraction of its radius, a belt's free end still counts as resting on it.
+ * The dynamics' own contact only acts once the end is inside, so a converged frame leaves it a hair outside; a millimetre-scale gap, by contrast, is an end that has truly left.
+ */
+const RIM_CONTACT_TOLERANCE = 1e-4;
+
+/**
  * Orthonormalise in order, dropping whatever the vectors before it already span.
  * Plain modified Gram-Schmidt: these live in `ker(A)`'s own coordinates, a handful of dimensions even on the most redundant mechanism in the gallery.
  */
@@ -484,6 +490,41 @@ export function solve_statics(
         index: i,
       });
     });
+    // A free end resting on the rim of the pulley next to it: the push that pulley takes from it, along the line of centres.
+    // Its arm about the pulley's centre is radial, so it turns nothing; the end takes the opposite push.
+    // Read off the pulley the belt still runs onto, as the dynamics' own contact does — the first of its pulleys may have left it.
+    belt.terminalContacts.forEach((unknown, side) => {
+      if (unknown === undefined) return;
+      const { column, row } = unknown;
+      const terminal = side === 0 ? contact[0] : contact[contact.length - 1];
+      const pulley = side === 0 ? contact[1] : contact[contact.length - 2];
+      const gearID = pulley && belt.viaGears[pulley.index];
+      const gearRow = gearID !== undefined ? rowOfGear.get(gearID) : undefined;
+      const nodeRow = terminal && rowOfNode.get(belt.viaKeys[terminal.index]);
+      const touching =
+        terminal !== undefined &&
+        belt.viaGears[terminal.index] === undefined &&
+        pulley !== undefined &&
+        gearRow !== undefined &&
+        terminal.via.pos.distance_to(pulley.via.pos) <=
+          pulley.via.radius * (1 + RIM_CONTACT_TOLERANCE);
+      const span = touching ? pulley.via.pos.sub(terminal.via.pos) : undefined;
+      if (!touching || !span || span.length_squared() < 1e-18) {
+        add_at(a, row, column, 1);
+        return;
+      }
+      const n = span.normalize();
+      const arm = terminal.via.pos.sub(pulley.via.pos);
+      // The pulley is pushed along `n`; its rows read `Σ (what it applies) = … − (what is applied to it)`, hence the flip.
+      add_at(a, gearRow, column, -n.x);
+      add_at(a, gearRow + 1, column, -n.y);
+      add_at(a, gearRow + 2, column, -cross(arm, n.x, n.y));
+      if (nodeRow !== undefined) {
+        add_at(a, nodeRow, column, -n.x);
+        add_at(a, nodeRow + 1, column, -n.y);
+      }
+    });
+
     if (contact.length < 2) continue;
 
     /** One end of a strand pulling on whichever body its via stands for: a pulley takes it at its rim, with the arm that turns it; a terminal is a bare point. */
@@ -515,9 +556,22 @@ export function solve_statics(
       belt.closed,
     )) {
       if (piece.kind !== "segment") continue;
+      const viaA = contact[piece.gearIndexA].via;
+      const viaB = contact[piece.gearIndexB].via;
+      // A free end's run is read off its pulley's rim, never off the run vector: that vector vanishes as the end reaches the rim, and turns radial once it rests there — exactly as `applyBeltLengthConstraint` reads it.
+      // Belt travel at a rim point is `perp(radial)`, signed by the way the belt wraps that pulley.
+      const rim = (via: BeltVia, at: Point2) => {
+        const radial = at.sub(via.pos).normalize();
+        return radial.perp().mul(via.clockwise ? -1 : 1);
+      };
+      const terminalRun = !belt.closed && (viaA.radius === 0) !== (viaB.radius === 0);
       const span = piece.to.sub(piece.from);
-      if (span.length_squared() < 1e-18) continue;
-      const u = span.normalize();
+      if (!terminalRun && span.length_squared() < 1e-18) continue;
+      const u = !terminalRun
+        ? span.normalize()
+        : viaB.radius > 0
+          ? rim(viaB, piece.to)
+          : rim(viaA, piece.from);
       const from = contact[piece.gearIndexA].index;
       const to = contact[piece.gearIndexB].index;
       const column = belt.columns[from];

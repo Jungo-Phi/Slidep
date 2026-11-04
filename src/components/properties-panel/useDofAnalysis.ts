@@ -11,15 +11,26 @@ import {
   chain_highlight,
   MotionMode,
 } from "../solver/analysis/motion-modes";
+import {
+  PoseMeasurement,
+  StructuralChain,
+  structural_mobility,
+} from "../solver/analysis/structural-mobility";
+import type { ReferencePose } from "../solver/recording/use-simulation-playback";
+import type { SimulationSnapshot } from "../../types/runtime-state";
 import { ID } from "../../types";
 
 /** One chain, with what the counting says, what the solver measured, and the motions it found. */
 export type ChainAnalysis = {
   chain: AnalysisChain;
+  /** Structural: the same at every pose of one structure, see `structural_mobility`. */
   mobility: ChainMobility;
+  /** The motions at the pose on screen, as many as `mobility` counts. */
   modes: MotionMode[];
   /** Elements to light when the chain is pointed at: the union of its modes'. */
   highlight: ID[];
+  /** A pose showing the chain's structural mobility: the one a redundancy audit must solve around. */
+  regular: StructuralChain["regular"];
 };
 
 /** Everything one measurement produced, kept together: animating a mode needs the model too. */
@@ -51,6 +62,20 @@ export type DofAnalysis = {
  */
 const MEASURED = new WeakMap<MechanicalElement[], Measurement>();
 
+/** Reference poses already measured, by the recorded instant they are posed at: scrubbing within one structure measures them once. */
+const REFERENCES = new WeakMap<SimulationSnapshot, PoseMeasurement>();
+
+function measure_pose(mechanism: Mechanism): PoseMeasurement {
+  const model = build_analysis_model(mechanism);
+  return { model, mobilities: probe_mobility(model) };
+}
+
+function measure_reference({ snapshot, mechanism }: ReferencePose): PoseMeasurement {
+  let measured = REFERENCES.get(snapshot);
+  if (!measured) REFERENCES.set(snapshot, (measured = measure_pose(mechanism)));
+  return measured;
+}
+
 /**
  * How long a *change* must settle before it is measured.
  * First display never waits.
@@ -71,8 +96,15 @@ const CHANGE_DEBOUNCE_MS = 200;
  * While `frozen`, nothing new is measured and the last figures stay on screen; the pose reached meanwhile is measured once it thaws.
  * A playing simulation freezes it: the pose changes at every instant, and a measurement landing between two of them blocks the display for hundreds of milliseconds on a large mechanism.
  * A first display is still measured, frozen or not: the panel must not open blank.
+ *
+ * `references` are recorded poses of the same structure (see `structure_references`), empty outside a simulation.
+ * They are what makes the figures structural: a singular pose on screen cannot add or drop a motion the others do not share.
  */
-export function useDofAnalysis(mechanism: Mechanism, frozen = false): DofAnalysis {
+export function useDofAnalysis(
+  mechanism: Mechanism,
+  frozen = false,
+  references: ReferencePose[] = [],
+): DofAnalysis {
   const elements = mechanism.mechanicalElements;
   const cached = MEASURED.get(elements);
   const [, redraw] = React.useReducer((n: number) => n + 1, 0);
@@ -82,6 +114,8 @@ export function useDofAnalysis(mechanism: Mechanism, frozen = false): DofAnalysi
   // Any mechanism carrying this element list yields the same analysis, so reading the latest one at measurement time cannot pick up a mismatched pair.
   const latest = React.useRef(mechanism);
   latest.current = mechanism;
+  const latestReferences = React.useRef(references);
+  latestReferences.current = references;
 
   React.useEffect(() => {
     const hit = MEASURED.get(elements);
@@ -92,18 +126,23 @@ export function useDofAnalysis(mechanism: Mechanism, frozen = false): DofAnalysi
     if (frozen && shown.current !== undefined) return;
     const measure = () => {
       const measured = latest.current;
-      const model = build_analysis_model(measured);
-      const mobilities = probe_mobility(model);
+      const current = measure_pose(measured);
+      const { model } = current;
+      const structural = structural_mobility(
+        current,
+        latestReferences.current.map(measure_reference),
+      );
       const result: Measurement = {
         mechanism: measured,
         model,
-        chains: model.chains.map((chain, i) => {
-          const modes = canonical_modes(model, chain, mobilities[i]);
+        chains: structural.map(({ chain, mobility, regular }) => {
+          const modes = canonical_modes(model, chain, mobility);
           return {
             chain,
-            mobility: mobilities[i],
+            mobility,
             modes,
             highlight: chain_highlight(chain, modes),
+            regular,
           };
         }),
       };

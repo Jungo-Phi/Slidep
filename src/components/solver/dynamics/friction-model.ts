@@ -177,9 +177,18 @@ export function resolve_friction_forces(
   angleVelocities: Map<string, number>,
   posMasses: Map<string, number>,
   angleMasses: Map<string, number>,
-): { forces: Map<string, Point2>; torques: Map<string, number> } {
+): {
+  forces: Map<string, Point2>;
+  torques: Map<string, number>;
+  /**
+   * The couple each grounded joint passes to the mechanism through its friction, by pivot key (N·m, counter-clockwise).
+   * The ground is that friction's other side, so this is part of the support's own reaction — a hinge that passes no couple otherwise still passes this one.
+   */
+  grounded: Map<string, number>;
+} {
   const forces = new Map<string, Point2>();
   const torques = new Map<string, number>();
+  const grounded = new Map<string, number>();
   const add_force = (key: string, v: Point2) => {
     const prev = forces.get(key);
     forces.set(key, prev ? prev.add(v) : v);
@@ -204,7 +213,7 @@ export function resolve_friction_forces(
     add_force(pivotKey, F.mul(-1));
   };
 
-  if (dt <= 0) return { forces, torques };
+  if (dt <= 0) return { forces, torques, grounded };
 
   for (const friction of compiled) {
     if (friction.kind === "slide") {
@@ -264,10 +273,12 @@ export function resolve_friction_forces(
     const torque = -c * omegaRel;
     add_torque(rotor, rotorRadius, pivotKey, torque);
     // Newton's third law; the ground absorbs it instead when there is no housing.
+    // An arm's torque lands as a force pair whose couple is exactly `torque`, so either rotor kind hands the ground the same figure.
     if (housing) add_torque(housing, housingRadius, pivotKey, -torque);
+    else grounded.set(pivotKey, (grounded.get(pivotKey) ?? 0) + torque);
   }
 
-  return { forces, torques };
+  return { forces, torques, grounded };
 }
 
 /**

@@ -132,6 +132,14 @@ export interface StaticsBelt {
   closed: boolean;
   /** The tension of the strand leaving via `p`: `n` columns on a closed belt, `n − 1` on an open one. */
   columns: number[];
+  /**
+   * An open belt's two free ends, start then end, each with the push it may take from the pulley next to it — none on a closed belt.
+   *
+   * The dynamics never lets a terminal sink inside the pulley it runs onto (`applyBeltLengthConstraint`'s radial contact): a fixed end the pulley rolls onto carries that pulley on its rim, radially, which no strand tension can stand for.
+   * One unknown each, the push along the line of centres, and one row: it reads `N = 0` while the end stands off the rim, `0 = 0` while it rests on it — an equation rather than a dropped column, for the same reason as `slides`.
+   * Absent on an end wound onto its pulley, which its rim pin already holds there.
+   */
+  terminalContacts: ({ column: number; row: number } | undefined)[];
   /** The belt's own `BeltLength`, read each frame for its `disconnected` flags — the link is where this codebase keeps a belt's live contact state, and a pulley the belt has left must receive nothing. */
   length: Extract<Link, { type: "BeltLength" }>;
 }
@@ -257,7 +265,7 @@ function link_touches_gear(link: Link, id: ID): boolean {
 }
 
 /** Each belt's path, read off its own `BeltLength` — the one link that already carries the whole ordered geometry, terminals included. */
-function belt_paths(links: Link[]): Omit<StaticsBelt, "columns">[] {
+function belt_paths(links: Link[]): Omit<StaticsBelt, "columns" | "terminalContacts">[] {
   return links.flatMap((link) => {
     if (link.type !== "BeltLength") return [];
     const beltID = belt_of(link);
@@ -293,9 +301,9 @@ function belt_paths(links: Link[]): Omit<StaticsBelt, "columns">[] {
  */
 function carried_bodies(
   gears: StaticsGear[],
-  paths: Omit<StaticsBelt, "columns">[],
+  paths: Omit<StaticsBelt, "columns" | "terminalContacts">[],
   links: Link[],
-): { gears: StaticsGear[]; belts: Omit<StaticsBelt, "columns">[] } {
+): { gears: StaticsGear[]; belts: Omit<StaticsBelt, "columns" | "terminalContacts">[] } {
   let keptGears = gears;
   let keptBelts = paths;
   for (;;) {
@@ -513,7 +521,7 @@ export function build_statics_system(
   }
 
   // One tension per tangent strand, laid out last so the belts own the tail of the unknowns.
-  const belts: StaticsBelt[] = bodiesCarried.belts.map((belt) => ({
+  const tensioned = bodiesCarried.belts.map((belt) => ({
     ...belt,
     columns: Array.from(
       { length: belt.closed ? belt.viaKeys.length : belt.viaKeys.length - 1 },
@@ -526,6 +534,15 @@ export function build_statics_system(
   for (const gear of carried) bodies.push({ kind: "gear", gearID: gear.id, row: (row += 3) - 3 });
   for (const key of nodeKeys) bodies.push({ kind: "node", nodeKey: key, row: (row += 3) - 3 });
   const slides = slideFaces.map((slide) => ({ ...slide, row: row++ }));
+
+  const belts: StaticsBelt[] = tensioned.map((belt) => ({
+    ...belt,
+    terminalContacts: belt.closed
+      ? []
+      : [!belt.length.startWound, !belt.length.endWound].map((free) =>
+          free ? { column: columns++, row: row++ } : undefined,
+        ),
+  }));
 
   return { interfaces, slides, couplings, bodies, gears: carried, belts, rows: row, columns };
 }

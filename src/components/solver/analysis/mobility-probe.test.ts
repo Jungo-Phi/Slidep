@@ -6,6 +6,8 @@ import huygens from "../../../../test-mechanisms/Huygen's chain drive.slidep?raw
 import jansen from "../../../../test-mechanisms/Jansen's linkage.slidep?raw";
 import poulie from "../../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import slider from "../../../../test-mechanisms/Test slider.slidep?raw";
+import tombante from "../../../../test-mechanisms/Poulie tombante.slidep?raw";
+import treuil from "../../../../test-mechanisms/Treuil court.slidep?raw";
 import vilbrequin from "../../../../test-mechanisms/Vilbrequin.slidep?raw";
 import {
   BeamElement,
@@ -21,6 +23,13 @@ import {
   SliderElement,
 } from "../../../types";
 import { DEFAULT_METADATA, DEFAULT_SIMULATION } from "../../../types/mechanism";
+import { DynamicSnapshot } from "../../../types/runtime-state";
+import {
+  RECORD_DT,
+  apply_dynamic_snapshot_to_mechanism,
+  compile_simulation_model,
+  step_dynamic_simulation,
+} from "../dynamics/simulation-engine";
 import { load_mechanism } from "../../../utils/load-mechanism";
 import { belt_without_gear } from "../../../utils/belt-geom";
 import { build_analysis_model, variable_keys_of } from "./analysis-model";
@@ -303,6 +312,28 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
     expect(strands(withDrop)).toBe(strands(mech) - 1);
   });
 
+  it("une poulie lâchée par la courroie forme sa propre chaîne", () => {
+    // The pulley falls on its own once the belt has left it: it shares nothing with the rest, so it is a chain of its own.
+    const { mechanism: mech } = load_mechanism(JSON.parse(tombante));
+    const model = compile_simulation_model(mech, true, true);
+    let snapshot: DynamicSnapshot | null = null;
+    for (let i = 0; i < Math.round(2 / RECORD_DT); i++)
+      snapshot = step_dynamic_simulation(model, i * RECORD_DT, snapshot, RECORD_DT, new Point2(0, -9.81));
+    const shown = apply_dynamic_snapshot_to_mechanism(mech, snapshot!);
+    const belt = shown.mechanicalElements.find((el) => el.type === "belt") as BeltElement;
+    expect(belt.disconnectedGearIndices).toEqual([1]);
+    const fallen = belt.attachedGearsIDs[1].id;
+
+    const before = build_analysis_model(mech);
+    const after = build_analysis_model(shown);
+    expect(before.chains).toHaveLength(1);
+    expect(after.chains).toHaveLength(2);
+    const own = after.chains.find((c) => c.elements.includes(fallen))!;
+    expect(own.elements).not.toContain(belt.id);
+    // Free in the plane and free to spin.
+    expect(probe_chain_mobility(after, own).mobility).toBe(3);
+  }, 30_000);
+
   it("le joint relit son s0 sur la boucle amputée, pas sur l'entière", () => {
     // `rewire_belts` measures the junction's `s0` on the loop the dropped pulley has left; the link that reads that `s0` back must walk the same one.
     // Otherwise it sets the junction elsewhere — 316 mm elsewhere, measured on `Déconnexion courroie` at 2.5 s — the model's rest pose violates its own constraint, and the probe counted that gap as a third mode.
@@ -334,12 +365,14 @@ describe("probe_chain_mobility — mécanismes de référence", () => {
     expect(mh(vilbrequin)).toEqual([[1, 0]]);
     expect(mh(slider)).toEqual([[1, 0]]);
     expect(mh(jansen)).toEqual([[1, 2]]);
-    // The closed-loop drives are sound: their one redundancy was the model's surplus strand law, pruned since.
-    // Poulie bloqueuse keeps its own, which is real.
+    // Belt drives are sound: the strand laws a belt repeats are pruned from the count.
+    // Poulie bloqueuse keeps its redundancy, which is real, and so does Core XY: its four come from the carriage's rails and welds.
     expect(mh(decon)).toEqual([[1, 0]]);
     expect(mh(poulie)).toEqual([[1, 1]]);
     expect(mh(huygens)).toEqual([[6, 0]]);
-    expect(mh(coreXY)).toEqual([[2, 6]]);
+    expect(mh(coreXY)).toEqual([[2, 4]]);
+    expect(mh(tombante)).toEqual([[3, 0]]);
+    expect(mh(treuil)).toEqual([[2, 0]]);
     expect(mh(doubleSlider)).toEqual([
       [1, 2],
       [2, 0],

@@ -111,6 +111,7 @@ import {
 import { Link } from "../../../types";
 import { undriven_motors } from "../../solver/analysis/motion-modes";
 import { ChainAnalysis, useDofAnalysis } from "../useDofAnalysis";
+import { structure_references } from "../../solver/recording/use-simulation-playback";
 import { ddl_status } from "../ddl-status";
 import { AnimatedMode, useModeAnimation } from "../useModeAnimation";
 import {
@@ -959,7 +960,19 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   // The superposed view only makes sense with several probed elements; fall back to the per-element view (and its hidden switch) below that.
   const superposed = superpose && probedElements.length >= 2;
 
-  const analysis = useDofAnalysis(analysedMechanism, runtimeState.isPlaying);
+  const references = React.useMemo(
+    () => structure_references(mechanism, appMode, runtimeState),
+    // The recording and the instant decide the stretch; the edited mechanism only poses it, and its elements are what an edit changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      mechanism.mechanicalElements,
+      appMode,
+      runtimeState.simulationSnapshots,
+      runtimeState.parameterSnapshots,
+      runtimeState.time,
+    ],
+  );
+  const analysis = useDofAnalysis(analysedMechanism, runtimeState.isPlaying, references);
 
   /** The mode being pointed at, if any. */
   const [animated, setAnimated] = React.useState<AnimatedMode>(null);
@@ -987,12 +1000,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const runAudit = React.useCallback(
     (chainAnalysis: ChainAnalysis) => {
       if (!measuredModel) return;
-      const { chain, mobility } = chainAnalysis;
+      const { chain, regular } = chainAnalysis;
       setAuditing(chain.id);
       // Seconds of solving on a big chain, and it blocks the thread.
       // Handing the browser one frame first is what lets the button show it was pressed.
       setTimeout(() => {
-        const found = find_redundant_links(measuredModel, chain, mobility);
+        // Solved around a pose showing the structural mobility: a singular one would make every link look like it frees a motion.
+        const found = find_redundant_links(regular.model, regular.chain, regular.mobility);
         setAudits((prev) => new Map(prev).set(chain.id, found));
         setAuditing(null);
       }, 0);

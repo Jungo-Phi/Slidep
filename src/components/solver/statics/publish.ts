@@ -90,8 +90,13 @@ export function belt_strands_from_statics(solution: StaticsSolution | undefined)
 /**
  * The frame's own torsors, one per anchored node, as a snapshot carries them — see `SupportTorsor`.
  * A torsor standing for a belt, a mesh or a contact (`foreign`) is no reading and is left out, so its node falls back on the raw impulses.
+ *
+ * `groundFriction` is the couple a grounded joint passes through its own friction, by pivot key: the statics takes that friction as a known action on the bodies it turns, so the hinge's solved couple leaves it out, yet it is the support that applies it.
  */
-export function supports_from_statics(solution: StaticsSolution | undefined): SupportTorsor[] {
+export function supports_from_statics(
+  solution: StaticsSolution | undefined,
+  groundFriction: Map<string, number> = new Map(),
+): SupportTorsor[] {
   return (solution?.torsors ?? []).flatMap((torsor) =>
     torsor.beamID !== undefined || torsor.gearID !== undefined || torsor.foreign
       ? []
@@ -100,7 +105,7 @@ export function supports_from_statics(solution: StaticsSolution | undefined): Su
             nodeKey: torsor.nodeKey,
             fx: torsor.fx,
             fy: torsor.fy,
-            m: torsor.m,
+            m: torsor.m + (groundFriction.get(torsor.nodeKey) ?? 0),
             determined: torsor.determined.fx && torsor.determined.fy && torsor.determined.m,
           },
         ],
