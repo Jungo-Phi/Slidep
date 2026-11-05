@@ -23,9 +23,6 @@
 
 **Lisibilité**
 
-- 🚨 Discontinuité dans la lecture au détachement des courroies
-- 🚨 Après avoir changé une valeur dans un NumberInput, cliquer sur le canvas (sans avoir cliquer sur enter) annule la modif
-
 - 🤔 Fusionner statique et cinématique ?
 - 🤔 Activer les contacts par défaut ?
 - 🤔 Outil "déconnecter" ?
@@ -37,6 +34,8 @@
 - 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
 - 🔨 Modifier les dimensions du profilé d'une poutre dans le panneau de la poutre elle-même
 - 🔨 Rendre les hitbox exactes (contraintes, noeuds)
+- 🔨 Les contraintes (égal, horizontal, etc.) sont trop proches des noeuds (hitbox)
+- 🔨 Changement de la sélection dans l'onglet éléments devrait se faire au mouseUp
 
 **Themes**
 
@@ -54,15 +53,6 @@
 - 🤔 Faire apparaitre "un indice" qui pointe vers l'outil DDL quand il y a un blocage (ou au premier)
 - 🤔 Les mécaniciens on tendance à penser avec des conditions aux limites. Comment leur faire comprendre que slidep fonctionne avec des liaisons ?
 - 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
-
-**Solveur géométrique**
-
-- 🚨 En édition, bouger un élément d'un côté du mécanisme fait bouger l'autre bout (ex. fait tourner un slider ancré) :
-  - 🔨 Maintenir les longueurs des beams si possible. Maintenir l'orientation ce celui modifié si possible.
-  - 🔨 Ignorer des grounds si nécessaire.
-  - 🚨 Généralement laisser les nodes sur les edges en "SlideOn"
-  - Un mouvement à un bout du mécanisme ne devrait pas faire bouger l'autre bout
-- 🤔 Que faire quand on entre une valeur dans le panneau latéral que les contraintes existantes ne permettent pas ?
 
 **DDL & analyse hyperstatique**
 
@@ -137,6 +127,7 @@
 - 🔨 Afficher les unités des efforts internes
 - 🔨 Mieux afficher les unités des graphs globaux
 - 🚨 En simulation, clicker sur l'icon force, puis esc, puis reprendre la simu nous remet sur l'icon force.
+- 🔨 Mettre en évidence (rouge?) les contraintes géométriques non respectées
 - 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
 - 🔨 Afficher l'angle total ET modulo 360
 

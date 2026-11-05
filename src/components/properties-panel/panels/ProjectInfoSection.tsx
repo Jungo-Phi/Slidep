@@ -41,6 +41,7 @@ const ERROR_CODE_COLORS: Record<ValidationErrorCode, string> = {
   DUPLICATE_CONSTRAINT: "#5D4037",
   PARENT_BEAM_CONFLICT: "#2E7D32",
   GEAR_ROLE_CONFLICT: "#809d28",
+  BODY_AND_END: "#5C6BC0",
 };
 
 const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
@@ -60,6 +61,7 @@ const ERROR_CODE_LABELS: Record<ValidationErrorCode, string> = {
   DUPLICATE_CONSTRAINT: "cnt",
   PARENT_BEAM_CONFLICT: "rai",
   GEAR_ROLE_CONFLICT: "grc",
+  BODY_AND_END: "bde",
 };
 
 const CATEGORY_COLORS: Record<ConstraintViolationCategory, string> = {

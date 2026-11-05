@@ -325,7 +325,7 @@ function drawn_past_base(
 /**
  * Where the part being dragged actually sits, once the solver has had its say.
  *
- * A drag does not pin anything to the cursor: `resolveGeometricConstraints` frees the grabbed part and pulls it with a `HandleGrab` that competes with every other constraint.
+ * `resolveGeometricConstraints` holds the grabbed part on the cursor only when the sketch can follow it, and otherwise brings it as close as the constraints allow.
  * What comes back is what the mechanism granted, and it falls short whenever an anchor, a dimension or a slide holds the part back.
  *
  * Every case here must answer with the handle that solve took hold of, built from the same target it was handed.

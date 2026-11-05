@@ -18,6 +18,8 @@ import {
   PivotElement,
   ProfileDef,
 } from "../types";
+import { get_belt_path, measure_belt_length } from "./belt-geom";
+import { belt_project } from "./belt-path";
 
 const id = (s: string) =>
   `00000000-0000-0000-0000-${s.padStart(12, "0")}` as ID;
@@ -498,7 +500,7 @@ describe("compute_constraint_violations — extrémité de courroie dans sa poul
     );
     expect(violation).toBeDefined();
     expect(violation!.error).toBeCloseTo(7);
-    expect(violation!.unit).toBe("px");
+    expect(violation!.unit).toBe("m");
   });
 
   // A wound end rests exactly on the rim: the tangent run is of length 0, which is legitimate and must not be reported.
@@ -511,5 +513,140 @@ describe("compute_constraint_violations — extrémité de courroie dans sa poul
     // Inside the FAR pulley, which the start terminal does not wrap.
     const mech = open_belt_mechanism(new Point2(97, 0), new Point2(100, 10));
     expect(messages(mech)).toEqual([]);
+  });
+});
+
+/**
+ * At the scale mechanisms are drawn at — metres, gears of a few centimetres — where the old fixed 0.5 "px" threshold read every error as nothing.
+ * Two meshed gears of radius 0.125 on axles 0.25 apart, a join on the rim of the first.
+ */
+describe("compute_constraint_violations — à l'échelle du mètre", () => {
+  const RIM_ID = id("j1");
+  const R = 0.125;
+  const meshed = (over: { gap?: number; rim?: Point2 } = {}) => {
+    const x2 = 2 * R + (over.gap ?? 0);
+    return mechanism([
+      pivot({ id: AXLE_ID, rotatingEdgesIDs: [], fixedGearsIDs: [GEAR_ID] }),
+      gear({ radius: R, meshedGearsIDs: [GEAR2_ID], fixedNodesBodyIDs: [RIM_ID] }),
+      pivot({
+        id: id("p3"),
+        position: new Point2(x2, 0),
+        rotatingEdgesIDs: [],
+        fixedGearsIDs: [GEAR2_ID],
+      }),
+      gear({
+        id: GEAR2_ID,
+        position: new Point2(x2, 0),
+        radius: R,
+        parentAxleID: id("p3"),
+        meshedGearsIDs: [GEAR_ID],
+      }),
+      {
+        type: "join",
+        id: RIM_ID,
+        probes: [],
+        overlays: {},
+        position: over.rim ?? new Point2(0, R),
+        isGrounded: false,
+        fixedEdgesIDs: [GEAR_ID],
+      },
+    ]);
+  };
+  const messages = (mech: Mechanism) =>
+    (compute_constraint_violations(mech) ?? []).map((v) => v.message);
+
+  it("un mécanisme juste ne signale rien", () => {
+    expect(messages(meshed())).toEqual([]);
+  });
+
+  it("ne signale pas un écart sous le dixième de pixel", () => {
+    expect(messages(meshed({ gap: 1e-6, rim: new Point2(0, R + 1e-6) }))).toEqual([]);
+  });
+
+  it("signale des engrenages engrenés qui ne sont plus tangents", () => {
+    const violations = compute_constraint_violations(meshed({ gap: 0.05 })) ?? [];
+    const tangency = violations.find((v) => v.message.startsWith("Tangence"));
+    expect(tangency).toBeDefined();
+    expect(tangency!.error).toBeCloseTo(0.05);
+    expect(tangency!.unit).toBe("m");
+    // Shown in the panel's length unit, not in raw metres.
+    expect(tangency!.message).toContain("50 mm");
+  });
+
+  it("signale un nœud qui a quitté la jante de son engrenage", () => {
+    const violations =
+      compute_constraint_violations(meshed({ rim: new Point2(0, R + 0.01) })) ?? [];
+    const rim = violations.find((v) => v.message.includes("jante"));
+    expect(rim).toBeDefined();
+    expect(rim!.elementID).toBe(GEAR_ID);
+    expect(rim!.error).toBeCloseTo(0.01);
+  });
+
+  it("le seuil suit la taille du dessin", () => {
+    // The same drawing a thousand times smaller: the same relative error is still seen.
+    const tiny = meshed({ gap: 0.05 });
+    for (const el of tiny.mechanicalElements) {
+      if ("position" in el) el.position = el.position.mul(1e-3);
+      if (el.type === "gear") el.radius *= 1e-3;
+    }
+    expect(messages(tiny).some((m) => m.startsWith("Tangence"))).toBe(true);
+  });
+});
+
+describe("compute_constraint_violations — courroies", () => {
+  const BELT_ID = id("blt");
+  const JOIN_ID = id("j1");
+  /** The closed belt of `closed_belt_mechanism`, its second pulley moved 100 away from the first, its junction at `junction`. */
+  const closed_belt = (junction: Point2, constraints: ConstraintElement[] = []) => {
+    const mech = closed_belt_mechanism();
+    for (const el of mech.mechanicalElements) {
+      if (el.id === id("p3") || el.id === GEAR2_ID)
+        (el as { position: Point2 }).position = new Point2(100, 0);
+      if (el.id === JOIN_ID) (el as { position: Point2 }).position = junction;
+      if (el.type === "belt") {
+        el.positionStart = junction;
+        el.positionEnd = junction;
+      }
+    }
+    mech.constraintElements = constraints;
+    return mech;
+  };
+  const belt_of = (mech: Mechanism) =>
+    mech.mechanicalElements.find((el) => el.id === BELT_ID) as BeltElement;
+  const on_loop = (p: Point2) => {
+    const mech = closed_belt(p);
+    const { vias, closed } = get_belt_path(belt_of(mech), mech.mechanicalElements);
+    return belt_project(vias, p, closed).point;
+  };
+  const messages = (mech: Mechanism) =>
+    (compute_constraint_violations(mech) ?? []).map((v) => v.message);
+
+  it("accepte une jonction posée sur la boucle", () => {
+    expect(messages(closed_belt(on_loop(new Point2(50, 30))))).toEqual([]);
+  });
+
+  it("signale une jonction qui a quitté la boucle", () => {
+    const violations = compute_constraint_violations(closed_belt(new Point2(50, 30))) ?? [];
+    const junction = violations.find((v) => v.message.startsWith("Jonction"));
+    expect(junction).toBeDefined();
+    expect(junction!.elementID).toBe(BELT_ID);
+    expect(junction!.error).toBeCloseTo(20);
+  });
+
+  it("signale une longueur de courroie cotée qui n'est plus tenue", () => {
+    const junction = on_loop(new Point2(50, 30));
+    const plain = closed_belt(junction);
+    const length = measure_belt_length(belt_of(plain), plain.mechanicalElements);
+    const dimension = (value: number): ConstraintElement => ({
+      type: "dimension-belt",
+      id: id("d1"),
+      position: new Point2(0, 0),
+      beltID: BELT_ID,
+      value,
+    });
+    expect(messages(closed_belt(junction, [dimension(length)]))).toEqual([]);
+    const violations =
+      compute_constraint_violations(closed_belt(junction, [dimension(length + 5)])) ?? [];
+    expect(violations.map((v) => v.elementID)).toContain(id("d1"));
   });
 });

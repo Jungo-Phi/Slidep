@@ -84,7 +84,11 @@ import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
 import { build_measure, measure_anchor, ruler_step_back } from "./measure";
-import { snapped } from "../snapping/point-snap";
+import {
+  selection_grab_point_of,
+  selection_grabbed_point,
+  snapped,
+} from "../snapping/point-snap";
 import {
   rope_pulled_by,
   trace_belt_drag,
@@ -517,11 +521,23 @@ export function canvasStateReducer(
             );
             break;
           } else if (state.elementIDs.includes(hoveredPart.id)) {
-            setCanvasState({
-              type: "MovingSelectionMultiple",
+            const grabbed = mechanicalElements.find(
+              (element) => element.id === hoveredPart.id,
+            );
+            const grabbedPoint = grabbed
+              ? selection_grab_point_of(grabbed, worldMousePos)
+              : undefined;
+            const moving = {
+              type: "MovingSelectionMultiple" as const,
               elementIDs: state.elementIDs,
               grabbedID: hoveredPart.id,
               hasMoved: false,
+              grabbedPoint,
+            };
+            const held = selection_grabbed_point(moving, mechanicalElements);
+            setCanvasState({
+              ...moving,
+              grabOffset: held ? worldMousePos.sub(held) : undefined,
             });
           } else {
             // Click on element not in selection without Shift → select only that element
@@ -1122,10 +1138,9 @@ export function canvasStateReducer(
             mechanicalElements,
           ) as GearElement;
           // Grab a point on the perimeter and pull the rim onto what is hovered: a meshing gear, a belt run, a node to size against.
-          // The hover has already placed the tangency point, so the rim lands on it instead of stopping short; on empty space it follows the free cursor.
+          // The hover has already placed the tangency point, so the rim lands on it instead of stopping short; on empty space it follows the cursor, rounded by the grid snap (see `snap_hover`) to a round radius.
           // The geometric solver decides whether the radius grows or the centre moves (radius-constrained / meshed) — see resolveGeometricConstraints.
-          const gearTarget =
-            hoveredPart.type === "Void" ? worldMousePos : hoveredPart.position;
+          const gearTarget = hoveredPart.position;
           actions.push({
             type: "ChangeGearRadius",
             id: state.elementID,
@@ -1213,8 +1228,15 @@ export function canvasStateReducer(
             hoveredElementIDs: newHoveredElementsIds,
           });
           break;
-        case "MovingSelectionMultiple":
+        case "MovingSelectionMultiple": {
           if (hoveredPart.position.equals(oldPosition)) break;
+          // Carried by the grabbed point, brought to where the (snapped) cursor puts it: read from where that point is now rather than summed from mouse steps, so the grid snap holds and no drift builds up.
+          const held = selection_grabbed_point(state, mechanicalElements);
+          const delta =
+            held && state.grabOffset
+              ? hoveredPart.position.sub(state.grabOffset).sub(held)
+              : screen2world_vec(event.mouseDelta, viewport);
+          if (delta.length_squared() < 1e-24) break;
           if (!state.hasMoved) {
             setCanvasState({ ...state, hasMoved: true });
           }
@@ -1222,9 +1244,10 @@ export function canvasStateReducer(
             type: "MoveElements",
             elementIDs: state.elementIDs,
             newPos: hoveredPart.position,
-            delta: screen2world_vec(event.mouseDelta, viewport),
+            delta,
           });
           break;
+        }
         case "ErasingMultiple":
           if (hoveredPart.position.equals(oldPosition)) break;
           setCanvasState({

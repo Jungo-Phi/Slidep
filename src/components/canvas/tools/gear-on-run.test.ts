@@ -9,7 +9,10 @@ import type {
 } from "../../../types/element";
 import type { HoveredPart } from "../../../types/hovered-part";
 import { DEFAULT_FLOOR, ZERO, type ViewportState } from "../../../types";
-import { INTERACTION_SPECS } from "../../../constants/interaction-specs";
+import { HIT_TOLERANCE, INTERACTION_SPECS } from "../../../constants/interaction-specs";
+import { grid_snap_step } from "../../../utils";
+import { DEFAULT_SNAP_SETTINGS } from "../../../utils/snap-corridor";
+import { snap_hover } from "../snapping/point-snap";
 import { get_belt_path } from "../../../utils/belt-geom";
 import { belt_pieces } from "../../../utils/belt-path";
 import { get_hovered_part } from "../picking/get-hover";
@@ -136,5 +139,39 @@ describe("a gear laid against a belt run", () => {
       }),
     );
     expect(newCanvasState).toEqual({ type: "PlacingGearStart" });
+  });
+});
+
+describe("a gear laid against a belt run, snapped", () => {
+  const state = { type: "PlacingGearRadius" as const, startHover: contact };
+  const step = grid_snap_step(VIEWPORT.scale);
+
+  // Its centre slides with its size, so it is the radius that is rounded, not the distance from where the gesture started — slanted as well as square to the run.
+  it("lands on a round radius, square to the run or not", () => {
+    // Raw rim points of a gear 3 px bigger than a round radius, read at several bearings from straight out of the run.
+    const radius = 2 * step + 3;
+    const centre = middle.add(
+      normal.mul(radius - INTERACTION_SPECS.GEAR_ON_BELT_GROW),
+    );
+    for (const bearing of [0, 30, -45, 70]) {
+      const raw = centre.add(
+        normal.rotate((bearing * Math.PI) / 180).mul(radius),
+      );
+      expect(gear_on_run(contact, raw, MECH, VIEWPORT)!.radius).toBeCloseTo(
+        radius,
+      );
+      const rim = snap_hover(
+        { type: "Void", position: raw },
+        state,
+        MECH,
+        VIEWPORT,
+        DEFAULT_SNAP_SETTINGS,
+      ).position;
+      expect(gear_on_run(contact, rim, MECH, VIEWPORT)!.radius).toBeCloseTo(
+        2 * step,
+        9,
+      );
+      expect(rim.distance_to(raw)).toBeLessThan(2 * HIT_TOLERANCE.SNAP);
+    }
   });
 });

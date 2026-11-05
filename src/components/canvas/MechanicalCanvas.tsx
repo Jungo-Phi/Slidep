@@ -1172,6 +1172,11 @@ const MechanicalCanvasView = forwardRef<
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       set_pointer_kind(event.pointerType);
+      // A field still being edited commits on blur, but the browser only moves focus on the mousedown that follows this pointerdown — after the gesture below has already changed the selection and unmounted (or re-targeted) the panel holding it, losing the edit.
+      // Blurring it first lets it commit against the element it was editing.
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== event.currentTarget)
+        active.blur();
       window.getSelection()?.removeAllRanges();
       // A gesture is rare enough to pay for one measurement, and it catches the case the observer cannot see: a canvas moved without being resized.
       measureCanvas();

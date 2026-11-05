@@ -160,6 +160,10 @@ export type CanvasState =
       elementIDs: ID[];
       grabbedID: ID;
       hasMoved: boolean;
+      /** The point of the grabbed element the selection is carried by, and snapped by: its centre, or the terminal of an edge nearest the grab. */
+      grabbedPoint?: "position" | "start" | "end";
+      /** From that point to the cursor at the press, kept for the whole drag so the selection does not jump under the cursor. */
+      grabOffset?: WorldPoint;
     }
   | { type: "Erasing" }
   | { type: "ErasingMultiple"; startPos: WorldPoint; hoveredElementIDs: ID[] }

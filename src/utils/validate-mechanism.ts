@@ -17,7 +17,9 @@ import {
   MIN_PULLEYS_TO_CLOSE,
 } from "./belt-rules";
 import { edges_by_terminal_pair, edges_may_coexist } from "./edge-rules";
-import { rad_to_deg } from "./quantity-format";
+import { format_quantity, LENGTH, rad_to_deg } from "./quantity-format";
+import { get_belt_path, measure_belt_length } from "./belt-geom";
+import { belt_project } from "./belt-path";
 import { t } from "../i18n";
 
 export type ValidationErrorCode =
@@ -36,7 +38,8 @@ export type ValidationErrorCode =
   | "LOADED_BELT_JUNCTION"
   | "SUPERPOSED_EDGES"
   | "DUPLICATE_CONSTRAINT"
-  | "PARENT_BEAM_CONFLICT";
+  | "PARENT_BEAM_CONFLICT"
+  | "BODY_AND_END";
 
 /**
  * What a constraint says, independently of how it was written: its type and its operands, order-independent.
@@ -441,6 +444,20 @@ export function validate_mechanism(
     }
   }
 
+  // ── A beam holds a node by an end or by its body, never both ─────────────────
+  for (const el of mels) {
+    if (el.type !== "beam") continue;
+    for (const nodeID of new Set([el.fixedNodeStartID, el.fixedNodeEndID])) {
+      if (!nodeID || !el.fixedNodesBodyIDs.includes(nodeID)) continue;
+      errors.push({
+        code: "BODY_AND_END",
+        message: t("validation_body_and_end", { name: name(nodeID) }),
+        elementID: el.id,
+        relatedID: nodeID,
+      });
+    }
+  }
+
   // ── A motor drives from the ground or from a beam, never both ────────────────
   for (const el of mels) {
     if (el.type !== "pivot" || !el.motor) continue;
@@ -473,18 +490,53 @@ export interface ConstraintViolation {
   elementID: ID;
   category: ConstraintViolationCategory;
   message: string;
+  /** In the unit named by `unit`: metres for `"m"`. */
   error: number;
-  unit: "px" | "°" | "ratio";
+  unit: "m" | "°" | "ratio";
+}
+
+/**
+ * Fraction of the drawing's size beyond which a length error is reported.
+ *
+ * Relative, because positions are in metres and a mechanism may span a millimetre or ten metres alike: a fixed threshold is either blind on the one or pedantic on the other.
+ * 1e-4 is a tenth of a pixel for a mechanism filling a 1000 px screen — under what the eye sees, and far above what the edition solve leaves behind.
+ */
+export const VIOLATION_RELATIVE_TOLERANCE = 1e-4;
+
+/** A length as the panel shows it. */
+const shown_length = (value: number) => format_quantity(value, LENGTH, 2);
+
+/** The size of the drawing: the larger side of the box around every node, edge end and gear rim. 1 when there is nothing to measure. */
+function mechanism_extent(mels: MechanicalElement[]): number {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const take = (p: Point2, margin = 0) => {
+    minX = Math.min(minX, p.x - margin);
+    minY = Math.min(minY, p.y - margin);
+    maxX = Math.max(maxX, p.x + margin);
+    maxY = Math.max(maxY, p.y + margin);
+  };
+  for (const el of mels) {
+    if ("position" in el) take(el.position, el.type === "gear" ? el.radius : 0);
+    else {
+      take(el.positionStart);
+      take(el.positionEnd);
+    }
+  }
+  const extent = Math.max(maxX - minX, maxY - minY);
+  return Number.isFinite(extent) && extent > 0 ? extent : 1;
 }
 
 /**
  * Computes geometric errors for each constraint and mechanical liaison, returning violations where error > threshold.
  *
- * Thresholds: thresholdPx for distances (px), thresholdDeg for angles (°), thresholdRatio for gear-ratio (dimensionless).
+ * Thresholds: `relativeTolerance` of the drawing's size for lengths, thresholdDeg for angles (°), thresholdRatio for gear-ratio (dimensionless).
  */
 export function compute_constraint_violations(
   mechanism: Mechanism,
-  thresholdPx = 0.5,
+  relativeTolerance = VIOLATION_RELATIVE_TOLERANCE,
   thresholdDeg = 0.5,
   thresholdRatio = 0.01,
 ): ConstraintViolation[] | null {
@@ -505,6 +557,7 @@ export function compute_constraint_violations(
     }
   }
 
+  const thresholdLength = relativeTolerance * mechanism_extent(mels);
   const violations: ConstraintViolation[] = [];
 
   function add(
@@ -512,11 +565,11 @@ export function compute_constraint_violations(
     category: ConstraintViolationCategory,
     message: string,
     error: number,
-    unit: "px" | "°" | "ratio",
+    unit: "m" | "°" | "ratio",
   ) {
     const thr =
-      unit === "px"
-        ? thresholdPx
+      unit === "m"
+        ? thresholdLength
         : unit === "°"
           ? thresholdDeg
           : thresholdRatio;
@@ -538,12 +591,12 @@ export function compute_constraint_violations(
           "dimension",
           t("violation_distance", {
             name: n,
-            current: len.toFixed(1),
-            target: cel.value,
-            delta: err.toFixed(2),
+            current: shown_length(len),
+            target: shown_length(cel.value),
+            delta: shown_length(err),
           }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -558,12 +611,12 @@ export function compute_constraint_violations(
           "dimension",
           t("violation_distance", {
             name: n,
-            current: dist.toFixed(1),
-            target: cel.value,
-            delta: err.toFixed(2),
+            current: shown_length(dist),
+            target: shown_length(cel.value),
+            delta: shown_length(err),
           }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -578,12 +631,12 @@ export function compute_constraint_violations(
           "dimension",
           t("violation_distance", {
             name: n,
-            current: dist.toFixed(1),
-            target: cel.value,
-            delta: err.toFixed(2),
+            current: shown_length(dist),
+            target: shown_length(cel.value),
+            delta: shown_length(err),
           }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -625,12 +678,31 @@ export function compute_constraint_violations(
           "dimension",
           t("violation_distance", {
             name: n,
-            current: r.toFixed(1),
-            target: cel.value,
-            delta: err.toFixed(2),
+            current: shown_length(r),
+            target: shown_length(cel.value),
+            delta: shown_length(err),
           }),
           err,
-          "px",
+          "m",
+        );
+        break;
+      }
+      case "dimension-belt": {
+        const belt = mechByID.get(cel.beltID);
+        if (!belt || belt.type !== "belt") break;
+        const length = measure_belt_length(belt, mels);
+        const err = Math.abs(length - cel.value);
+        add(
+          cel.id,
+          "dimension",
+          t("violation_distance", {
+            name: n,
+            current: shown_length(length),
+            target: shown_length(cel.value),
+            delta: shown_length(err),
+          }),
+          err,
+          "m",
         );
         break;
       }
@@ -641,9 +713,9 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          t("violation_not_horizontal", { name: n, delta: err.toFixed(2) }),
+          t("violation_not_horizontal", { name: n, delta: shown_length(err) }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -655,9 +727,9 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          t("violation_not_horizontal", { name: n, delta: err.toFixed(2) }),
+          t("violation_not_horizontal", { name: n, delta: shown_length(err) }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -668,9 +740,9 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          t("violation_not_vertical", { name: n, delta: err.toFixed(2) }),
+          t("violation_not_vertical", { name: n, delta: shown_length(err) }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -682,9 +754,9 @@ export function compute_constraint_violations(
         add(
           cel.id,
           "alignment",
-          t("violation_not_vertical", { name: n, delta: err.toFixed(2) }),
+          t("violation_not_vertical", { name: n, delta: shown_length(err) }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -741,12 +813,12 @@ export function compute_constraint_violations(
           "geometric",
           t("violation_unequal_lengths", {
             name: n,
-            first: len1.toFixed(1),
-            second: len2.toFixed(1),
-            delta: err.toFixed(2),
+            first: shown_length(len1),
+            second: shown_length(len2),
+            delta: shown_length(err),
           }),
           err,
-          "px",
+          "m",
         );
         break;
       }
@@ -790,10 +862,10 @@ export function compute_constraint_violations(
         t("violation_node_off_beam", {
           node: nodeName,
           beam: beamName,
-          delta: err.toFixed(2),
+          delta: shown_length(err),
         }),
         err,
-        "px",
+        "m",
       );
     }
   }
@@ -815,10 +887,10 @@ export function compute_constraint_violations(
           t("violation_node_off_edge_start", {
             node: nodeName,
             edge: edgeName,
-            delta: err.toFixed(2),
+            delta: shown_length(err),
           }),
           err,
-          "px",
+          "m",
         );
       }
     }
@@ -833,10 +905,10 @@ export function compute_constraint_violations(
           t("violation_node_off_edge_end", {
             node: nodeName,
             edge: edgeName,
-            delta: err.toFixed(2),
+            delta: shown_length(err),
           }),
           err,
-          "px",
+          "m",
         );
       }
     }
@@ -867,12 +939,38 @@ export function compute_constraint_violations(
         t("violation_tangency", {
           first: gear1Name,
           second: gear2Name,
-          current: dist.toFixed(1),
-          target: target.toFixed(1),
-          delta: err.toFixed(2),
+          current: shown_length(dist),
+          target: shown_length(target),
+          delta: shown_length(err),
         }),
         err,
-        "px",
+        "m",
+      );
+    }
+  }
+
+  // ── Liaisons: a node fixed on a gear sits on its rim (dist = r) ──────────────
+  for (const el of mels) {
+    if (el.type !== "gear") continue;
+    const centre = nodePos.get(el.id);
+    if (!centre) continue;
+    for (const nodeID of el.fixedNodesBodyIDs) {
+      const p = nodePos.get(nodeID);
+      if (!p) continue;
+      const dist = p.distance_to(centre);
+      const err = Math.abs(dist - el.radius);
+      add(
+        el.id,
+        "liaison",
+        t("violation_node_off_gear", {
+          node: shown_element_name(mechByID.get(nodeID)),
+          gear: shown_element_name(el),
+          current: shown_length(dist),
+          target: shown_length(el.radius),
+          delta: shown_length(err),
+        }),
+        err,
+        "m",
       );
     }
   }
@@ -894,10 +992,10 @@ export function compute_constraint_violations(
         t("violation_gear_off_axle", {
           gear: gearName,
           axle: axleName,
-          delta: err.toFixed(2),
+          delta: shown_length(err),
         }),
         err,
-        "px",
+        "m",
       );
     }
   }
@@ -927,13 +1025,36 @@ export function compute_constraint_violations(
           {
             belt: beltName,
             gear: shown_element_name(mechByID.get(gearID)),
-            delta: err.toFixed(2),
+            delta: shown_length(err),
           },
         ),
         err,
-        "px",
+        "m",
       );
     }
+  }
+
+  // ── Liaisons: a closed belt's junction rides the loop ────────────────────────
+  for (const el of mels) {
+    // The same belts the edition solve holds a junction for (`belt_junction_link`).
+    if (el.type !== "belt" || !el.closed || el.attachedGearsIDs.length === 0) continue;
+    const junctionID = belt_junction_id(el);
+    const junction = junctionID ? nodePos.get(junctionID) : undefined;
+    if (!junctionID || !junction) continue;
+    const { vias, closed } = get_belt_path(el, mels);
+    if (vias.length === 0) continue;
+    const err = junction.distance_to(belt_project(vias, junction, closed).point);
+    add(
+      el.id,
+      "liaison",
+      t("violation_junction_off_belt", {
+        node: shown_element_name(mechByID.get(junctionID)),
+        belt: shown_element_name(el),
+        delta: shown_length(err),
+      }),
+      err,
+      "m",
+    );
   }
 
   return violations.length > 0 ? violations : null;

@@ -291,3 +291,53 @@ describe("snap_hover / jante d'engrenage", () => {
     expect(snap(onRim(raw), sizing, MECH_GEAR, VIEW).position).toEqual(raw);
   });
 });
+
+describe("snap_hover /sélection déplacée", () => {
+  // Grabbed 7 px right of the beam's start: it is the start that lands on the grid, the cursor keeping its offset.
+  const state: CanvasState = {
+    type: "MovingSelectionMultiple",
+    elementIDs: [BEAM],
+    grabbedID: BEAM,
+    hasMoved: true,
+    grabbedPoint: "start",
+    grabOffset: P(7, 0),
+  };
+
+  it("aimante le point saisi, pas le curseur", () => {
+    const { position, gridX, gridY } = snap(
+      voidAt(P(STEP + 7 + 3, 2 * STEP - 2)),
+      state,
+      MECH,
+      VIEW,
+    );
+    expect(position.x).toBeCloseTo(STEP + 7);
+    expect(position.y).toBeCloseTo(2 * STEP);
+    expect(gridX).toBeCloseTo(STEP);
+    expect(gridY).toBeCloseTo(2 * STEP);
+  });
+});
+
+describe("snap_hover /barre déplacée par son corps", () => {
+  const moving: CanvasState = { type: "MovingEdgeBody", elementID: BEAM, t: 0.5 };
+
+  it("pose une barre horizontale sur une ligne de la grille, sans toucher à x", () => {
+    const { position, gridY } = snap(voidAt(P(123, STEP + 3)), moving, MECH, VIEW);
+    expect(position.x).toBe(123);
+    expect(position.y).toBeCloseTo(STEP);
+    expect(gridY).toBeCloseTo(STEP);
+  });
+
+  it("pose une barre verticale sur une ligne de la grille, sans toucher à y", () => {
+    const vertical = [beam(P(0, 0), P(0, 1000))];
+    const position = snapped_at(voidAt(P(STEP - 3, 123)), moving, vertical, VIEW);
+    expect(position.x).toBeCloseTo(STEP);
+    expect(position.y).toBe(123);
+  });
+
+  it("laisse libre une barre oblique", () => {
+    const slanted = [beam(P(0, 0), P(1000, 300))];
+    expect(snapped_at(voidAt(P(STEP + 3, STEP + 3)), moving, slanted, VIEW)).toEqual(
+      P(STEP + 3, STEP + 3),
+    );
+  });
+});

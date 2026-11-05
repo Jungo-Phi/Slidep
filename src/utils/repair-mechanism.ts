@@ -6,7 +6,7 @@
  *
  * Scope is deliberately narrow: references that point at nothing or at the wrong kind of element, and coordinates that are not finite numbers.
  * Those are what make a getter throw or a drawing call crash.
- * Non-reciprocal connections, duplicate IDs and domain contradictions are left to the validator, because repairing them means guessing which side told the truth — with one named exception below (parentBeamID vs fixedEdgesIDs), where the guess isn't one.
+ * Non-reciprocal connections, duplicate IDs and domain contradictions are left to the validator, because repairing them means guessing which side told the truth — with the few named exceptions below (a connection stated twice in two roles), where the guess isn't one.
  */
 
 import { ID, MechanicalElement, UnionElement } from "../types/element";
@@ -29,7 +29,9 @@ export type RepairCode =
   /** A beam held as parentBeamID also sat in fixedEdgesIDs; the duplicate was dropped. */
   | "PARENT_BEAM_DUPLICATE"
   /** A gear held as fixedGearsIDs also sat in rotatingEdgesIDs; the duplicate was dropped. */
-  | "GEAR_ROLE_DUPLICATE";
+  | "GEAR_ROLE_DUPLICATE"
+  /** A node a beam held by an end also sat on that beam's body; the body connection was dropped. */
+  | "BODY_END_DUPLICATE";
 
 export interface Repair {
   code: RepairCode;
@@ -174,11 +176,67 @@ export function repair_mechanism(mechanism: Mechanism): {
       };
     };
 
+    /**
+     * The element with every body connection a beam end already holds taken out: from the beam's body list, and from the rail role of the node, which keeps the beam as an ordinary edge.
+     *
+     * A node at a beam's end is where the body stops, so nothing is guessed: the end wins, as it does when a gesture brings a node there (`body_end_corrections`).
+     */
+    const repair_body_end_conflict = <T extends UnionElement>(element: T): T => {
+      if (element.type === "beam") {
+        const beam = element as unknown as {
+          fixedNodeStartID?: ID;
+          fixedNodeEndID?: ID;
+          fixedNodesBodyIDs: ID[];
+        };
+        const ends = [beam.fixedNodeStartID, beam.fixedNodeEndID];
+        const conflicting = beam.fixedNodesBodyIDs.filter((id) => ends.includes(id));
+        if (conflicting.length === 0) return element;
+        for (const nodeID of conflicting)
+          repairs.push({
+            code: "BODY_END_DUPLICATE",
+            message: `${shown_element_name(element)} (fixedNodesBodyIDs) : référence "${name(nodeID)}" retirée, déjà tenue par une extrémité.`,
+            elementID: element.id,
+            relatedID: nodeID,
+          });
+        return {
+          ...element,
+          fixedNodesBodyIDs: beam.fixedNodesBodyIDs.filter((id) => !conflicting.includes(id)),
+        };
+      }
+      const node = element as unknown as {
+        parentBeamID?: ID;
+        fixedEdgesIDs?: ID[];
+        rotatingEdgesIDs?: ID[];
+      };
+      if (!node.parentBeamID) return element;
+      const rail = byID.get(node.parentBeamID);
+      if (
+        !rail ||
+        !("fixedNodeStartID" in rail) ||
+        (rail.fixedNodeStartID !== element.id && rail.fixedNodeEndID !== element.id)
+      )
+        return element;
+      repairs.push({
+        code: "BODY_END_DUPLICATE",
+        message: `${shown_element_name(element)} (parentBeamID) : "${name(node.parentBeamID)}" n'est plus un rail, le nœud en tient une extrémité.`,
+        elementID: element.id,
+        relatedID: node.parentBeamID,
+      });
+      const list = node.fixedEdgesIDs ? "fixedEdgesIDs" : "rotatingEdgesIDs";
+      const edges = node[list] ?? [];
+      return {
+        ...element,
+        parentBeamID: undefined,
+        [list]: edges.includes(node.parentBeamID) ? edges : [...edges, node.parentBeamID],
+      };
+    };
+
     /** The repaired element, or null when it cannot survive its dead reference. */
     const repair_element = <T extends UnionElement>(element: T): T | null => {
       let repaired = repair_points(element);
       repaired = repair_parent_beam_conflict(repaired);
       repaired = repair_gear_role_conflict(repaired);
+      repaired = repair_body_end_conflict(repaired);
 
       for (const { field, ids, spec } of element_ref_fields(element)) {
         // An absent mandatory reference is as fatal to a getter as a dead one.

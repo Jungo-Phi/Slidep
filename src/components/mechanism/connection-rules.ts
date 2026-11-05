@@ -304,6 +304,25 @@ export function terminal_pulley(
   return state.type === "MovingEdgeStartPoint" ? route[0].id : route[route.length - 1].id;
 }
 
+/**
+ * Whether a dragged node riding `candidate`'s body is aimed at one of its ends that no node holds.
+ * An end already held is reached through the node holding it instead, by a fusion.
+ */
+function reaches_own_free_end(
+  state: CanvasState,
+  draggedElement: MechanicalElement | undefined,
+  candidate: UnionElement,
+  part: HoveredPart | undefined,
+): boolean {
+  if (state.type !== "MovingNode" || !draggedElement) return false;
+  if (candidate.type !== "beam" || !candidate.fixedNodesBodyIDs.includes(draggedElement.id))
+    return false;
+  if (part?.type !== "Edge") return false;
+  if (part.part === "start") return !candidate.fixedNodeStartID;
+  if (part.part === "end") return !candidate.fixedNodeEndID;
+  return false;
+}
+
 /** Every element `element` is currently linked to, whatever the container. */
 function connected_ids(element: MechanicalElement): Set<ID> {
   const ids = new Set<ID>();
@@ -361,7 +380,12 @@ export function legality_for_state(
   return (candidate: UnionElement, part?: HoveredPart): Legality => {
     // Re-linking a pair changes nothing, and offering it would let a useless target sit in front of a useful one.
     // A belt terminal and the pulley it wraps are linked already, but not at that terminal: pinning it there is a link of its own.
-    if (alreadyLinked.has(candidate.id) && candidate.id !== pinnable)
+    // So is a node riding a beam brought to that beam's free end: it trades the body for the end.
+    if (
+      alreadyLinked.has(candidate.id) &&
+      candidate.id !== pinnable &&
+      !reaches_own_free_end(state, draggedElement, candidate, part)
+    )
       return refuse("rule_already_connected");
 
     // A junction holds its belt and nothing else, whichever way the two would meet.

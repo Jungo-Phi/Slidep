@@ -17,7 +17,11 @@ import type {
   WorldPoint,
 } from "../../../types";
 import { Point2 } from "../../../types/point2";
-import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
+import {
+  HIT_TOLERANCE,
+  INTERACTION_SPECS,
+} from "../../../constants/interaction-specs";
+import { gear_on_run } from "../tools/gear-on-run";
 import {
   grid_snap_step,
   screen2world_length,
@@ -44,6 +48,8 @@ const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
   "MovingEdgeStartPoint",
   "MovingEdgeEndPoint",
   "MovingNode",
+  "MovingEdgeBody",
+  "MovingSelectionMultiple",
   "PlacingBeamStart",
   "PlacingBeamEnd",
   "PlacingBeltStart",
@@ -244,10 +250,81 @@ function radius_centre(
   state: CanvasState,
   mechanicalElements: MechanicalElement[],
 ): WorldPoint | undefined {
-  if (state.type === "PlacingGearRadius") return state.startHover.position;
+  // Laid against a belt run, the gear's centre is not where the gesture started but follows the cursor (see `gear_on_run`): `snap_gear_on_run` answers for it.
+  if (state.type === "PlacingGearRadius")
+    return state.startHover.type === "BeltBody"
+      ? undefined
+      : state.startHover.position;
   if (state.type !== "ChangingGearRadius") return undefined;
   const gear = mechanicalElements.find((el) => el.id === state.elementID);
   return gear?.type === "gear" ? gear.position : undefined;
+}
+
+/**
+ * The rim point of a gear laid against a belt run, moved so that the gear `gear_on_run` lays from it has a round radius.
+ *
+ * The radius is what this gesture produces, but it is not a distance from any fixed point: the centre slides along the run's normal as the gear grows.
+ * So the round radius is chosen first, which fixes the centre, and the rim point is put back on that circle facing the cursor.
+ * Checked by laying the gear again from it: near the run's own line `gear_on_run` caps the radius, and a point the rounding sends there would not give the radius it was chosen for.
+ */
+function snap_gear_on_run(
+  contact: Extract<HoveredPart, { type: "BeltBody" }>,
+  rim: WorldPoint,
+  mechanicalElements: MechanicalElement[],
+  viewport: ViewportState,
+  step: number,
+  tolerance: number,
+): WorldPoint | undefined {
+  const laid = gear_on_run(contact, rim, mechanicalElements, viewport);
+  if (!laid) return undefined;
+  const radius = snapped(laid.radius, step, tolerance);
+  if (radius === laid.radius || radius <= 0) return undefined;
+  // The centre sits `radius - grow` off the contact along the run's normal, so it slides along that normal by exactly the radius change.
+  const grow = screen2world_length(INTERACTION_SPECS.GEAR_ON_BELT_GROW, viewport);
+  const offset = laid.radius - grow;
+  if (Math.abs(offset) < 1e-12) return undefined;
+  const normal = laid.center.sub(contact.position).mul(1 / offset);
+  const centre = laid.center.add(normal.mul(radius - laid.radius));
+  const spoke = rim.sub(centre);
+  if (spoke.length() < 1e-12) return undefined;
+  const candidate = centre.add(spoke.with_length(radius));
+  const check = gear_on_run(contact, candidate, mechanicalElements, viewport);
+  return check && Math.abs(check.radius - radius) < 1e-9 * Math.max(1, radius)
+    ? candidate
+    : undefined;
+}
+
+/** Where the point a moved selection is carried by sits now (see `MovingSelectionMultiple.grabbedPoint`). */
+export function selection_grabbed_point(
+  state: Extract<CanvasState, { type: "MovingSelectionMultiple" }>,
+  mechanicalElements: MechanicalElement[],
+): WorldPoint | undefined {
+  const element = mechanicalElements.find((el) => el.id === state.grabbedID);
+  if (!element) return undefined;
+  switch (state.grabbedPoint) {
+    case "position":
+      return "position" in element ? element.position : undefined;
+    case "start":
+      return "positionStart" in element ? element.positionStart : undefined;
+    case "end":
+      return "positionEnd" in element ? element.positionEnd : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/** Which point of `element` a selection grabbed at `at` is carried by: its own position, or the nearer terminal of an edge. */
+export function selection_grab_point_of(
+  element: MechanicalElement,
+  at: WorldPoint,
+): "position" | "start" | "end" | undefined {
+  if ("position" in element) return "position";
+  if ("positionStart" in element && "positionEnd" in element)
+    return at.distance_to(element.positionStart) <=
+      at.distance_to(element.positionEnd)
+      ? "start"
+      : "end";
+  return undefined;
 }
 
 /** The element `id` names, when it is an edge. */
@@ -305,8 +382,54 @@ export function snap_hover(
     ...grid_lines_at(position, step),
   });
 
+  // A bar carried by its body is aimed at the cursor through the point grabbed on it, which lies on the bar: snapping that point across the bar lays the whole bar on a grid line.
+  // Only for a bar that runs along the grid: one at any other angle crosses every line, and no single coordinate of it is worth rounding.
+  // Along the bar the grabbed point means nothing, so it is left free there.
+  if (state.type === "MovingEdgeBody") {
+    if (hovered.type !== "Void" || hovered.rejected)
+      return free(hovered.position);
+    const edge = edge_of(state.elementID, mechanicalElements);
+    if (!edge) return free(hovered.position);
+    const axis = edge.positionEnd.sub(edge.positionStart);
+    const length = axis.length();
+    if (length < 1e-9) return free(hovered.position);
+    const { x, y } = hovered.position;
+    if (Math.abs(axis.y) < 1e-6 * length)
+      return landed(new Point2(x, snapped(y, step, tolerance)));
+    if (Math.abs(axis.x) < 1e-6 * length)
+      return landed(new Point2(snapped(x, step, tolerance), y));
+    return free(hovered.position);
+  }
+
   if (hovered.type === "Void") {
     if (hovered.rejected) return free(hovered.position);
+
+    // A selection carried as a whole: it is the point it is held by that lands on the grid, the cursor keeping its offset from it.
+    if (state.type === "MovingSelectionMultiple") {
+      if (!state.grabOffset) return free(hovered.position);
+      const point = hovered.position.sub(state.grabOffset);
+      const onGrid = snap_free(point, step, tolerance);
+      return {
+        position: onGrid.add(state.grabOffset),
+        guides: [],
+        ...grid_lines_at(onGrid, step),
+      };
+    }
+
+    if (
+      state.type === "PlacingGearRadius" &&
+      state.startHover.type === "BeltBody"
+    )
+      return free(
+        snap_gear_on_run(
+          state.startHover,
+          hovered.position,
+          mechanicalElements,
+          viewport,
+          step,
+          tolerance,
+        ) ?? hovered.position,
+      );
 
     const centre = radius_centre(state, mechanicalElements);
     if (centre) {

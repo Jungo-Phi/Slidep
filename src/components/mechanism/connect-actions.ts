@@ -1715,6 +1715,59 @@ export function connect_node_and_edge(
 }
 
 /**
+ * The actions that settle every node held both by a beam's body and by one of its ends: the end wins.
+ *
+ * A node at the end of its beam is where the body stops, so riding that body adds nothing but a contradiction — the solver would hold the node on the beam twice over.
+ * The node leaves the body; a slider whose rail it was keeps the beam as an ordinary edge, since it still holds it by that end.
+ *
+ * Judged on the state a bundle leaves: a fusion brings a node there in either direction, and so does a body node dropped on its own beam's free end.
+ */
+export function body_end_corrections(
+  mechanicalElements: MechanicalElement[],
+): Action[] {
+  const byID = new Map(mechanicalElements.map((el) => [el.id, el]));
+  const actions: Action[] = [];
+  for (const beam of mechanicalElements) {
+    if (beam.type !== "beam") continue;
+    // Disconnections address the list by index, each one against the list the previous left.
+    const body = [...beam.fixedNodesBodyIDs];
+    for (const nodeID of [beam.fixedNodeStartID, beam.fixedNodeEndID]) {
+      if (!nodeID) continue;
+      const index = body.indexOf(nodeID);
+      if (index < 0) continue;
+      body.splice(index, 1);
+      actions.push({
+        type: "ConnectsFixedNodesBody",
+        disconnect: true,
+        elementID: beam.id,
+        connectID: nodeID,
+        index,
+      });
+      const node = byID.get(nodeID);
+      if (!node || !("parentBeamID" in node) || node.parentBeamID !== beam.id)
+        continue;
+      const listType: ConnectsArrayActionType =
+        "fixedEdgesIDs" in node ? "ConnectsFixedEdges" : "ConnectsRotatingEdges";
+      actions.push({
+        type: "ConnectsParentBeam",
+        disconnect: true,
+        elementID: node.id,
+        connectID: beam.id,
+      });
+      if (!get_connections(node, listType).includes(beam.id))
+        actions.push({
+          type: listType,
+          disconnect: false,
+          elementID: node.id,
+          connectID: beam.id,
+          index: 0,
+        });
+    }
+  }
+  return actions;
+}
+
+/**
  * Whether `edge` can take the rail role for `node`.
  *
  * Only a beam crossing the node's body qualifies: the solver slides a node along the beams whose `fixedNodesBodyIDs` name it, and a beam merely pinned to the node by one of its ends would follow it instead of guiding it.

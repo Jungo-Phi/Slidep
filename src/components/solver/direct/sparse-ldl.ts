@@ -124,8 +124,16 @@ export function analyse(pattern: SymmetricPattern): Analysis {
  * Factorise the matrix whose values, laid out as `pattern`, are in `values`.
  * A pivot that falls under `floor` is raised to it: a redundant constraint then takes (almost) no share instead of dividing by nothing.
  * Returns how many pivots had to be raised.
+ *
+ * `signs`, indexed like the original matrix, states the sign each pivot is expected to have, for a quasi-definite matrix (a positive block over a negative one, as a KKT system with regularised constraints is): such a matrix factorises in any order, and a pivot that comes out too small or of the wrong sign is pushed to `±floor` instead.
+ * Absent, every pivot is expected positive.
  */
-export function factorise(analysis: Analysis, values: Float64Array, floor: number): number {
+export function factorise(
+  analysis: Analysis,
+  values: Float64Array,
+  floor: number,
+  signs?: Int8Array,
+): number {
   const { pattern, order, rank, parent, lStart, lRow, lValue, d, y, flag, stack, filled } = analysis;
   const { n, colStart, rowIndex } = pattern;
   let raised = 0;
@@ -161,8 +169,9 @@ export function factorise(analysis: Analysis, values: Float64Array, floor: numbe
       lValue[end] = l;
       filled[i]++;
     }
-    if (!(d[k] > floor)) {
-      d[k] = floor;
+    const sign = signs ? signs[column] : 1;
+    if (!(d[k] * sign > floor)) {
+      d[k] = sign * floor;
       raised++;
     }
   }

@@ -8,7 +8,7 @@ import {
 import { clone_mechanism } from "../../utils";
 import { assert_actions_preserve_validity } from "../../utils/assert-mechanism";
 import { actionReducer } from "./action-reducer";
-import { open_belt } from "./connect-actions";
+import { body_end_corrections, open_belt } from "./connect-actions";
 import {
   created_elements,
   edge_newness,
@@ -86,6 +86,19 @@ function with_belt_closure_corrections(
 }
 
 /**
+ * Appends the corrections a bundle owes to the body-or-end invariant: a node a beam holds by one of its ends is not on that beam's body too — see `body_end_corrections`.
+ */
+function with_body_end_exclusivity(
+  mechanism: Mechanism,
+  actions: Action[],
+): Action[] {
+  if (!may_change_terminals(actions)) return actions;
+  const after = actionReducer(clone_mechanism(mechanism), actions, false);
+  const corrections = body_end_corrections(after.mechanicalElements);
+  return corrections.length ? [...actions, ...corrections] : actions;
+}
+
+/**
  * Appends the corrections a bundle owes to the motor invariant: a motor drives from the ground or from a beam, never from neither.
  * One left with neither is anchored, keeping the mechanism it drives coherent.
  *
@@ -146,7 +159,13 @@ export function with_corrections(
 ): Action[] {
   return with_belt_closure_corrections(
     mechanism,
-    with_motor_anchoring(mechanism, with_superposition_fusions(mechanism, actions)),
+    with_motor_anchoring(
+      mechanism,
+      with_body_end_exclusivity(
+        mechanism,
+        with_superposition_fusions(mechanism, actions),
+      ),
+    ),
   );
 }
 
