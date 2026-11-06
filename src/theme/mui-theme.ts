@@ -375,11 +375,11 @@ const SPECS = {
     mode: "dark",
     accent: "#e07942",
     accentDark: "#c5612b",
-    onAccent: "#35322b",
+    onAccent: "#262626",
     ink: "#f5ead9",
-    paper: "#1b2931",
-    appBackground: "#194a6f",
-    toolbar: "#253957",
+    paper: "#162f4e",
+    appBackground: "#1c537e",
+    toolbar: "#182c3b",
     fillBody: "#4f8895",
     fillNode: "#cc996a",
     selectionStroke: "#57cbfd",
@@ -670,48 +670,29 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
   };
 };
 
-/** A spec halfway between two others, from which `canvas_palette` draws a theme fade's intermediate palette. */
-export const mix_theme_specs = (
-  from: ThemeSpec,
-  to: ThemeSpec,
+/**
+ * A canvas palette part-way between two others, colour by colour — what a theme fade draws with.
+ *
+ * The palettes are blended, not the specs they come from: most canvas colours are derived from the spec through something that is not linear in it (a ramp chosen by `mode`, a contrast solve, a mix of two fading colours), so a blended spec yields colours that lag, lead, or jump at the point where `mode` flips — out of step with the interface's CSS fade, which runs straight from one final colour to the other.
+ * Blending the finished colours runs every one of them on that same straight line.
+ */
+export const mix_canvas_palettes = (
+  from: CanvasPalette,
+  to: CanvasPalette,
   t: number,
-): ThemeSpec => ({
-  ...to,
-  mode: t < 0.5 ? from.mode : to.mode,
-
-  accent: mix(from.accent, to.accent, t),
-  accentDark: mix(from.accentDark, to.accentDark, t),
-  onAccent: mix(from.onAccent, to.onAccent, t),
-  ink: mix(from.ink, to.ink, t),
-
-  appBackground: mix(from.appBackground, to.appBackground, t),
-  paper: mix(from.paper, to.paper, t),
-  toolbar: mix(from.toolbar, to.toolbar, t),
-
-  fillBody: mix(from.fillBody, to.fillBody, t),
-  fillNode: mix(from.fillNode, to.fillNode, t),
-
-  selectionStroke: mix(from.selectionStroke, to.selectionStroke, t),
-  selectionBox: mix(from.selectionBox, to.selectionBox, t),
-
-  deletionStroke: mix(
-    from.deletionStroke ?? DELETION_STROKE,
-    to.deletionStroke ?? DELETION_STROKE,
-    t,
-  ),
-  deletionBox: mix(
-    from.deletionBox ?? DELETION_BOX,
-    to.deletionBox ?? DELETION_BOX,
-    t,
-  ),
-
-  gridContrast: (from.gridContrast ?? 1) * (1 - t) + (to.gridContrast ?? 1) * t,
-  gridTint: mix(
-    from.gridTint ?? (from.mode === "dark" ? "#FFFFFF" : "#000000"),
-    to.gridTint ?? (to.mode === "dark" ? "#FFFFFF" : "#000000"),
-    t,
-  ),
-});
+): CanvasPalette => {
+  const overlay = {} as Record<PhysicsOverlayKind, string>;
+  for (const kind of PHYSICS_OVERLAY_KINDS)
+    overlay[kind] = mix(from.OVERLAY[kind], to.OVERLAY[kind], t);
+  const out = { ...to, OVERLAY: overlay };
+  for (const key of Object.keys(to) as (keyof CanvasPalette)[]) {
+    const a = from[key];
+    const b = to[key];
+    if (typeof a === "string" && typeof b === "string")
+      (out as Record<string, unknown>)[key] = mix(a, b, t);
+  }
+  return out;
+};
 
 /**
  * Typography configuration
@@ -778,11 +759,12 @@ const components: ThemeOptions["components"] = {
       ":root": { colorScheme: palette.mode },
       [`.${THEME_TRANSITION_CLASS} *, .${THEME_TRANSITION_CLASS} *::before, .${THEME_TRANSITION_CLASS} *::after`]:
         {
-          transitionProperty: "background-color, border-color, color, fill",
-          transitionDuration: `${THEME_TRANSITION_MS}ms`,
-          transitionTimingFunction: "linear",
-          // The fade wins over a component's own transition (hover, focus), which would otherwise win on specificity and let the element jump from one theme to the other mid-fade.
-          transitionDelay: "0s",
+          // `!important` because a component's own transition (hover, focus) would otherwise win: Emotion inserts global styles before component ones, at the same specificity, and the element would fade at its own pace instead.
+          transitionProperty:
+            "background-color, border-color, color, fill, stroke !important",
+          transitionDuration: `${THEME_TRANSITION_MS}ms !important`,
+          transitionTimingFunction: "linear !important",
+          transitionDelay: "0s !important",
         },
       body: { backgroundColor: palette.background.default },
       "::selection": {

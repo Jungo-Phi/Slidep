@@ -25,7 +25,7 @@
 
 - 🤔 Fusionner statique et édition ?
 - 🤔 Activer les contacts par défaut ?
-- 🤔 Outil "déconnecter" ?
+- 🤔 Outil "déconnecter" ? (ce qu'on ne peut faire actuellement que par le panneau contextuel)
 - 🤔 Outil "couper" (les poutres) ?
 - 🤔 Modifier les dimensions du profilé d'une poutre dans le panneau de la poutre elle-même ?
 
@@ -183,8 +183,6 @@
 
 - 🚨 Ne pas ajouter un remplacement d'élément identique à l'historique
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
-- 🔨 Theme transition : certaines couleurs changent instantanément (grille + autres éléments spéciaux du canvas)
-- 🔨 Les couleurs de la top-bar et du canvas ne sont pas assez différenciée
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)
 - 🆕 Cacher les joins qui ne sont connectés qu'à un segment
@@ -193,7 +191,6 @@
 - 🔨 Hover une probe devrait hover l'élément aussi
 - 🆕 Sélectionner les dimensions (sur la flèche)
 - 🤔 Caméra qui suit le mécanisme en simulation ?
-- 🤔 Ajouter un mode d'édition pour déconnecter les éléments (ce qu'on ne peut faire actuellement que par le panneau contextuel) ?
 
 - 🔨 Afficher le point de contact pour placingGearRadius sur belt
 - ❇️ Wrap VS windings ?
@@ -271,7 +268,6 @@
 - ❇️ Unifier les tailles des éléments UI
 - ❇️ S'assurer que la police est toujours la même
 - 🆕 Se déplacer dans le temps de la simu avec les flèches du clavier
-- 🆕 Afficher les couleurs des thèmes dans le menu paramètres
 - 🆕 Ajouter un paramètre pour cacher les unités de la grille
 
 ### À faire quand tout le reste est fait

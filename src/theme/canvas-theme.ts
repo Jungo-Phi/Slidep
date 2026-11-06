@@ -5,16 +5,13 @@
  */
 
 import {
-  canvas_palette,
   CanvasPalette,
   DEFAULT_THEME,
-  mix_theme_specs,
-  THEME_SPECS,
+  mix_canvas_palettes,
   THEME_TRANSITION_CLASS,
   THEME_TRANSITION_MS,
   THEMES,
   ThemeName,
-  ThemeSpec,
 } from "./mui-theme";
 
 /** Alpha suffixes, appended to a hex color. Theme-independent. */
@@ -25,7 +22,7 @@ const TRANSPARENCY = {
 } as const;
 
 /**
- * Colors used to draw on the canvas, for the *currently selected theme*. Names state the role, not the hue, so that a change of accent does not turn every name into a lie.
+ * Colors the canvas is drawn in, for the *currently selected theme*. Names state the role, not the hue, so they hold whatever accent a theme picks.
  *
  * This binding is reassigned by `set_canvas_theme`.
  * Drawing code may read `COLORS.X` freely — the canvas redraws every animation frame, so a theme switch shows up on the next one — but must not capture it in a module-level constant, which would freeze it on the theme active at import time.
@@ -45,25 +42,25 @@ export let COLORS: CanvasPalette & typeof TRANSPARENCY = {
 export let ICON_COLORS: CanvasPalette = THEMES[DEFAULT_THEME].canvas;
 
 /**
- * The spec `COLORS` currently stands for — a theme's own, or, mid-fade, one blended between two.
+ * The palette `COLORS` currently stands for — a theme's own, or, mid-fade, one blended between two.
  * A fade interrupted by another theme change departs from here, and so never jumps.
  */
-let current: ThemeSpec = THEME_SPECS[DEFAULT_THEME];
+let current: CanvasPalette = THEMES[DEFAULT_THEME].canvas;
 
 /** The fade in flight, if any — a second theme change cuts it short. */
 let fade: number | null = null;
 
 /**
- * Le fondu CSS de l'interface, joué en même temps que celui du canvas.
+ * The interface's CSS fade, played alongside the canvas one.
  *
- * Il ne vit que le temps du changement de thème : hors de là, la transition s'appliquerait aussi au survol et à la sélection, qu'elle rendrait mous.
+ * It lives only for the duration of a theme switch: left on, the transition would also apply to hover and selection, and make them sluggish.
  */
 const set_ui_fading = (fading: boolean): void => {
   document.documentElement.classList.toggle(THEME_TRANSITION_CLASS, fading);
 };
 
 /**
- * Repoint the canvas palette, fading into it over `duration` ms.
+ * Repoint the canvas palette, fading into it over `duration` ms from the next frame on.
  * The canvas redraws every animation frame, so simply moving `COLORS` frame by frame is enough to make the drawing cross-fade with the rest of the interface.
  *
  * The fade runs linearly, like the interface's own CSS transitions: the ground under the drawing is painted in CSS, the grid on top of it in canvas, and two different curves would put one out of step with the other.
@@ -78,22 +75,25 @@ export function set_canvas_theme(
   fade = null;
 
   ICON_COLORS = THEMES[name].canvas;
-  const target = THEME_SPECS[name];
+  const target = THEMES[name].canvas;
 
   if (duration <= 0) {
     set_ui_fading(false);
     current = target;
-    COLORS = { ...THEMES[name].canvas, ...TRANSPARENCY };
+    COLORS = { ...target, ...TRANSPARENCY };
     return;
   }
 
   set_ui_fading(true);
   const from = current;
-  const start = performance.now();
-  const step = () => {
-    const t = Math.min(1, (performance.now() - start) / duration);
-    current = t < 1 ? mix_theme_specs(from, target, t) : target;
-    COLORS = { ...canvas_palette(current), ...TRANSPARENCY };
+  // The clock starts on the first frame, not now: this runs while React renders the new theme, and the CSS transitions only start once that render has been committed and styled — on that same frame.
+  // Started now, the canvas would lead the interface by however long the render takes, and its labels would fade ahead of the ground they sit on.
+  let start: number | null = null;
+  const step = (now: number) => {
+    start ??= now;
+    const t = Math.min(1, (now - start) / duration);
+    current = t < 1 ? mix_canvas_palettes(from, target, t) : target;
+    COLORS = { ...current, ...TRANSPARENCY };
     if (t < 1) {
       fade = requestAnimationFrame(step);
     } else {
