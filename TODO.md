@@ -23,25 +23,20 @@
 
 **Lisibilité**
 
-- 🤔 Fusionner statique et cinématique ?
+- 🤔 Fusionner statique et édition ?
 - 🤔 Activer les contacts par défaut ?
 - 🤔 Outil "déconnecter" ?
 - 🤔 Outil "couper" (les poutres) ?
+- 🤔 Modifier les dimensions du profilé d'une poutre dans le panneau de la poutre elle-même ?
 
 - 🔨 Donner des titres à toutes les sections du panneau latéral
 - 🔨 Changer icon des collisions de groupe
 - 🔨 Finir les traits de DimensionAngle
 - 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
-- 🔨 Modifier les dimensions du profilé d'une poutre dans le panneau de la poutre elle-même
 - 🔨 Rendre les hitbox exactes (contraintes, noeuds)
 - 🔨 Les contraintes (égal, horizontal, etc.) sont trop proches des noeuds (hitbox)
 - 🔨 Changement de la sélection dans l'onglet éléments devrait se faire au mouseUp
-
-**Themes**
-
-- 🔨 Blueprint : Bords tags plus lisibles, luminosité plus basse et moins saturé sur les bords
-- 🔨 Slidep dark : la couleur de sélection est trop saturée
-- 🔨 Classic dark : la couleur de stroke est trop bleu
+- 🔨 Angles plus précis
 
 **Découvrabilité et onboarding**
 
