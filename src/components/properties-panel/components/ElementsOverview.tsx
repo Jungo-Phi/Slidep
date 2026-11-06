@@ -53,6 +53,7 @@ import { overlay_icon } from "../element-readings";
 import { selection_metrics } from "../selection-metrics";
 import { LENGTH, MASS, format_quantity } from "../../../utils/quantity-format";
 import { PluralKey, t, tn } from "../../../i18n";
+import SectionTitle from "./SectionTitle";
 
 const GROUP_LABEL_KEYS: Record<DisplayType, PluralKey> = {
   damper: "selection_damper",
@@ -510,7 +511,15 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
               constraintElements={mechanism.constraintElements}
               materials={analysedMechanism.materials}
               profiles={analysedMechanism.profiles}
+              storedMaterials={mechanism.materials}
+              storedProfiles={mechanism.profiles}
               applyActions={applyActions}
+              setHighlight={setHighlight}
+              onSelectBeams={(ids) =>
+                setCanvasState(
+                  multiple_selection_state(ids, mechanicalElements),
+                )
+              }
             />
           </Box>
         </Box>
@@ -519,6 +528,10 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
       <Divider sx={{ mx: -2 }} />
 
       <Box>
+        {/* The container's own margin already sets it in: the title lines up with the element tab's own. */}
+        {OVERLAY_KIND_ORDER.some(
+          (kind) => overlay_targets(listed, kind).length > 0,
+        ) && <SectionTitle sx={{ px: 0 }}>{t("show_section")}</SectionTitle>}
         {OVERLAY_KIND_ORDER.map((kind) => {
           const targets = overlay_targets(listed, kind);
           if (targets.length === 0) return null;

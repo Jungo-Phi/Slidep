@@ -1849,10 +1849,22 @@ export const STRINGS = {
     es: "{count} restricciones incumplidas",
   },
   constraints_empty: {
-    fr: "Pas encore de contraintes géométriques",
+    fr: "Pas encore de contraintes",
     en: "No constraints yet",
     de: "Noch keine Bedingungen",
     es: "Aún no hay restricciones",
+  },
+  dimensions_section: {
+    fr: "Cotes",
+    en: "Dimensions",
+    de: "Maße",
+    es: "Cotas",
+  },
+  geometric_constraints_section: {
+    fr: "Contraintes",
+    en: "Constraints",
+    de: "Bedingungen",
+    es: "Restricciones",
   },
   dimensions_empty: {
     fr: "Pas encore de cotes",
@@ -1862,6 +1874,18 @@ export const STRINGS = {
   },
 
   // ── Element properties ────────────────────────────────────────────────────
+  physical_properties: {
+    fr: "Propriétés physiques",
+    en: "Physical properties",
+    de: "Physikalische Eigenschaften",
+    es: "Propiedades físicas",
+  },
+  show_section: {
+    fr: "Afficher",
+    en: "Show",
+    de: "Anzeigen",
+    es: "Mostrar",
+  },
   // Only rpm appears here: the other units are SI symbols and read the same everywhere.
   unit_rpm: { fr: "tr/min", en: "rpm", de: "U/min", es: "rpm" },
   motor_torque_label: {
@@ -2024,10 +2048,70 @@ export const STRINGS = {
     es: "Perfil",
   },
   open_in_library: {
-    fr: "Modifier dans la bibliothèque",
-    en: "Edit in the library",
-    de: "In der Bibliothek bearbeiten",
-    es: "Editar en la biblioteca",
+    fr: "Voir dans la bibliothèque",
+    en: "Show in the library",
+    de: "In der Bibliothek anzeigen",
+    es: "Ver en la biblioteca",
+  },
+  edit: {
+    fr: "Éditer",
+    en: "Edit",
+    de: "Bearbeiten",
+    es: "Editar",
+  },
+  edit_disabled_profile: {
+    fr: "Choisissez un profilé pour l'éditer",
+    en: "Pick a profile to edit it",
+    de: "Wählen Sie ein Profil, um es zu bearbeiten",
+    es: "Elija un perfil para editarlo",
+  },
+  edit_disabled_material: {
+    fr: "Choisissez un matériau pour l'éditer",
+    en: "Pick a material to edit it",
+    de: "Wählen Sie ein Material, um es zu bearbeiten",
+    es: "Elija un material para editarlo",
+  },
+  select_these_beams: {
+    fr: "Sélectionner ces poutres",
+    en: "Select these beams",
+    de: "Diese Balken auswählen",
+    es: "Seleccionar estas vigas",
+  },
+  shared_with_beams_one: {
+    fr: "Partagé avec {count} autre poutre",
+    en: "Shared with {count} other beam",
+    de: "Mit {count} weiteren Balken geteilt",
+    es: "Compartido con {count} viga más",
+  },
+  shared_with_beams_other: {
+    fr: "Partagé avec {count} autres poutres",
+    en: "Shared with {count} other beams",
+    de: "Mit {count} weiteren Balken geteilt",
+    es: "Compartido con {count} vigas más",
+  },
+  shared_edit_hint: {
+    fr: "Toute modification ici s'applique aussi à ces poutres",
+    en: "Any change here applies to these beams too",
+    de: "Jede Änderung hier gilt auch für diese Balken",
+    es: "Cualquier cambio aquí se aplica también a estas vigas",
+  },
+  detach: {
+    fr: "Dissocier",
+    en: "Detach",
+    de: "Abtrennen",
+    es: "Separar",
+  },
+  detach_hint_material: {
+    fr: "Crée une copie du matériau pour cette sélection",
+    en: "Creates a copy of the material for this selection",
+    de: "Erstellt eine Kopie des Materials für diese Auswahl",
+    es: "Crea una copia del material para esta selección",
+  },
+  detach_hint_profile: {
+    fr: "Crée une copie du profilé pour cette sélection",
+    en: "Creates a copy of the profile for this selection",
+    de: "Erstellt eine Kopie des Profils für diese Auswahl",
+    es: "Crea una copia del perfil para esta selección",
   },
   profile_i_beam: {
     fr: "Profilé en I",
@@ -2130,12 +2214,6 @@ export const STRINGS = {
     en: "Built-in entry, can't be deleted",
     de: "Integrierter Eintrag, kann nicht gelöscht werden",
     es: "Entrada incorporada, no se puede eliminar",
-  },
-  catalog_entry_locked: {
-    fr: "Entrée du catalogue — dupliquez-la pour la modifier",
-    en: "Catalogue entry — duplicate it to edit",
-    de: "Katalogeintrag — zum Bearbeiten duplizieren",
-    es: "Entrada del catálogo — duplícala para editarla",
   },
   length_unlock: {
     fr: "Débloquer la longueur",

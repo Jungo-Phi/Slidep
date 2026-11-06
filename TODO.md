@@ -21,27 +21,30 @@
 
 ### Retours utilisateurs
 
+Vous avez créé un slidep !
+
 **Lisibilité**
 
-- 🤔 Fusionner statique et édition ?
-- 🤔 Activer les contacts par défaut ?
-- 🤔 Outil "déconnecter" ? (ce qu'on ne peut faire actuellement que par le panneau contextuel)
-- 🤔 Outil "couper" (les poutres) ?
-- 🤔 Modifier les dimensions du profilé d'une poutre dans le panneau de la poutre elle-même ?
+- 🚨 Imposer un angle depuis le panneau latéral ne l'impose pas
+- 🔨 Angles plus précis
 
-- 🔨 Donner des titres à toutes les sections du panneau latéral
-- 🔨 Changer icon des collisions de groupe
+- 🤔 Outil "déconnecter" ? (ce qu'on ne peut faire actuellement que par le panneau contextuel)
+- 🤔 Outil "couper" pour les poutres ? (Le join pourrait faire ça)
+
 - 🔨 Finir les traits de DimensionAngle
-- 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
 - 🔨 Rendre les hitbox exactes (contraintes, noeuds)
 - 🔨 Les contraintes (égal, horizontal, etc.) sont trop proches des noeuds (hitbox)
-- 🔨 Changement de la sélection dans l'onglet éléments devrait se faire au mouseUp
-- 🔨 Angles plus précis
+- 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
+- 🤔 Mettre en place un versionning
+- 🤔 Ajouter un élément depuis les connexions du panneau latéral ?
+- 🤔 Masse sur plan incliné : difficile à placer et mauvais résultats
+- 🤔 Fusionner statique et édition ?
+
 
 **Découvrabilité et onboarding**
 
 - 🆕 Ajouter des tutos dans un deuxième onglet de la gallerie
-- 🤔 Utiliser les exemples comme tuto
+- 🤔 Utiliser les exemples comme tuto ?
 - 🆕 Ajouter des tutos au hover long sur les élément de la palette et premières utilisations de fonctionnalités
 - 🤔 Mieux distinguer les modes édition / simulation / simulation reset
 - 🤔 Montrer qu'on peut interagir pendant la simulation
@@ -319,17 +322,8 @@
 
 ### Pistes d'amélioration
 
-**Questions demandées**
-Pour répondre aux questions qui suivent, définir l'objectif et la vision de l'application.
-
-- 🤔 Définir l'ordre des grands chantiers. Priorités exprimées par les testeurs : partage/collaboration, robotique et automatisation (voir ThinkerCAD), puis 3D
-- 🤔 Mettre en place un versionning ?
-- 🤔 Comment connecter ou non des engrenages sur le même axe ?
-- 🚨 Masse sur plan incliné : difficile à placer et mauvais résultats
-- 🤔 Revenir sur l'idée de pouvoir modifier le mécanisme en cours de simulation (ex. déconnecter 2 éléments, ou contraintes) ?
 - 🆕 Pouvoir appliquer une fonction / commande au moteur pendant la simulation
 - 🆕 Case à cocher pour ignorer masses et frottements
-- 🤔 Ajouter un élément depuis les connexions du panneau latéral ?
 - Pistes d'amélioration exprimées par des utilisateurs:
   - 🤔 Formes pleines
   - 🤔 Placer des forces normales au plan 2D
@@ -372,6 +366,5 @@ Pour répondre aux questions qui suivent, définir l'objectif et la vision de l'
 
 ### [ Préparer pour les contributions ]
 
-- 🆕 README.md
-- 🆕 Documentation
+- 🔨 Clean la documentation
 - 🆕 Design guidelines

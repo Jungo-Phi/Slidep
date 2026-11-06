@@ -35,3 +35,10 @@ export const ICON_GROUP_SX = {
  * One number to tune by eye — too much and a long label starts truncating against a wide value.
  */
 export const SUBJECT_VALUES_INSET = { px: 2 } as const;
+
+/** The name of a field inside a section — a connection's end, a beam's material or profile: small, faint and set in under the section's own title, so the two never read alike. */
+export const FIELD_LABEL_SX = {
+  typography: "caption",
+  fontWeight: "500",
+  color: "text.secondary",
+} as const;

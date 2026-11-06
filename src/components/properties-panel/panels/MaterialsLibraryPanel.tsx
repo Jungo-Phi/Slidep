@@ -38,6 +38,8 @@ import NumberInput from "../components/NumberInput";
 import SectionSchema from "../components/SectionSchema";
 import ElementDisplay from "../components/ElementDisplay";
 import { PROBE_ELEMENT_COLORS } from "../probe-colors";
+import { icon } from "../../element-palette/iconDataUris";
+import { multiple_selection_state } from "../../canvas/tools/canvas-state-reducer";
 import { INLINE_INPUT_SX } from "../../mechanisms-gallery/inline-input-sx";
 import { DENSITY, LENGTH, STRESS } from "../../../utils/quantity-format";
 import { t, tn } from "../../../i18n";
@@ -283,6 +285,8 @@ interface LibraryEntryGroupProps {
   onRename?: (newName: string) => void;
   onDuplicate: () => void;
   onDelete?: () => void;
+  /** Selects every beam holding this entry. */
+  onSelectBeams: () => void;
   dragOver: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: (e: React.DragEvent) => void;
@@ -307,6 +311,7 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
   onRename,
   onDuplicate,
   onDelete,
+  onSelectBeams,
   dragOver,
   onDragOver,
   onDragLeave,
@@ -363,11 +368,48 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
             headerRef={headerRef}
           />
         )}
-        <Tooltip title={tn("used_by_beams", usageCount)}>
-          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
-            {usageCount}
-          </Typography>
-        </Tooltip>
+        {/* What the group holds, and — the same gesture as a type's row in the elements tab — a click that selects exactly those beams. */}
+        {usageCount > 0 ? (
+          <Tooltip
+            title={`${tn("used_by_beams", usageCount)} — ${t("select_these_beams")}`}
+          >
+            <Box
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectBeams();
+              }}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.25,
+                borderRadius: 3,
+                px: 0.5,
+                cursor: "pointer",
+                "&:hover": { backgroundColor: "action.selected" },
+              }}
+            >
+              <Box
+                component="img"
+                src={icon("beam")}
+                draggable={false}
+                sx={{ width: 16, height: 16 }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                {usageCount}
+              </Typography>
+            </Box>
+          </Tooltip>
+        ) : (
+          <Tooltip title={tn("used_by_beams", usageCount)}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ px: 0.5 }}
+            >
+              {usageCount}
+            </Typography>
+          </Tooltip>
+        )}
         <InlineName name={name} onCommit={onRename!} />
         <Box sx={{ flexGrow: 1 }} />
         <Tooltip title={t("duplicate")}>
@@ -845,6 +887,14 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
       ? beams.find((el) => el.id === hoveredPart.id)
       : undefined;
 
+  const selectBeams = (group: BeamElement[]) =>
+    setCanvasState(
+      multiple_selection_state(
+        group.map((beam) => beam.id),
+        mechanism.mechanicalElements,
+      ),
+    );
+
   const addMaterial = () => {
     const material = default_material(materials.map((m) => m.name));
     applyActions([{ type: "CreateMaterial", material }]);
@@ -1064,6 +1114,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                 ])
               }
               onDelete={() => deleteMaterial(material.id)}
+              onSelectBeams={() => selectBeams(materialBeams)}
               dragOver={dragOverMaterialID === material.id}
               onDragOver={(e) => handleMaterialDragOver(e, material.id)}
               onDragLeave={(e) => handleMaterialDragLeave(e, material.id)}
@@ -1215,6 +1266,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
                 ])
               }
               onDelete={() => deleteProfile(profile.id)}
+              onSelectBeams={() => selectBeams(profileBeams)}
               dragOver={dragOverProfileID === profile.id}
               onDragOver={(e) => handleProfileDragOver(e, profile.id)}
               onDragLeave={(e) => handleProfileDragLeave(e, profile.id)}

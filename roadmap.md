@@ -1,10 +1,5 @@
 # Slidep : feuille de route
 
-**Poser le cap**
-
-- Mettre à jour la section « Vision » de `Slidep Architecture.md` (elle parle encore de « préférer l'intuition à la précision ») et la faire pointer vers le README. _Fini quand la vision n'existe qu'à un endroit._
-- Classer chaque ligne de la TODO dans une étape de cette feuille de route, ou dans « plus tard ». _Fini quand chaque ligne a sa place._
-
 ## Un Slidep 2D fiable
 
 **Objectif : pouvoir faire confiance à chaque chiffre affiché.**
@@ -12,7 +7,6 @@
 - Des valeurs de référence : pour 5 à 10 mécanismes de `test-mechanisms/`, écrire les réactions et efforts attendus (calcul à la main, mécanismes classiques de Working Model) et un test vitest qui les compare. _Fini quand `npm test` vérifie la physique de ces mécanismes._
 - Corriger les résultats faux : poulie sans masse, moment sur pivot, bilan des forces de Pendulum clock, treuils. _Fini quand les tests passent, chaque bug corrigé ajoutant son test._
 - Afficher juste : unités des efforts internes, T/N au lieu de x/y. _Fini quand les bugs d'affichage prioritaires sont fermés._
-- Le solveur géométrique ne surprend plus : bouger un bout du mécanisme ne fait plus bouger l'autre bout, nœuds en SlideOn conservés. _Fini quand le cas du slider ancré qui tourne est corrigé et testé._
 **Projet témoin** : les mécanismes de la galerie 2D donnent des résultats justes et vérifiés.
 
 ## Partage et galerie

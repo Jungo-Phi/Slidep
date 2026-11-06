@@ -284,7 +284,17 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
   // Every id currently selected — one for a plain click, the whole group for a box selection.
   // Threaded down so any ElementDisplay can tell whether it names one of them.
   // Held across renders: the panel re-renders with the clock, and a fresh array each time would re-render every memoised row it reaches.
-  const selectedIds = React.useMemo(() => selected_ids(canvasState), [canvasState]);
+  const liveSelectedIds = React.useMemo(
+    () => selected_ids(canvasState),
+    [canvasState],
+  );
+  // A box selection being dragged out only shows on the canvas: the panel keeps the selection it had, and takes the new one on mouseup.
+  const boxSelecting = canvasState.type === "SelectingMultiple";
+  const [settledSelectedIds, setSettledSelectedIds] =
+    React.useState(liveSelectedIds);
+  if (!boxSelecting && settledSelectedIds !== liveSelectedIds)
+    setSettledSelectedIds(liveSelectedIds);
+  const selectedIds = boxSelecting ? settledSelectedIds : liveSelectedIds;
   // Scrubbing from a chart: landing on the end of the recording is not scrubbing, since playing from there records on.
   const seekTime = (time: number) =>
     setRuntimeState((previous) => ({
@@ -407,27 +417,6 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
               onFocusHandled={() => setLibraryFocusRequest(null)}
             />
           )}
-          {/* The mechanism's own readings over the whole run lead the analysis: the solver's energy balance, then the most stressed beam once one has been read — a card that appeared empty on every mechanism without beams would only ever be noise. */}
-          {activeTab === "analysis" && appMode === "dynamic" && (
-            <Box sx={{ mt: 1 }}>
-              <EnergyBalance
-                snapshots={runtimeState.simulationSnapshots as DynamicSnapshot[]}
-                currentTime={runtimeState.time}
-                onSeek={seekTime}
-              />
-              {runtimeState.stressScale.beams.size > 0 && (
-                <WorstStress
-                  cache={runtimeState.stressScale}
-                  elements={mechanism.mechanicalElements}
-                  materials={mechanism.materials}
-                  profiles={mechanism.profiles}
-                  currentTime={runtimeState.time}
-                  onSeek={seekTime}
-                  setHoveredAbscissa={setHoveredAbscissa}
-                />
-              )}
-            </Box>
-          )}
           {activeTab === "analysis" && (
             <AnalysisPanel
               setHighlight={setHighlight}
@@ -451,6 +440,29 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
               setMomentBalanceReference={setMomentBalanceReference}
               setMomentBalanceReferenceHovered={setMomentBalanceReferenceHovered}
               setFocusedOverlay={setFocusedOverlay}
+              // The mechanism's own readings over the whole run, read after the degrees of freedom: the solver's energy balance, then the most stressed beam once one has been read — a card that appeared empty on every mechanism without beams would only ever be noise.
+              runSummary={
+                appMode === "dynamic" && (
+                  <Box>
+                    <EnergyBalance
+                      snapshots={runtimeState.simulationSnapshots as DynamicSnapshot[]}
+                      currentTime={runtimeState.time}
+                      onSeek={seekTime}
+                    />
+                    {runtimeState.stressScale.beams.size > 0 && (
+                      <WorstStress
+                        cache={runtimeState.stressScale}
+                        elements={mechanism.mechanicalElements}
+                        materials={mechanism.materials}
+                        profiles={mechanism.profiles}
+                        currentTime={runtimeState.time}
+                        onSeek={seekTime}
+                        setHoveredAbscissa={setHoveredAbscissa}
+                      />
+                    )}
+                  </Box>
+                )
+              }
             />
           )}
         </OverlayScrollArea>

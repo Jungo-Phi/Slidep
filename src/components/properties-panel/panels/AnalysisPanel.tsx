@@ -197,6 +197,8 @@ interface AnalysisPanelProps {
   setMomentBalanceReferenceHovered: (hovered: boolean) => void;
   /** See `App`'s own `setFocusedOverlay`. */
   setFocusedOverlay: (overlay: FocusedOverlay) => void;
+  /** The mechanism's own readings over the whole run — energy balance, most stressed beam — shown after the degrees of freedom, ahead of the force balance. */
+  runSummary?: React.ReactNode;
 }
 
 /** Short human label for a solver link type, shown as the violation kind. */
@@ -795,6 +797,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   setMomentBalanceReference,
   setMomentBalanceReferenceHovered,
   setFocusedOverlay,
+  runSummary,
 }) => {
   const { palette } = useTheme();
   const curveColors = probe_curve_colors(palette.primary.main);
@@ -1155,8 +1158,51 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 2 }}>
-      {appMode !== "edition" && (
+      {/* DDL Indicator — one block per kinematic chain */}
+      <Box sx={{ mx: 2 }}>
+        <CollapsibleSection storageKey="analysisSection.mobility" title={t("ddl_heading")}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            {analysis.chains.map((chainAnalysis, index) => (
+              <ChainCard
+                key={chainAnalysis.chain.id}
+                analysis={chainAnalysis}
+                index={index}
+                appMode={appMode}
+                setHighlight={setHighlight}
+                setRedundancySymbols={setRedundancySymbols}
+                symbolsFor={symbolsFor}
+                elementOf={elementOf}
+                shownMotors={shownMotors}
+                animated={animated}
+                setAnimated={setAnimated}
+                hoveredPart={hoveredPart}
+                setHoveredPart={setHoveredPart}
+                selectedIds={selectedIds}
+                setCanvasState={setCanvasState}
+                applyActions={applyActions}
+                modesPlayable={modesPlayable}
+                blockedMotors={blockedMotors}
+                audit={audits.get(chainAnalysis.chain.id)}
+                auditing={auditing === chainAnalysis.chain.id}
+                onAudit={runAudit}
+              />
+            ))}
+            {/* Only once measured: an empty list before the first pass means "not yet", which is not the same statement as "nothing moves". */}
+            {analysis.ready && analysis.chains.length === 0 && (
+              <Typography variant="body2" color="text.disabled" sx={{ p: 1 }}>
+                {t("ddl_rigid_zero")}
+              </Typography>
+            )}
+          </Box>
+        </CollapsibleSection>
+      </Box>
+
+      <Divider />
+
+      {/* All of it read off a dynamic run: in kinematics there is nothing here, and a divider of its own would double the one above. */}
+      {appMode === "dynamic" && (
         <>
+          {runSummary}
           {forceBalance && (
             <ForceBalanceTable
               balance={forceBalance}
@@ -1203,47 +1249,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <Divider />
         </>
       )}
-
-      {/* DDL Indicator — one block per kinematic chain */}
-      <Box sx={{ mx: 2 }}>
-        <CollapsibleSection storageKey="analysisSection.mobility" title={t("ddl_heading")}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {analysis.chains.map((chainAnalysis, index) => (
-              <ChainCard
-                key={chainAnalysis.chain.id}
-                analysis={chainAnalysis}
-                index={index}
-                appMode={appMode}
-                setHighlight={setHighlight}
-                setRedundancySymbols={setRedundancySymbols}
-                symbolsFor={symbolsFor}
-                elementOf={elementOf}
-                shownMotors={shownMotors}
-                animated={animated}
-                setAnimated={setAnimated}
-                hoveredPart={hoveredPart}
-                setHoveredPart={setHoveredPart}
-                selectedIds={selectedIds}
-                setCanvasState={setCanvasState}
-                applyActions={applyActions}
-                modesPlayable={modesPlayable}
-                blockedMotors={blockedMotors}
-                audit={audits.get(chainAnalysis.chain.id)}
-                auditing={auditing === chainAnalysis.chain.id}
-                onAudit={runAudit}
-              />
-            ))}
-            {/* Only once measured: an empty list before the first pass means "not yet", which is not the same statement as "nothing moves". */}
-            {analysis.ready && analysis.chains.length === 0 && (
-              <Typography variant="body2" color="text.disabled" sx={{ p: 1 }}>
-                {t("ddl_rigid_zero")}
-              </Typography>
-            )}
-          </Box>
-        </CollapsibleSection>
-      </Box>
-
-      <Divider />
 
       {/* Measurements: active probes and their charts */}
       <Box sx={{ mx: 2 }}>

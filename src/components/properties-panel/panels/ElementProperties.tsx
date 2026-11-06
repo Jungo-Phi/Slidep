@@ -48,6 +48,7 @@ import ElementReadings from "../components/ElementReadings";
 import LoadDetails, { LoadValueInput } from "../components/LoadDetails";
 import { MetricRow, ValueRow } from "../components/MetricRow";
 import ReadingRow from "../components/ReadingRow";
+import SectionTitle from "../components/SectionTitle";
 import { ROW_CONTROL_CLASS, ROW_ICON_BUTTON_SX } from "../inspector-metrics";
 import { format_scalar } from "../metric-display";
 import { get_element_icon } from "../../element-palette/elementIcon";
@@ -400,6 +401,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       {hasPhysics && (
         <>
           <Divider sx={{ my: 1 }} />
+          <SectionTitle>{t("physical_properties")}</SectionTitle>
           <Box
             sx={{
               display: "flex",
@@ -526,7 +528,13 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                 shownElements={[shown_as(element)]}
                 materials={analysedMechanism.materials}
                 profiles={analysedMechanism.profiles}
+                storedMaterials={mechanism.materials}
+                storedProfiles={mechanism.profiles}
+                allBeams={analysedMechanism.mechanicalElements.filter(
+                  (el): el is BeamElement => el.type === "beam",
+                )}
                 applyActions={applyActions}
+                setHighlight={setHighlight}
               />
             )}
             {element.type === "spring" && (
@@ -587,6 +595,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       )}
 
       <Divider sx={{ my: 1 }} />
+      <SectionTitle>{t("show_section")}</SectionTitle>
       <ElementReadings
         element={element}
         mechanism={mechanism}
@@ -605,6 +614,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       {elementLoads.length > 0 && (
         <>
           <Divider sx={{ my: 1 }} />
+          <SectionTitle>{t("loads")}</SectionTitle>
           <Box sx={{ px: 2, display: "flex", flexDirection: "column", gap: 0.25 }}>
             {elementLoads.map((load) => {
               const shownLoad =
@@ -699,6 +709,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       {"position" in geometry && (
         <>
           <Divider sx={{ my: 1 }} />
+          <SectionTitle>{t("geometry")}</SectionTitle>
           <Box
             sx={{
               display: "flex",
@@ -707,6 +718,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               justifyContent: "center",
               gap: 2,
               m: 1,
+              mb: 1.5,
             }}
           >
             <VectorInput
@@ -908,6 +920,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       {"positionStart" in geometry && "positionStart" in element && (
         <>
           <Divider sx={{ my: 1 }} />
+          <SectionTitle>{t("geometry")}</SectionTitle>
           <Box
             sx={{
               display: "flex",
@@ -916,6 +929,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
               justifyContent: "center",
               gap: 2,
               m: 1,
+              mb: 1.5,
             }}
           >
             <Box
@@ -1050,6 +1064,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       )}
 
       <Divider sx={{ my: 1 }} />
+      <SectionTitle sx={{ mb: 1 }}>{t("connections")}</SectionTitle>
       <ConnectionsProperties
         element={element}
         hoveredPart={hoveredPart}

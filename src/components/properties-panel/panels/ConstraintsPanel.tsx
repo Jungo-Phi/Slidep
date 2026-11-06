@@ -12,6 +12,7 @@ import ElementDisplay from "../components/ElementDisplay";
 import StructureOnly from "../components/StructureOnly";
 import React from "react";
 import RatioInput from "../components/RatioInput";
+import SectionTitle from "../components/SectionTitle";
 import {
   element_to_hovered_part,
   is_geometric_constraint_type,
@@ -164,9 +165,12 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   );
 
   const renderBlock = (
+    title: string,
     constraints: ConstraintElement[],
     emptyLabel: string,
   ) => (
+    <>
+    <SectionTitle sx={{ pl: 3, pt: 2, mb: -1.5 }}>{title}</SectionTitle>
     <Box
       sx={{
         borderRadius: 3,
@@ -199,12 +203,17 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
         </Box>
       )}
     </Box>
+    </>
   );
 
   return (
     <>
-      {renderBlock(dimensions, t("dimensions_empty"))}
-      {renderBlock(geometrics, t("constraints_empty"))}
+      {renderBlock(t("dimensions_section"), dimensions, t("dimensions_empty"))}
+      {renderBlock(
+        t("geometric_constraints_section"),
+        geometrics,
+        t("constraints_empty"),
+      )}
     </>
   );
 };

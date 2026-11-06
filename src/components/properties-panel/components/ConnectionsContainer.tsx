@@ -13,6 +13,7 @@ import { HoveredPart } from "../../../types/hovered-part";
 import { ID } from "../../../types/element";
 import { ordered_body_nodes } from "../element-order";
 import { StringKey, t } from "../../../i18n";
+import { FIELD_LABEL_SX } from "../inspector-metrics";
 
 const CONTAINER_NAME_KEYS: Record<ConnectsActionType, StringKey> = {
   ConnectsAttachedBelt: "belt",
@@ -75,7 +76,8 @@ export const ConnectionsContainer: React.FC<ConnectionsContainerProps> = ({
 
   return (
     <Box sx={{ display: "contents" }}>
-      <Typography variant="subtitle2">{containerName}</Typography>
+      {/* Smaller and fainter than the section title above, and set in under it. */}
+      <Typography sx={FIELD_LABEL_SX}>{containerName}</Typography>
 
       <Box
         sx={{

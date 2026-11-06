@@ -15,8 +15,10 @@ import {
   SlidepElement,
   SpringElement,
   DamperElement,
+  ID,
 } from "../../../types";
 import { MaterialDef, ProfileDef } from "../../../types/material";
+import { CanvasHighlight } from "../../canvas/drawing/draw-canvas";
 import NumberInput from "./NumberInput";
 import SignedNumberInput from "./SignedNumberInput";
 import StructureOnly from "./StructureOnly";
@@ -96,9 +98,16 @@ interface GroupPropertiesProps {
   shownElements?: MechanicalElement[];
   /** Needed to write a length through the dimension holding it, when one does. */
   constraintElements: ConstraintElement[];
+  /** The library at the instant on screen, and the stored one edits are built against. */
   materials: MaterialDef[];
   profiles: ProfileDef[];
+  storedMaterials?: MaterialDef[];
+  storedProfiles?: ProfileDef[];
   applyActions: (actions: Action[]) => void;
+  /** Lights up, on the canvas, the other beams a material/profile edit here would reach. */
+  setHighlight?: (highlight: CanvasHighlight) => void;
+  /** Narrows the selection down to these beams — a mixed selection's material/profile menu. */
+  onSelectBeams?: (ids: ID[]) => void;
 }
 
 /**
@@ -116,7 +125,11 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
   constraintElements,
   materials,
   profiles,
+  storedMaterials,
+  storedProfiles,
   applyActions,
+  setHighlight,
+  onSelectBeams,
 }) => {
   const alone = elements.length === 1;
   const shownByID = new Map(shownElements.map((el) => [el.id, el]));
@@ -533,7 +546,15 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
           shownElements={beams.map((beam) => shown(beam))}
           materials={materials}
           profiles={profiles}
+          storedMaterials={storedMaterials}
+          storedProfiles={storedProfiles}
+          // `shownElements` is the whole mechanism on screen when the overview passes it — which is what tells who else shares an entry.
+          allBeams={shownElements.filter(
+            (el): el is BeamElement => el.type === "beam",
+          )}
           applyActions={applyActions}
+          setHighlight={setHighlight}
+          onSelectBeams={onSelectBeams}
         />
       )}
     </Box>

@@ -432,7 +432,8 @@ const App: React.FC = () => {
     canvasStateRef.current = canvasState;
   }, [canvasState]);
 
-  // A simulation opens on the mechanism's analysis, unless an element or a load is selected: its page is where the reader already was, and it stays.
+  // A simulation opens on the mechanism's analysis, unless the elements tab is being read with an element or a load selected: that page is where the reader already was, and it stays.
+  // A selection alone never pulls the tab over to the elements.
   useEffect(() => {
     if (appMode === "edition") return;
     const mech = mechanismRef.current;
@@ -441,7 +442,9 @@ const App: React.FC = () => {
         mech.mechanicalElements.some((el) => el.id === id) ||
         mech.loads.some((load) => load.id === id),
     );
-    setActiveTab(elementSelected ? "elements" : "analysis");
+    setActiveTab((tab) =>
+      tab === "elements" && elementSelected ? "elements" : "analysis",
+    );
   }, [appMode]);
 
   const {
