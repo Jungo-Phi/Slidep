@@ -254,4 +254,15 @@ describe("edition rules", () => {
     expectAt(solved.get("G"), 0, 0, 1e-9);
     expectAt(solved.get("B:end"), 80, 60);
   });
+
+  // A beam is oriented start → end: a typed angle more than a quarter turn away must not settle on the same line pointing backwards.
+  it.each([(2 * Math.PI) / 3, Math.PI, -Math.PI / 2])("turns a beam to a typed angle of %f rad, not half a turn off it", (newAngle) => {
+    const m = mechanism([
+      beam("B", P(0, 0), P(100, 0), { fixedNodeStartID: "G" as ID }),
+      pivot("G", P(0, 0), true),
+    ]);
+    const solved = solve(m, { type: "ChangeEdgeAngle", id: "B", newAngle, oldAngle: 0 });
+    const direction = solved.get("B:end")!.sub(solved.get("B:start")!);
+    expect(Math.abs(Point2.from_polar(1, newAngle).angle_to(direction))).toBeLessThan(1e-6);
+  });
 });

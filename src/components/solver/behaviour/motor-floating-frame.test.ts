@@ -77,20 +77,21 @@ describe("marcheur sur un sol frottant", () => {
       snapshots.push(...(step.snapshots as DynamicSnapshot[]));
       reached = step.reached;
     }
-    const balance = compute_energy_balance(snapshots);
+    // What the mechanism holds beyond what its motor gave and its contacts took.
+    const b = compute_energy_balance(snapshots);
     let worstGain = 0;
-    balance.t.forEach((_, i) => {
-      worstGain = Math.max(worstGain, balance.mechanical[i] - balance.motorWork[i]);
+    b.t.forEach((_, i) => {
+      worstGain = Math.max(worstGain, b.mechanical[i] - b.motorWork[i] + b.frictionWork[i] + b.impactWork[i]);
     });
     return worstGain;
   };
 
-  // A leak shows as tens of joules within a tenth of a second; what the solve's own drift leaves stays within a few hundredths.
+  // A leak shows as joules within a tenth of a second; what the solve's own drift leaves stays within a few hundredths.
   it("quand le moteur sature pendant qu'un pied glisse", () => {
-    expect(run(38, 1.6)).toBeLessThan(1);
-  }, 30000);
+    expect(run(38, 1.6)).toBeLessThan(0.5);
+  }, 60000);
 
   it("quand un pied frappe le sol, le moteur sous sa limite", () => {
-    expect(run(130, 4.45)).toBeLessThan(1);
-  }, 30000);
+    expect(run(18, 5)).toBeLessThan(0.5);
+  }, 60000);
 });

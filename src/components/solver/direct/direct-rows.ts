@@ -88,28 +88,16 @@ export class Rows {
   /** The link the row belongs to, and its multiplier's slot (the link's first slot + `sub`, see `row_slots`). */
   link = new Int32Array(0);
   slot = new Int32Array(0);
-  /** 1 for a contact's row: `C ≥ 0` is enough, and its multiplier stays positive. */
+  /** 1 for a row that may only push, `C ≥ 0` being enough: a contact, or a slider at an end stop. */
   unilateral = new Uint8Array(0);
   /** 1 for a contact that stops without bouncing: a guard on the geometry rather than a collision. */
   inelastic = new Uint8Array(0);
   /** Each link's first multiplier slot, set by `evaluate_rows`. */
   first: Int32Array = new Int32Array(0);
-  /**
-   * The sliders standing at an end stop: `stopRow[i]` is the first of the two rows holding one there, `stopX/Y[i]` the unit axis pointing out past the stop.
-   * What a bounce off the stop reverses is the slider's speed along that axis.
-   */
-  stops = 0;
-  stopRow = new Int32Array(0);
-  stopX = new Float64Array(0);
-  stopY = new Float64Array(0);
 
   reset(capacity: number): void {
     this.count = 0;
-    this.stops = 0;
     if (this.width.length >= capacity) return;
-    this.stopRow = new Int32Array(capacity);
-    this.stopX = new Float64Array(capacity);
-    this.stopY = new Float64Array(capacity);
     this.unilateral = new Uint8Array(capacity);
     this.inelastic = new Uint8Array(capacity);
     this.width = new Int32Array(capacity);
@@ -286,20 +274,8 @@ export function evaluate_rows(
         if (l2 === 0) break;
         const qx = x[node] - x[start];
         const qy = y[node] - y[start];
-        const t = (qx * dx + qy * dy) / l2;
-        // Past an end, the node is held at that end, as `applySlideOnSegmentConstraint` clamps it.
-        if (t <= 0 || t >= 1) {
-          const first = rows.count;
-          on_segment_rows(k, start, end, node, t <= 0 ? 0 : 1, link.normalOffset ?? 0);
-          const out = (t <= 0 ? -1 : 1) / Math.sqrt(l2);
-          rows.stopRow[rows.stops] = first;
-          rows.stopX[rows.stops] = dx * out;
-          rows.stopY[rows.stops] = dy * out;
-          rows.stops++;
-          break;
-        }
-        // Inside: only the distance to the line, `n·(node − start)`, with `n` the unit left normal of the segment.
         const len = Math.sqrt(l2);
+        // The distance to the line, `n·(node − start)`, with `n` the unit left normal of the segment.
         const c = (dx * qy - dy * qx) / len;
         const offset = link.normalOffset ?? 0;
         const value = offset === 0 ? c : c - offset * (c < 0 ? -1 : 1);
@@ -312,6 +288,23 @@ export function evaluate_rows(
         rows.add(r, P(end) + 1, gey);
         rows.add(r, P(start), dy / len - gex);
         rows.add(r, P(start) + 1, -dx / len - gey);
+        // At or past an end, the stop keeps the node from going further and only pushes: a slider leaving it is free to, as `applySlideOnSegmentConstraint` lets it.
+        const along = (qx * dx + qy * dy) / len;
+        const t = along / len;
+        if (t > 0 && t < 1) break;
+        const sign = t <= 0 ? 1 : -1;
+        const stop = rows.begin(k, 1, t <= 0 ? along : len - along, 0, 1);
+        rows.unilateral[stop] = 1;
+        const turnX = qx / len - (along * dx) / l2;
+        const turnY = qy / len - (along * dy) / l2;
+        const endX = t <= 0 ? 0 : dx / len;
+        const endY = t <= 0 ? 0 : dy / len;
+        rows.add(stop, P(node), (sign * dx) / len);
+        rows.add(stop, P(node) + 1, (sign * dy) / len);
+        rows.add(stop, P(end), sign * turnX + endX);
+        rows.add(stop, P(end) + 1, sign * turnY + endY);
+        rows.add(stop, P(start), sign * (-dx / len - turnX) - endX);
+        rows.add(stop, P(start) + 1, sign * (-dy / len - turnY) - endY);
         break;
       }
       case "KeepOrientation": {

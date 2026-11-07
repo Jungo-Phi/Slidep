@@ -1278,7 +1278,7 @@ export function PBD_solve(
       nodes.vAngle[a] = (nodes.angle[a] - frameStartA[a]) * invDt;
     if (pushes) slide_contacts(friction!, pushes, nodes, dynamics.dt);
     if (direct && dynamics.restitution && startVX && startVY && startVA)
-      dynamics.restitution.lost += direct_bounce(direct, nodes, startVX, startVY, startVA, dynamics.restitution.coefficient);
+      dynamics.restitution.lost += direct_bounce(direct, nodes, startVX, startVY, startVA, dynamics.restitution.coefficient, dynamics.dt);
   }
 
   if (direct) {

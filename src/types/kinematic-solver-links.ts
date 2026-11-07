@@ -132,6 +132,8 @@ export type Link = {
       key1: string;
       key2: string;
       direction: Point2;
+      /** Holds `key1 → key2` along `direction` itself rather than along its line, so a typed angle cannot come out half a turn off; only the edition solver reads it. */
+      oriented?: boolean;
     }
   | {
       type: "Angle";

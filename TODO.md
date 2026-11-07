@@ -25,25 +25,12 @@ Vous avez créé un slidep !
 
 **Lisibilité**
 
-Pourquoi je ne reproduisais pas. La marche du Jansen est chaotique. J’ai exécuté le même code sur le même fichier dans Chrome en mode headless : sa trajectoire s’écarte de celle de Node dès 0,7 s (arrondis des fonctions mathématiques), donc ton run exact n’est pas rejouable chez moi. J’ai donc lancé une centaine de runs en perturbant très légèrement la restitution et la vitesse du moteur. Un des runs est monté à 68,7 J, la même valeur que ta courbe (68,3 J).
-Défaut 1 : moteur saturé pendant qu’un pied glisse puis se décolle.
-Mon premier correctif ne traitait que le cas où seuls des moteurs saturent.
-Ici, au même moment, un contact au sol voulait « tirer », et le solveur repassait par l’ancien chemin : l’impulsion du moteur appliquée seule. C’est la fuite de moment cinétique corrigée ce matin.
-Correctif : moteurs saturés et contacts relâchés sont maintenant figés ensemble, puis le reste est résolu à nouveau dans la même itération.
-Défaut 2 : le rebond (direct_bounce) laissait le moteur fournir une impulsion sans limite.
-Lors d’un impact du pied, toutes les autres lignes « gardaient leur vitesse », y compris celle du moteur.
-Le moteur a ainsi pris l’équivalent de ~6 000 N·m pendant un sous-pas, soit +8 J d’un coup.
-Le rebond traitait aussi l’autre pied, posé sans impact, comme s’il pouvait tirer le sol.
-Correctif : le moteur ne participe plus au rebond, puisqu’un couple borné ne donne aucune impulsion sur un choc instantané. Un contact qui devrait tirer est retiré, puis le rebond est résolu à nouveau.
-Le frottement de contact ne faisait que rendre ces situations atteignables : il n’était pas lui-même en cause.
-Vérification
-Sur 120 runs perturbés de 5 s, l’énergie mécanique ne dépasse plus 2 J ; avant ces correctifs, des runs montaient à 9 J et 68 J.
-Deux nouveaux tests dans motor-floating-frame.test.ts rejouent ces deux situations. Chacun échoue sur la version qui contient son défaut (66 J et 2,9 J) et passe avec le correctif (~0,02 J).
-Toute la suite passe (1475 tests) et le typecheck est propre.
-Limite de ces tests : la marche étant chaotique, une future modification du solveur peut déplacer ces deux instants et les tests ne les toucheront plus. Je l’ai noté en commentaire dans le test.
-
-- 🚨 Imposer un angle depuis le panneau latéral ne l'impose pas
+- 🚨 Transférer les propriétées de mesures et overlays au remplacement d'un node / edge
 - 🔨 Angles plus précis
+- 🔨 Raccourcis pour revenir au début de la simulation
+- 🆕 CTRL+C / CTRL+V
+- 🔨🔨 Rendre la simu plus rapide (Test sur Walking jansen) !
+- 🆕 Colorer les éléments
 
 - 🤔 Outil "déconnecter" ? (ce qu'on ne peut faire actuellement que par le panneau contextuel)
 - 🤔 Outil "couper" pour les poutres ? (Le join pourrait faire ça)
@@ -134,7 +121,6 @@ Limite de ces tests : la marche étant chaotique, une future modification du sol
 - 🚨 Un ctrl+y de remplacement d'élément n'a pas reset la simulation, wtf !?
 - 🚨 Le point sur la timeline n'est pas attrapable quand il est sur un marqueur
 - 🚨 Clicker sur le canvas après avoir sélectionné un élément ne doit pas afficher la sélection multiple (ou seulement après avoir commencé le drag).
-- 🔨 Transférer les propriétées de mesures et overlays au remplacement d'un node / edge
 - 🔨 Hover le bilan des moments ne doit pas faire apparitre le cg, seulement à la sélection. Et n'afficher la croix que si on n'affiche pas de moment à sa position
 - 🔨 Afficher les contraintes d'un élément sélectionné
 - 🔨 Afficher le point grabbé en simulation

@@ -778,9 +778,11 @@ class RowReader {
         const s = this.pos(link.key1);
         const e = this.pos(link.key2);
         if (s === undefined || e === undefined) return;
-        this.numeric("eq", [s, s + 1, e, e + 1], () =>
-          wrap_half_turn(link.direction.angle_to(this.vector(s, e))),
-        );
+        const wrap = link.oriented ? wrap_turn : wrap_half_turn;
+        const offset = () => link.direction.angle_to(this.vector(s, e));
+        // Unwrapped about its current value so the finite differences never straddle the cut, where a beam typed exactly half a turn round starts.
+        const here = wrap(offset());
+        this.numeric("eq", [s, s + 1, e, e + 1], () => here + wrap(offset() - here));
         return;
       }
       case "Angle":

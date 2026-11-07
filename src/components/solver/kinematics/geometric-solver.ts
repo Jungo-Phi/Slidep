@@ -450,6 +450,7 @@ export function resolveGeometricConstraints(
           key1: `${trigger.id}:start`,
           key2: `${trigger.id}:end`,
           direction: Point2.from_polar(1, trigger.newAngle),
+          oriented: true,
         });
         break;
       case "ChangeBeltLength": {
