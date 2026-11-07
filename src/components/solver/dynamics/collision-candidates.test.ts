@@ -240,7 +240,7 @@ describe("build_collision_candidates", () => {
     expect(pointKeys).toContain(`${B}:start`);
     expect(pointKeys).toContain(`${B}:end`);
     expect(pointKeys).toContain(GA); // a gear's axle is a node too
-    expect(circleFloor).toEqual([{ centerKey: G, radius: 10 }]);
+    expect(circleFloor).toEqual([{ centerKey: G, radius: 10, angleKey: G }]);
   });
 
   it("retire d'un nœud qui ignore les collisions toutes ses paires, contre poutres et roues", () => {

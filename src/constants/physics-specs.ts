@@ -1,6 +1,14 @@
-import { DOWN } from "../types";
+import { DOWN, Point2, SimulationSettings, ZERO } from "../types";
 
-export const GRAVITY = DOWN.mul(9.81); // m/s^2
+/** Earth's gravity, m/s² — a fixed reference scale (the grab's stiffness is sized against it), not what a mechanism integrates: that is `gravity_vector`. */
+export const GRAVITY = DOWN.mul(9.81);
+
+/** The acceleration a mechanism's settings integrate: downward at its own strength, or none with gravity off. */
+export function gravity_vector(
+  settings: Pick<SimulationSettings, "gravity" | "gravityStrength">,
+): Point2 {
+  return settings.gravity ? DOWN.mul(settings.gravityStrength) : ZERO;
+}
 
 export const DEFAULT = {
   LINEAR_MASS: 1, // kg/m
@@ -18,10 +26,6 @@ export const DEFAULT = {
    * Here the beam's speed decays over ~40 s while the gear is held within ~40 ms, so a gear train wants it turned down.
    */
   ROTATIONAL_FRICTION: 0.001,
-  /**
-   * Restitution of every impact — collisions, the floor, sliders reaching an end stop: 0 = fully inelastic, what blocks just stops; 1 = elastic, bounces back at the speed it arrived.
-   */
-  RESTITUTION: 0.9,
 } as const;
 
 /**

@@ -467,7 +467,9 @@ const App: React.FC = () => {
     appMode,
     setAppMode,
     setCanvasState,
-    gravity: mechanism.simulation.gravity,
+    gravity: mechanism.simulation.gravity
+      ? mechanism.simulation.gravityStrength
+      : 0,
     collisions: mechanism.simulation.collisions,
     floor: mechanism.simulation.floor.enabled,
     supportReactions: mechanism.simulation.supportReactions,

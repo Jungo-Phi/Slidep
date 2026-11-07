@@ -26,7 +26,7 @@ import {
   effort_snapshot_at,
 } from "../../solver/dynamics/simulation-engine";
 import { compute_cohesion_field } from "../../solver/recording/cohesion-field";
-import { GRAVITY } from "../../../constants/physics-specs";
+import { gravity_vector } from "../../../constants/physics-specs";
 import { available_overlays, overlay_shown } from "../../../utils/element-queries";
 import { element_mass } from "../../../utils/element-mass";
 import { shown_element_name } from "../../../utils";
@@ -136,7 +136,7 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
           shown,
           metric,
           snapshot,
-          analysedMechanism.simulation.gravity,
+          gravity_vector(analysedMechanism.simulation),
           analysedMechanism.materials,
           analysedMechanism.profiles,
         )
@@ -212,7 +212,7 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
       cohesion,
       analysedMechanism.loads,
       effortSnapshot,
-      analysedMechanism.simulation.gravity ? GRAVITY : ZERO,
+      gravity_vector(analysedMechanism.simulation),
     );
   }, [diagramBeam, effortSnapshot, analysedMechanism]);
   // Clears the canvas's own marker when the diagrams go away — nothing else ever un-sets it once one stops being hovered without the mouse ever leaving it.

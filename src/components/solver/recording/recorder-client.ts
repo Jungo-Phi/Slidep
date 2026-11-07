@@ -112,9 +112,9 @@ export class RecorderClient {
     this.post({ type: "grab", grab });
   }
 
-  /** Dynamic mode only: whether the next steps integrate gravity. */
-  setGravity(on: boolean): void {
-    this.post({ type: "gravity", on });
+  /** Dynamic mode only: the downward acceleration (m/s²) the next steps integrate, 0 with gravity off. */
+  setGravity(strength: number): void {
+    this.post({ type: "gravity", strength });
   }
 
   /** Both modes: whether the next steps detect and resist collisions. */

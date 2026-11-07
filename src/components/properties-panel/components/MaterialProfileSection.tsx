@@ -138,7 +138,15 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
           </Typography>
           <KeyboardArrowDown fontSize="small" />
         </Box>
-        <Box sx={{ display: "flex", justifySelf: "end", flexShrink: 0 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifySelf: "end",
+            flexShrink: 0,
+            // Ink rather than the IconButton default (`action.active`, a faded ink), like the rest of the panel; a disabled button keeps its own grey.
+            "& .MuiIconButton-root:not(.Mui-disabled)": { color: "text.primary" },
+          }}
+        >
           {/* Kept in place when mixed, only disabled: the row doesn't shift, and the tooltip says what to do instead. */}
           <Tooltip title={selected ? t("edit") : editDisabledHint}>
             <span>

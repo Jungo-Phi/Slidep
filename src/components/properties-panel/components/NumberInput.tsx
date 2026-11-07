@@ -43,6 +43,8 @@ interface NumberInputProps {
   step?: number;
   large?: boolean;
   accent?: boolean;
+  /** Width of the text zone, in px, where the default would cut a long value and its unit short. */
+  width?: number;
   /** Unsigned, which means always positive */
   unsigned?: boolean;
   adornment?: NumberInputAdornment;
@@ -97,6 +99,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   mixed = false,
   alert = false,
   atLimit = false,
+  width: textWidth,
 }) => {
   const disabled = shownDisabled || live;
   const unit = kind ? display_unit(value, kind, precision) : RAW_UNIT;
@@ -128,7 +131,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   // The adornment eats into the text zone, so the field grows to keep it intact.
   const height = large ? 32 : 24;
   const adornmentWidth = adornment ? height - 8 : 0;
-  const width = (large ? 100 : 96) + adornmentWidth;
+  const width = (textWidth ?? (large ? 100 : 96)) + adornmentWidth;
   const rounding = precision;
   // The finest step the up/down arrows snap to before falling back to `step`.
   const grain = fineStep ?? Math.pow(10, -rounding);

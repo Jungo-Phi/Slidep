@@ -1,4 +1,4 @@
-import { Action, MechanicalElement } from "../../types";
+import { Action, MechanicalElement, SimulationSettings } from "../../types";
 import { can_collide, element_collides } from "../../utils/element-queries";
 
 /** The elements that can collide — the denominator of the n/total counter. */
@@ -49,3 +49,8 @@ export function set_all_collides(
       oldValue: element_collides(el),
     }));
 }
+
+/** Whether a per-element collision flag can do anything at all under `simulation`: it only says whether the element takes part in contacts, and with neither collisions nor the floor on there are none. */
+export const contacts_active = (
+  simulation: Pick<SimulationSettings, "collisions" | "floor">,
+): boolean => simulation.collisions || simulation.floor.enabled;

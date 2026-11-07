@@ -60,7 +60,7 @@ import {
   pool_key_for_metric,
   quantity_kind_for_metric,
 } from "../../solver/recording/negligibility-pool";
-import { GRAVITY } from "../../../constants/physics-specs";
+import { gravity_vector } from "../../../constants/physics-specs";
 import type { LoadElement } from "../../../types/element";
 import {
   PROBE_METRIC_LABEL_KEYS,
@@ -1115,7 +1115,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     return compute_force_balance(
       apply_dynamic_snapshot_to_mechanism(analysedMechanism, dynSnap),
       dynSnap,
-      analysedMechanism.simulation.gravity ? GRAVITY : ZERO,
+      gravity_vector(analysedMechanism.simulation),
       momentBalancePoint,
     );
   }, [

@@ -1,10 +1,9 @@
-import { MechanicalElement, OverlayKind, ProbeMetric } from "../../types";
+import { MechanicalElement, OverlayKind, Point2, ProbeMetric } from "../../types";
 import { StringKey } from "../../i18n";
 import { probe_metric_available } from "../canvas/ProbeMetricSelector";
 import { DynamicSnapshot } from "../../types/runtime-state";
 import { PhysicsOverlayKind } from "../../constants/physics-display-specs";
 import { ICON_COLORS } from "../../theme/canvas-theme";
-import { GRAVITY } from "../../constants/physics-specs";
 import { icon, icon_tinted } from "../element-palette/iconDataUris";
 import { available_overlays, is_node_element } from "../../utils/element-queries";
 import {
@@ -402,7 +401,8 @@ export function mass_reading_sample(
   element: MechanicalElement,
   metric: "weight" | "inertia" | "inertia-moment",
   snapshot: DynamicSnapshot | undefined,
-  gravityOn: boolean,
+  /** The acceleration the mechanism integrates — `gravity_vector` of its settings, zero with gravity off. */
+  gravity: Point2,
   materials: MaterialDef[],
   profiles: ProfileDef[],
 ): MetricSample | undefined {
@@ -424,9 +424,9 @@ export function mass_reading_sample(
   }
   const vector =
     metric === "weight"
-      ? gravityOn
-        ? GRAVITY.mul(mass)
-        : undefined
+      ? gravity.length() === 0
+        ? undefined
+        : gravity.mul(mass)
       : snapshot && element_acceleration(element, snapshot)?.mul(mass);
   if (!vector) return undefined;
   return {

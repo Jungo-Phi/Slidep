@@ -395,6 +395,12 @@ export type Action =
   | { type: "SetGravity"; enabled: boolean }
   | { type: "SetCollisions"; enabled: boolean }
   | {
+      type: "ChangeSimulationValue";
+      setting: SimulationValueSetting;
+      newValue: number;
+      oldValue: number;
+    }
+  | {
       type: "ChangeFloorHeight";
       newValue: number;
       oldValue: number;
@@ -408,3 +414,10 @@ export type Action =
       /** Typed and validated rather than dragged — see `MoveNode`. */
       committed?: boolean;
     };
+
+/** The numeric settings of the physics the mechanism runs under, each edited through `ChangeSimulationValue` — see `SimulationSettings`. */
+export type SimulationValueSetting =
+  | "gravityStrength"
+  | "restitution"
+  | "staticFriction"
+  | "dynamicFriction";

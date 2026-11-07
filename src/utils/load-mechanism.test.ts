@@ -80,7 +80,10 @@ describe("load_mechanism", () => {
       ...mechanism,
       simulation: {
         gravity: false,
+        gravityStrength: 3.71,
         collisions: true,
+        restitution: 0.4,
+        contactFriction: { static: 0.6, dynamic: 0.5 },
         floor: { enabled: true, height: 2.5, angle: 0.3 },
         beamStressLens: "none",
         supportReactions: false,

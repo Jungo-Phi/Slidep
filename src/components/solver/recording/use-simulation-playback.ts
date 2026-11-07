@@ -78,7 +78,7 @@ import {
   extend_stress_scale,
   shear_admissible_stress,
 } from "./cohesion-field";
-import { GRAVITY } from "../../../constants/physics-specs";
+import { DOWN } from "../../../types/point2";
 import { NEGLIGIBLE_STRESS_FRACTION } from "../../../constants/physics-display-specs";
 import {
   extend_negligibility_pool,
@@ -349,10 +349,10 @@ export type UseSimulationPlaybackArgs = {
     update: CanvasState | ((prev: CanvasState) => CanvasState),
   ) => void;
   /**
-   * Dynamic mode only: whether the predict step integrates gravity.
+   * Dynamic mode only: the downward acceleration (m/s²) the predict step integrates, 0 with gravity off.
    * Read every render through a ref, like `mechanism`/`appMode` — see the class doc below.
    */
-  gravity: boolean;
+  gravity: number;
   /**
    * Both modes: whether the next steps detect and resist collisions.
    * Same reasoning as `gravity` — read every render through a ref.
@@ -729,7 +729,7 @@ export function useSimulationPlayback({
       };
       if (mode === "dynamic") {
         const dynSnap = snapshot as DynamicSnapshot;
-        const gravity = gravityRef.current ? GRAVITY : new Point2(0, 0);
+        const gravity = DOWN.mul(gravityRef.current);
         // The field along a beam is read whole at the recorded instant its torsors belong to, pose included, and drawn along the beam where it stands now.
         const effortSnap = held ? dynSnap : (effort_snapshot_at(snaps as DynamicSnapshot[], rs.time) ?? dynSnap);
         let effortMechanism: Mechanism | undefined;
@@ -1052,7 +1052,7 @@ export function useSimulationPlayback({
                         mech.mechanicalElements,
                         mech.loads,
                         simulationSnapshots as DynamicSnapshot[],
-                        gravityRef.current ? GRAVITY : new Point2(0, 0),
+                        DOWN.mul(gravityRef.current),
                         mech.materials,
                         mech.profiles,
                       )
@@ -1181,7 +1181,7 @@ export function useSimulationPlayback({
                     mech.mechanicalElements,
                     mech.loads,
                     simulationSnapshots as DynamicSnapshot[],
-                    gravityRef.current ? GRAVITY : new Point2(0, 0),
+                    DOWN.mul(gravityRef.current),
                     mech.materials,
                     mech.profiles,
                   )

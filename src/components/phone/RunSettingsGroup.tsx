@@ -10,10 +10,7 @@ import { Action, AppMode, Mechanism, MechanismMetadata } from "../../types";
 import { t } from "../../i18n";
 import { OverlaysMenu, OverlaysMenuProps } from "../toolbar/OverlaysMenu";
 import { ModeMenu, PhysicsMenu } from "../toolbar/RunSettingsMenus";
-import {
-  RUN_MODES,
-  usePhysicsSwitches,
-} from "../toolbar/playback-actions";
+import { RUN_MODES } from "../toolbar/playback-actions";
 import { overlays_shown } from "../properties-panel/overlay-actions";
 
 /** One segment of the group: what it shows, then the caret every one of them carries, since each opens a menu. */
@@ -67,7 +64,6 @@ export const RunSettingsGroup: React.FC<RunSettingsGroupProps> = ({
   const anchor = (menu: "overlays" | "physics" | "mode") =>
     open?.menu === menu ? open.anchor : null;
   const close = () => setOpen(null);
-  const physics = usePhysicsSwitches(appMode, mechanism);
   const anyShown = overlays_shown(
     overlays.mechanicalElements,
     overlays.beamStressLens,
@@ -134,8 +130,10 @@ export const RunSettingsGroup: React.FC<RunSettingsGroupProps> = ({
       <PhysicsMenu
         anchorEl={anchor("physics")}
         onClose={close}
-        switches={physics}
+        appMode={appMode}
+        mechanism={mechanism}
         applyActions={applyActions}
+        touch
       />
       <ModeMenu
         anchorEl={anchor("mode")}

@@ -18,6 +18,9 @@ export type KinNodes = {
   angles: Map<string, number>;
 };
 
+/** A gear on one side of a collision contact: its angle dof, and the radius at which the contact touches its rim. */
+export type ContactSpin = { angleKey: string; radius: number };
+
 /** Kinds of (non oriented) connections between points. */
 export type Link = {
   /** Element this constraint belongs to, for diagnostics and canvas
@@ -56,6 +59,9 @@ export type Link = {
       key1: string;
       key2: string;
       distance: number;
+      /** The gear `key1`, `key2` is the centre of, when it is one: contact friction turns it. */
+      spin1?: ContactSpin;
+      spin2?: ContactSpin;
     }
   | {
       /**
@@ -73,6 +79,8 @@ export type Link = {
       key3: string;
       offset: number;
       side: number;
+      /** The gear `key3` is the centre of, when it is one: contact friction turns it. */
+      spin3?: ContactSpin;
     }
   | {
       type: "DistanceToLine";
@@ -95,6 +103,8 @@ export type Link = {
       key3: string;
       normal: Point2;
       offset: number;
+      /** The gear `key3` is the centre of, when it is one: contact friction turns it. */
+      spin3?: ContactSpin;
     }
   // `normalOffset` (both OnSegment links) holds the point that many metres OFF the segment, on the side it already lies.
   // Absent = on it.

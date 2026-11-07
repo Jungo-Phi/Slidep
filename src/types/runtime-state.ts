@@ -4,7 +4,7 @@
 
 import { ConstraintElement, ID, LoadElement, MechanicalElement } from "./element";
 import type { MaterialDef, ProfileDef } from "./material";
-import type { FloorConfig } from "./mechanism";
+import type { ContactFriction, FloorConfig } from "./mechanism";
 
 /**
  * Simulation speed presets
@@ -94,7 +94,7 @@ export interface EnergySample {
   /** J — the work the pull of a dynamic grab gave over this frame, apart from `loadPower` since it is the cursor's action and not a load the mechanism carries: signed, positive while the cursor drags the mechanism along its motion, and zero without a grab.
    * An energy per frame rather than a rate, like `impactLoss`: the pull closes the gap to the cursor within a frame or two, so a power read at the frame's end says nothing of what it gave. */
   grabWork: number;
-  /** J — kinetic energy the collision and floor bounces removed during this frame: an energy, not a rate, since an impact is an event. */
+  /** J — kinetic energy the contacts removed during this frame — the bounces of collisions, the floor and end stops, and the slip of collisions and the floor: an energy, not a rate, since an impact is an event. */
   impactLoss: number;
 }
 
@@ -368,7 +368,10 @@ export interface ParameterSnapshot {
   materials: MaterialDef[];
   profiles: ProfileDef[];
   gravity: boolean;
+  gravityStrength: number;
   collisions: boolean;
+  restitution: number;
+  contactFriction: ContactFriction;
   floor: FloorConfig;
 }
 

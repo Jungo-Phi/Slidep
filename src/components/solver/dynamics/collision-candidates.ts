@@ -13,24 +13,27 @@ export const FLOOR_ANCHOR_KEY = "floor_anchor";
  */
 export type CollisionCandidates = {
   pointSegment: { pointKey: string; segKey1: string; segKey2: string }[];
-  pointCircle: { pointKey: string; centerKey: string; radius: number }[];
+  /** `angleKey`, here and below, is the gear's own angle dof, which contact friction turns; absent, the circle does not spin. */
+  pointCircle: { pointKey: string; centerKey: string; radius: number; angleKey?: string }[];
   circleSegment: {
     centerKey: string;
     radius: number;
+    angleKey?: string;
     segKey1: string;
     segKey2: string;
   }[];
   circleCircle: {
     key1: string;
     radius1: number;
+    angleKey1?: string;
     key2: string;
     radius2: number;
+    angleKey2?: string;
   }[];
-  /** Every colliding node/gear against the floor's line — always built, independently of
-   * `mechanism.simulation.floor.enabled`: the live flag gates their use at runtime (see `collision_links`), the same way ordinary candidates are always built regardless of `collisions`.
+  /** Every colliding node/gear against the floor's line — always built, independently of `mechanism.simulation.floor.enabled`: the live flag gates their use at runtime (see `collision_links`), the same way ordinary candidates are always built regardless of `collisions`.
    * A height/angle change only takes effect on the next compile. */
   pointFloor: { pointKey: string }[];
-  circleFloor: { centerKey: string; radius: number }[];
+  circleFloor: { centerKey: string; radius: number; angleKey?: string }[];
 };
 
 /**
@@ -115,6 +118,7 @@ export function build_collision_candidates(
         circleSegment.push({
           centerKey: remap(gear.id),
           radius: gear.radius,
+          angleKey: gear.id,
           segKey1,
           segKey2,
         });
@@ -126,7 +130,7 @@ export function build_collision_candidates(
       for (const p of collidingPoints) {
         if (p.key === centerKey) continue; // fused with its own axle
         if (p.rawIds.some((id) => welded.has(id))) continue; // welded to this gear (rim, e.g.)
-        pointCircle.push({ pointKey: p.key, centerKey, radius });
+        pointCircle.push({ pointKey: p.key, centerKey, radius, angleKey: element.id });
       }
     }
   }
@@ -141,8 +145,10 @@ export function build_collision_candidates(
       circleCircle.push({
         key1: remap(g1.id),
         radius1: g1.radius,
+        angleKey1: g1.id,
         key2: remap(g2.id),
         radius2: g2.radius,
+        angleKey2: g2.id,
       });
     }
 
@@ -153,6 +159,7 @@ export function build_collision_candidates(
   const circleFloor: CollisionCandidates["circleFloor"] = gears.map((g) => ({
     centerKey: remap(g.id),
     radius: g.radius,
+    angleKey: g.id,
   }));
 
   return {

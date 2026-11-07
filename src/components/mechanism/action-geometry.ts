@@ -114,6 +114,7 @@ const ACTION_GEOMETRY: Record<
   ChangeFloorAngle: NONE_COALESCING,
   SetGravity: NONE,
   SetCollisions: NONE,
+  ChangeSimulationValue: NONE_COALESCING,
   SetElementCollides: NONE,
   SetBeamStressLens: NONE,
   SetSupportReactions: NONE,

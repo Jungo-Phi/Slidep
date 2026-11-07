@@ -414,7 +414,7 @@ describe("migrate_document", () => {
       floor: { enabled: true, height: 3, angle: 0.5 },
     };
     const result = migrate_document(doc({ formatVersion: 7, simulation }));
-    expect(result.simulation).toEqual({
+    expect(result.simulation).toMatchObject({
       ...simulation,
       beamStressLens: "none",
       supportReactions: false,
@@ -428,7 +428,7 @@ describe("migrate_document", () => {
       floor: { enabled: false, height: 0, angle: 0 },
     };
     const result = migrate_document(doc({ formatVersion: 11, simulation }));
-    expect(result.simulation).toEqual({
+    expect(result.simulation).toMatchObject({
       ...simulation,
       beamStressLens: "none",
       supportReactions: false,
@@ -443,7 +443,7 @@ describe("migrate_document", () => {
       beamStressLens: "bending",
     };
     const result = migrate_document(doc({ formatVersion: 12, simulation }));
-    expect(result.simulation).toEqual({
+    expect(result.simulation).toMatchObject({
       ...simulation,
       supportReactions: false,
     });
@@ -582,6 +582,18 @@ describe("migrate_document", () => {
       const result = v14(elements);
       expect(result.mechanicalElements).toEqual(elements);
       expect(result.history).toEqual([["a"]]);
+    });
+  });
+
+  it("gives a v15 document the contact and gravity settings the solver used before they were settable", () => {
+    const result = migrate_document(
+      doc({ formatVersion: 15, simulation: { gravity: true, collisions: false } }),
+    );
+    expect(result.simulation).toMatchObject({
+      gravity: true,
+      gravityStrength: 9.81,
+      restitution: 0.8,
+      contactFriction: { static: 0.5, dynamic: 0.4 },
     });
   });
 

@@ -1,6 +1,7 @@
 import { Action, LoadElement, Mechanism, MechanicalElement } from "../../types";
 import type { ParameterSnapshot } from "../../types/runtime-state";
 import { element_collides } from "../../utils/element-queries";
+import { SIMULATION_VALUE_SETTINGS, simulation_value } from "./simulation-values";
 
 /**
  * What a parameter action sets, as a key two actions share exactly when they set the same value.
@@ -25,6 +26,8 @@ function parameter_key(action: Action): string | undefined {
       return `${action.type}:${action.id}`;
     case "SetElementCollides":
       return `${action.type}:${action.elementID}`;
+    case "ChangeSimulationValue":
+      return `${action.type}:${action.setting}`;
     case "ChangeForce":
     case "ChangeDistributedForce":
     case "ChangeMoment":
@@ -244,6 +247,18 @@ export function rebased_bundle(
       newValue: shown.floor.angle,
       oldValue: settings.floor.angle,
     });
+
+  for (const setting of SIMULATION_VALUE_SETTINGS) {
+    const current = simulation_value(settings, setting);
+    const past = simulation_value(shown, setting);
+    if (current !== past)
+      changes.push({
+        type: "ChangeSimulationValue",
+        setting,
+        newValue: past,
+        oldValue: current,
+      });
+  }
 
   const touched = new Set(actions.map(parameter_key));
   const kept = changes.filter((action) => !touched.has(parameter_key(action)));

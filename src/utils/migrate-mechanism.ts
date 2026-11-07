@@ -14,7 +14,7 @@ import {
 import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 15;
+export const CURRENT_FORMAT_VERSION = 16;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -206,6 +206,20 @@ const MIGRATIONS: MigrationStep[] = [
     // Only a document that had such a junction loses its stack, inside the step: an entry there could put the belt back on a node that carries something else.
     preservesHistory: true,
     apply: (doc) => free_belt_junctions(doc),
+  },
+  {
+    to: 16,
+    // Gravity's strength, the restitution and the contact friction become settings of the mechanism: a document from before gets the defaults a new mechanism starts with — Earth's gravity, which it ran under already, and the bounce and friction its contacts only lacked for want of a setting.
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      simulation: {
+        gravityStrength: DEFAULT_SIMULATION.gravityStrength,
+        restitution: DEFAULT_SIMULATION.restitution,
+        contactFriction: { ...DEFAULT_SIMULATION.contactFriction },
+        ...(is_record(doc.simulation) ? doc.simulation : {}),
+      },
+    }),
   },
 ];
 

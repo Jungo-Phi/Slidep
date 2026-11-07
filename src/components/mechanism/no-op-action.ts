@@ -62,6 +62,7 @@ export function is_noop_action(action: Action): boolean {
       return true;
     case "ChangeFloorHeight":
     case "ChangeFloorAngle":
+    case "ChangeSimulationValue":
       return action.newValue === action.oldValue;
     default:
       return false;

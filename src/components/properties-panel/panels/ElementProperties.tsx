@@ -64,6 +64,7 @@ import { element_to_hovered_part, linked_constraint } from "../../canvas/utils";
 import { measure_belt_length } from "../../../utils/belt-geom";
 import { is_groundable } from "../../../utils/element-queries";
 import CollisionToggleButton from "../components/CollisionToggleButton";
+import { contacts_active } from "../collision-actions";
 import ToggleIcon from "../components/ToggleIcon";
 import React from "react";
 import { icon } from "../../element-palette/iconDataUris";
@@ -275,8 +276,9 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
           trailingControls={
             <>
               <CollisionToggleButton
-                element={element}
-                shown={shown_as(element)}
+                elements={[element]}
+                shown={[shown_as(element)]}
+                active={contacts_active(analysedMechanism.simulation)}
                 applyActions={applyActions}
                 sx={{ padding: 0.2, border: 1, borderColor: "divider" }}
               />

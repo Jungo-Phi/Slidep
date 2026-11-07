@@ -70,7 +70,7 @@ export type ToRecorder =
   | { type: "target"; targetTime: number }
   /** Dynamic mode only: whether the predict step integrates gravity. Rare — a Chip click,
    * not a per-frame value — so it is its own message rather than riding along `target`. */
-  | { type: "gravity"; on: boolean }
+  | { type: "gravity"; strength: number }
   /** Both modes: whether the next steps detect and resist collisions. Same reasoning as
    * `gravity` — a toggle click, not a per-frame value, and no recompile needed either. */
   | { type: "collisions"; on: boolean }

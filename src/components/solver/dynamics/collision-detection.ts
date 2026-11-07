@@ -1,4 +1,5 @@
 import { Link, Point2 } from "../../../types";
+import type { ContactSpin } from "../../../types/kinematic-solver-links";
 import { CollisionCandidates, FLOOR_ANCHOR_KEY } from "./collision-candidates";
 import { MIN_EXTENT_M } from "../nodes";
 import type { LinkSlots } from "../kinematics/link-slots";
@@ -158,6 +159,11 @@ type CollisionLink = Extract<
   { type: "MinDistance" | "MinDistanceToSegment" | "MinDistanceToLine" }
 >;
 
+/** The `field` naming a contact's gear, to spread into its link; empty for a circle without an angle dof. */
+function spin<F extends string>(field: F, angleKey: string | undefined, radius: number): { [K in F]?: ContactSpin } {
+  return angleKey === undefined ? {} : ({ [field]: { angleKey, radius } } as { [K in F]?: ContactSpin });
+}
+
 /**
  * Every candidate's link, in a fixed order, with `side` still to be read: `collision_links` reads it off `positions`, a `ContactSet`'s solve off its nodes.
  *
@@ -192,6 +198,7 @@ function contact_links(
         key1: c.pointKey,
         key2: c.centerKey,
         distance: c.radius + eps,
+        ...spin("spin2", c.angleKey, c.radius),
       });
 
     for (const c of candidates.circleSegment)
@@ -202,6 +209,7 @@ function contact_links(
         key2: c.segKey2,
         key3: c.centerKey,
         offset: c.radius + eps,
+        ...spin("spin3", c.angleKey, c.radius),
         side: 1,
       });
 
@@ -212,6 +220,8 @@ function contact_links(
         key1: c.key1,
         key2: c.key2,
         distance: c.radius1 + c.radius2 + eps,
+        ...spin("spin1", c.angleKey1, c.radius1),
+        ...spin("spin2", c.angleKey2, c.radius2),
       });
   }
 
@@ -234,6 +244,7 @@ function contact_links(
         key3: c.centerKey,
         normal: floorNormal,
         offset: c.radius + eps,
+        ...spin("spin3", c.angleKey, c.radius),
       });
   }
 

@@ -58,9 +58,20 @@ export interface FloorConfig {
   angle: number;
 }
 
+/** Coulomb friction at a contact (collisions and the floor), dimensionless: `static` holds a contact still, `dynamic` brakes one that slides. */
+export interface ContactFriction {
+  static: number;
+  dynamic: number;
+}
+
 export interface SimulationSettings {
   gravity: boolean;
+  /** m/s² — the acceleration gravity integrates when `gravity` is on, always downward. */
+  gravityStrength: number;
   collisions: boolean;
+  /** Restitution of every impact — collisions, the floor, sliders reaching an end stop: 0 = fully inelastic, what blocks just stops; 1 = elastic, bounces back at the speed it arrived. */
+  restitution: number;
+  contactFriction: ContactFriction;
   floor: FloorConfig;
   /** Which beam-fill reading the canvas colours every beam with — a property of this mechanism, like gravity, not a viewer preference: what is worth checking (bending, shear, utilization…) depends on the structure at hand. */
   beamStressLens: BeamStressLens;
@@ -72,7 +83,11 @@ export const DEFAULT_FLOOR: FloorConfig = { enabled: false, height: 0, angle: 0 
 
 export const DEFAULT_SIMULATION: SimulationSettings = {
   gravity: true,
+  gravityStrength: 9.81,
   collisions: false,
+  restitution: 0.8,
+  // Dry contact between ordinary solids (wood, metal…): enough grip for a wheel on the floor to roll rather than skid.
+  contactFriction: { static: 0.5, dynamic: 0.4 },
   floor: DEFAULT_FLOOR,
   beamStressLens: "none",
   supportReactions: false,

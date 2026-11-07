@@ -15,6 +15,7 @@ import {
   ProfileDef,
 } from "../../types";
 import { is_nameable } from "../../utils/element-queries";
+import { simulation_values, with_simulation_value } from "./simulation-values";
 import {
   get_constraint_element_from_id,
   get_element_from_id,
@@ -65,6 +66,7 @@ export function actionReducer(
   let floor = { ...mechanism.simulation.floor };
   let gravity = mechanism.simulation.gravity;
   let collisions = mechanism.simulation.collisions;
+  let simulationValues = simulation_values(mechanism.simulation);
   let beamStressLens = mechanism.simulation.beamStressLens;
   let supportReactions = mechanism.simulation.supportReactions;
   let element: UnionElement;
@@ -540,6 +542,13 @@ export function actionReducer(
       case "SetCollisions":
         collisions = action.enabled !== revert;
         break;
+      case "ChangeSimulationValue":
+        simulationValues = with_simulation_value(
+          simulationValues,
+          action.setting,
+          revert ? action.oldValue : action.newValue,
+        );
+        break;
       case "UpdatePositionsToValidState":
         let positions: Map<string, Point2>;
         let radii: Map<string, number>;
@@ -584,6 +593,7 @@ export function actionReducer(
       floor,
       gravity,
       collisions,
+      ...simulationValues,
       beamStressLens,
       supportReactions,
     },

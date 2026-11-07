@@ -46,6 +46,7 @@ export const PARAMETER_ACTIONS: Action["type"][] = [
   "ChangeFloorAngle",
   "SetGravity",
   "SetCollisions",
+  "ChangeSimulationValue",
   "ChangeMass",
   "ChangeSurfaceMass",
   "ChangeStiffness",

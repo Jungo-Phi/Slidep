@@ -35,12 +35,16 @@ import {
   sorted_for_display,
 } from "../element-order";
 import { get_element_icon } from "../../element-palette/elementIcon";
-import { icon } from "../../element-palette/iconDataUris";
 import { multiple_selection_state } from "../../canvas/tools/canvas-state-reducer";
-import { collision_count, set_all_collides } from "../collision-actions";
+import {
+  collision_count,
+  contacts_active,
+  set_all_collides,
+} from "../collision-actions";
 import ElementDisplay from "./ElementDisplay";
 import GroupProperties from "./GroupProperties";
 import CommandCountRow from "./CommandCountRow";
+import { icon } from "../../element-palette/iconDataUris";
 import StructureOnly from "./StructureOnly";
 import {
   OVERLAY_LABEL_KEYS,
@@ -110,6 +114,18 @@ interface ElementsOverviewProps {
    * Leaves the canvas out of whatever it was selecting. */
   onDeleteElements: (ids: ID[]) => void;
 }
+
+/** A collision command's own glyph, sized as the display rows' eyes are. */
+const CollisionGlyph: React.FC<{ name: "collision" | "collision-off" }> = ({
+  name,
+}) => (
+  <Box
+    component="img"
+    src={icon(name)}
+    alt=""
+    sx={{ width: 24, height: 24, display: "block", m: -0.25 }}
+  />
+);
 
 /**
  * The elements tab's list: one section per element type, carrying that type's own common fields and, behind its chevron, its elements one by one.
@@ -411,7 +427,12 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
             </Typography>
           )}
         </Box>
-        <Typography variant="subtitle1" noWrap sx={{ fontWeight: 500 }}>
+        <Typography
+          variant="subtitle1"
+          noWrap
+          color="text.primary"
+          sx={{ fontWeight: 500 }}
+        >
           {tn("selection_count", listed.length)}
         </Typography>
       </IconButton>
@@ -471,6 +492,49 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
           <Divider sx={{ mx: -2 }} />
         </>
       )}
+
+      {/* Whether the selection takes part in contacts: a property of the elements rather than a layer drawn over them, so a section of its own ahead of their types, not a row under "Show". */}
+      {(() => {
+        const { on, total } = collision_count(
+          listed.map(
+            (el) =>
+              analysedMechanism.mechanicalElements.find((e) => e.id === el.id) ??
+              el,
+          ),
+        );
+        if (total === 0) return null;
+        const row = (
+          <Box>
+            {/* The two commands carry the glyph already: one ahead of the label would say it a third time. */}
+            <CommandCountRow
+              label={t("collisions")}
+              on={on}
+              total={total}
+              px={0.5}
+              // Plain images, not `ToggleIcon`: its own inline opacity would beat the row's dimming of a command that cannot be clicked.
+              onIcon={<CollisionGlyph name="collision" />}
+              offIcon={<CollisionGlyph name="collision-off" />}
+              onTitle={t("include_all_in_collisions")}
+              offTitle={t("exclude_all_from_collisions")}
+              onSetAll={(include) =>
+                applyActions(set_all_collides(listed, include))
+              }
+            />
+          </Box>
+        );
+        return (
+          <>
+            {contacts_active(analysedMechanism.simulation) ? (
+              row
+            ) : (
+              <Tooltip title={t("collisions_inactive_hint")} placement="top">
+                {row}
+              </Tooltip>
+            )}
+            <Divider sx={{ mx: -2 }} />
+          </>
+        );
+      })()}
 
       {groups.map((group) => (
         <Box key={group.type}>
@@ -554,21 +618,6 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
           );
         })}
       </Box>
-
-      {(() => {
-        const { on, total } = collision_count(listed);
-        if (total === 0) return null;
-        return (
-          <CommandCountRow
-            icon={icon("collision")}
-            label={t("collisions")}
-            on={on}
-            total={total}
-            px={0.5}
-            onSetAll={(show) => applyActions(set_all_collides(listed, show))}
-          />
-        );
-      })()}
 
       {(metrics.massCount > 0 || metrics.beamCount > 0) && (
         <>

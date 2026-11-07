@@ -217,6 +217,7 @@ function merge_value_edit(lastAction: Action, newAction: Action): void {
       break;
     case "ChangeFloorHeight":
     case "ChangeFloorAngle":
+    case "ChangeSimulationValue":
       if (newAction.type !== lastAction.type) break;
       lastAction.newValue = newAction.newValue;
       break;
@@ -277,6 +278,8 @@ function merge_solved_edit(
  */
 function same_id(a: Action, b: Action): boolean {
   if ("id" in a && "id" in b) return a.id === b.id;
+  // Not an element's id, but the same question: is it the same value being edited.
+  if ("setting" in a && "setting" in b) return a.setting === b.setting;
   return !("id" in a) && !("id" in b);
 }
 

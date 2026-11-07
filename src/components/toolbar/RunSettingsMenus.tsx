@@ -3,84 +3,41 @@ import {
   alpha,
   Box,
   ButtonBase,
-  Chip,
-  ListItemText,
+  Divider,
   Menu,
   MenuItem,
+  Popover,
   Tooltip,
-  useTheme,
+  Typography,
 } from "@mui/material";
-import { KeyboardArrowDown } from "@mui/icons-material";
+import { KeyboardArrowDown, Replay } from "@mui/icons-material";
+import ToggleIcon from "../properties-panel/components/ToggleIcon";
+import { OVERLAY_ICON_SIZE } from "../properties-panel/element-readings";
 import { TOP_BAR_CONTROL_HEIGHT } from "./toolbar-metrics";
 import { t } from "../../i18n";
-import { Action, AppMode, Mechanism, MechanismMetadata } from "../../types";
-import { icon, icon_inked } from "../element-palette/iconDataUris";
+import {
+  Action,
+  AppMode,
+  DEFAULT_SIMULATION,
+  Mechanism,
+  MechanismMetadata,
+} from "../../types";
 import { useNonModalPopup } from "../common/use-non-modal-popup";
 import {
   change_app_mode,
   PhysicsSwitch,
   RUN_MODES,
+  usePhysicsSwitches,
+  useShownSimulation,
 } from "./playback-actions";
-
-interface PhysicsToggleProps {
-  on: boolean;
-  /** The palette icon's basename: the off state is its `-off` sibling. */
-  iconName: "gravity" | "collision" | "floor";
-  tooltip?: string;
-  /** Absent, the chip only shows the state: whatever holds it takes the click. */
-  onToggle?: () => void;
-  /** Diameter (px). */
-  size?: number;
-}
-
-/** One simulation switch (gravity, collisions, floor): icon only, filled when on. */
-export const PhysicsToggle: React.FC<PhysicsToggleProps> = ({
-  on,
-  iconName,
-  tooltip,
-  onToggle,
-  size = 22,
-}) => {
-  const theme = useTheme();
-  const chip = (
-    <Chip
-      icon={
-        <Box
-          component="img"
-          src={
-            on
-              ? icon_inked(iconName, theme.palette.primary.contrastText)
-              : icon(`${iconName}-off`)
-          }
-          alt=""
-          sx={{ width: (size * 18) / 22, height: (size * 18) / 22 }}
-        />
-      }
-      size="small"
-      clickable={!!onToggle}
-      onClick={onToggle}
-      variant="outlined"
-      sx={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        borderColor: on ? "primary.main" : "text.primary",
-        backgroundColor: on ? "primary.main" : "transparent",
-        color: on ? "primary.contrastText" : "inherit",
-        // The label's slot is what makes a chip a pill: dropped, the icon centres on its own.
-        "& .MuiChip-label": { display: "none" },
-        "& .MuiChip-icon": {
-          margin: 0,
-          color: on ? "primary.contrastText" : "inherit",
-        },
-        "&.MuiChip-clickable:hover": {
-          backgroundColor: on ? "primary.dark" : "action.hover",
-        },
-      }}
-    />
-  );
-  return tooltip ? <Tooltip title={tooltip}>{chip}</Tooltip> : chip;
-};
+import NumberInput from "../properties-panel/components/NumberInput";
+import { simulation_value } from "../mechanism/simulation-values";
+import type { SimulationValueSetting } from "../../types/actions";
+import type { StringKey } from "../../i18n";
+import {
+  LINEAR_ACCELERATION,
+  QuantityKind,
+} from "../../utils/quantity-format";
 
 interface MenuTriggerProps {
   /** Its accessible name, and its tooltip unless `tooltip` says otherwise. */
@@ -149,26 +106,199 @@ const useMenuProps = ({ anchorEl, onClose, nonModal }: AnchoredMenuProps) => {
   } as const;
 };
 
-/** The three physics switches as menu rows: each stays open on its click, so several can be flipped in a row. */
+/** The numeric settings' own fields: the symbol each is written with, how finely it is read, and the range it means anything in. */
+const VALUE_FIELDS: Record<
+  SimulationValueSetting,
+  {
+    symbol: string;
+    /** Absent, the field carries no tooltip: its row's label says enough. */
+    hintKey?: StringKey;
+    kind?: QuantityKind;
+    precision: number;
+    step: number;
+    max?: number;
+    /** A value to go back to, offered as the field's own button, and what that button says it does. */
+    reset?: { value: number; titleKey: StringKey };
+  }
+> = {
+  gravityStrength: {
+    symbol: "g",
+    kind: LINEAR_ACCELERATION,
+    precision: 2,
+    step: 0.1,
+    reset: { value: DEFAULT_SIMULATION.gravityStrength, titleKey: "gravity_reset" },
+  },
+  restitution: {
+    symbol: "e",
+    hintKey: "restitution_hint",
+    precision: 2,
+    step: 0.05,
+    max: 1,
+  },
+  staticFriction: {
+    symbol: "μs",
+    hintKey: "static_friction_hint",
+    precision: 2,
+    step: 0.05,
+  },
+  dynamicFriction: {
+    symbol: "μd",
+    hintKey: "dynamic_friction_hint",
+    precision: 2,
+    step: 0.05,
+  },
+};
+
+/** A section's name inside a top-bar popup, headed as the display menu heads its own. */
+const PopupHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Typography
+    variant="body2"
+    color="textDisabled"
+    sx={{ px: 2, py: 0.5, display: "block" }}
+  >
+    {children}
+  </Typography>
+);
+
+/**
+ * The physics the mechanism runs under: gravity and its strength, then the contacts — collisions, the floor, and how an impact bounces and rubs.
+ * A popover rather than a menu: it holds fields to type in, which a menu's own type-to-select would steal the keys from.
+ * Every value is the one in effect at the instant on screen, like the switches (see `useShownSimulation`); an edit is a parameter edit, so it applies mid-run without leaving the simulation.
+ */
 export const PhysicsMenu: React.FC<
   AnchoredMenuProps & {
-    switches: PhysicsSwitch[];
+    appMode: AppMode;
+    mechanism: Mechanism;
     applyActions: (actions: Action[]) => void;
+    /** Rows padded for a finger rather than a pointer. */
+    touch?: boolean;
   }
-> = ({ switches, applyActions, ...anchor }) => (
-  <Menu {...useMenuProps(anchor)}>
-    {switches.map((row) => (
-      <MenuItem
-        key={row.iconName}
-        onClick={() => applyActions([row.toggle])}
-        sx={{ gap: 1 }}
-      >
-        <PhysicsToggle on={row.on} iconName={row.iconName} size={28} />
-        <ListItemText>{t(row.labelKey)}</ListItemText>
-      </MenuItem>
-    ))}
-  </Menu>
-);
+> = ({ appMode, mechanism, applyActions, touch, ...anchor }) => {
+  const switches = usePhysicsSwitches(appMode, mechanism);
+  const shown = useShownSimulation(appMode, mechanism);
+  // Centred under its button, as the display menu is.
+  const menuProps = {
+    ...useMenuProps(anchor),
+    anchorOrigin: { vertical: "bottom", horizontal: "center" },
+    transformOrigin: { vertical: "top", horizontal: "center" },
+  } as const;
+  const switchOf = (name: PhysicsSwitch["iconName"]) =>
+    switches.find((row) => row.iconName === name)!;
+
+  const valueField = (setting: SimulationValueSetting) => {
+    const field = VALUE_FIELDS[setting];
+    const value = simulation_value(shown, setting);
+    const write = (newValue: number) =>
+      applyActions([
+        {
+          type: "ChangeSimulationValue",
+          setting,
+          newValue: Math.min(Math.max(newValue, 0), field.max ?? Infinity),
+          oldValue: simulation_value(mechanism.simulation, setting),
+        },
+      ]);
+    const reset = field.reset;
+    return (
+      <NumberInput
+        label={field.symbol}
+        title={field.hintKey ? t(field.hintKey) : ""}
+        kind={field.kind}
+        value={value}
+        precision={field.precision}
+        step={field.step}
+        unsigned
+        onChange={write}
+        // The reset button eats into the field: a value with its unit would no longer fit.
+        width={reset ? 112 : undefined}
+        adornment={
+          reset && {
+            icon: Replay,
+            title: t(reset.titleKey),
+            disabled: value === reset.value,
+            color: "secondary",
+            onClick: () => write(reset.value),
+          }
+        }
+      />
+    );
+  };
+
+  const minHeight = touch ? 44 : 36;
+
+  /**
+   * A setting switched on and off: the row itself is the switch, its glyph lit or faded as an element's own collision or anchor toggle is.
+   * A field it governs sits at the end of its row, outside the button: a click there is an edit, never a toggle.
+   */
+  const switchRow = (row: PhysicsSwitch, field?: React.ReactNode) => (
+    <Box sx={{ display: "flex", alignItems: "center", minHeight, pr: field ? 1.5 : 0 }}>
+      <Tooltip title={t(row.stateKey)} placement="left">
+        <ButtonBase
+          role="switch"
+          aria-checked={row.on}
+          onClick={() => applyActions([row.toggle])}
+          sx={{
+            flex: 1,
+            alignSelf: "stretch",
+            justifyContent: "flex-start",
+            gap: 1,
+            pl: 2,
+            pr: 2,
+            "&:hover": { backgroundColor: "action.hover" },
+          }}
+        >
+          <ToggleIcon
+            on={row.on}
+            onName={row.iconName}
+            offName={`${row.iconName}-off`}
+            size={OVERLAY_ICON_SIZE}
+          />
+          <Typography
+            variant="body1"
+            color={row.on ? "text.primary" : "text.secondary"}
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            {t(row.labelKey)}
+          </Typography>
+        </ButtonBase>
+      </Tooltip>
+      {field}
+    </Box>
+  );
+
+  const valueRow = (setting: SimulationValueSetting, labelKey: StringKey) => (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 2,
+        pl: 2,
+        pr: 1.5,
+        minHeight,
+      }}
+    >
+      <Typography variant="body1" sx={{ whiteSpace: "nowrap" }}>
+        {t(labelKey)}
+      </Typography>
+      {valueField(setting)}
+    </Box>
+  );
+
+  return (
+    <Popover {...menuProps}>
+      <Box sx={{ py: 1, minWidth: 300 }}>
+        {switchRow(switchOf("gravity"), valueField("gravityStrength"))}
+        <Divider sx={{ my: 1 }} />
+        <PopupHeading>{t("contacts_section")}</PopupHeading>
+        {switchRow(switchOf("collision"))}
+        {switchRow(switchOf("floor"))}
+        {valueRow("restitution", "restitution")}
+        {valueRow("staticFriction", "static_friction")}
+        {valueRow("dynamicFriction", "dynamic_friction")}
+      </Box>
+    </Popover>
+  );
+};
 
 /** The mode selector as a menu: picking a mode closes it. */
 export const ModeMenu: React.FC<

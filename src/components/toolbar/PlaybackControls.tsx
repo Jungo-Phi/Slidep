@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   Box,
+  Button,
   Divider,
   IconButton,
   ToggleButton,
@@ -10,6 +11,7 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
+  KeyboardArrowDown,
   FirstPage,
   LastPage,
   Pause,
@@ -43,13 +45,11 @@ import {
   change_app_mode,
   RUN_MODES,
   SPEEDS,
-  usePhysicsSwitches,
 } from "./playback-actions";
 import {
   MenuTrigger,
   ModeMenu,
   PhysicsMenu,
-  PhysicsToggle,
 } from "./RunSettingsMenus";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
 import {
@@ -60,57 +60,68 @@ import {
   TOP_BAR_SLIM_BUTTON_SX,
 } from "./toolbar-metrics";
 
-interface PhysicsTogglesProps {
+interface PhysicsButtonProps {
   appMode: AppMode;
   mechanism: Mechanism;
   applyActions: (actions: Action[]) => void;
-  /** Folds the three switches behind a single button opening them as a menu. */
-  folded: boolean;
+  /** Drops the label, the icon alone standing for the menu. */
+  condensed: boolean;
 }
 
-/** Gravity, collisions and floor, as they stand at the instant on screen: what they show is what they flip. */
-const PhysicsToggles: React.FC<PhysicsTogglesProps> = ({
+/**
+ * The "Physique ▾" top-bar button, built as "Afficher ▾" is: gravity, the contacts and their values, all behind one menu.
+ * A fixed icon rather than a state: no one of the settings stands for the others, and their states are read in the menu.
+ */
+const PhysicsButton: React.FC<PhysicsButtonProps> = ({
   appMode,
   mechanism,
   applyActions,
-  folded,
+  condensed,
 }) => {
-  const switches = usePhysicsSwitches(appMode, mechanism);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  if (folded)
-    return (
-      <>
-        {/* A fixed icon for the three settings together: none of them stands for the others, and their states are read in the menu. */}
-        <MenuTrigger
-          label={t("physics_settings")}
-          expanded={!!anchorEl}
-          onToggle={(button) =>
-            setAnchorEl((current) => (current ? null : button))
-          }
-        >
-          <Public sx={{ fontSize: 20 }} />
-        </MenuTrigger>
-        <PhysicsMenu
-          anchorEl={anchorEl}
-          onClose={() => setAnchorEl(null)}
-          nonModal
-          switches={switches}
-          applyActions={applyActions}
-        />
-      </>
-    );
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: TOP_BAR_GROUP_GAP }}>
-      {switches.map((row) => (
-        <PhysicsToggle
-          key={row.iconName}
-          on={row.on}
-          iconName={row.iconName}
-          tooltip={t(row.stateKey)}
-          onToggle={() => applyActions([row.toggle])}
-        />
-      ))}
-    </Box>
+    <>
+      <Tooltip title={condensed ? t("physics_settings") : ""}>
+        <Button
+          color="inherit"
+          size="small"
+          aria-label={t("physics_settings")}
+          aria-haspopup="menu"
+          aria-expanded={!!anchorEl}
+          onClick={(e) => {
+            const button = e.currentTarget;
+            setAnchorEl((current) => (current ? null : button));
+          }}
+          startIcon={<Public sx={{ fontSize: "18px !important" }} />}
+          endIcon={
+            <KeyboardArrowDown
+              sx={{ ml: -0.5, fontSize: "16px !important", opacity: 0.7 }}
+            />
+          }
+          sx={{
+            fontSize: "0.72rem",
+            fontWeight: 600,
+            textTransform: "none",
+            px: 0.75,
+            py: 0,
+            minHeight: TOP_BAR_CONTROL_HEIGHT,
+            minWidth: 0,
+            letterSpacing: 0,
+            "& .MuiButton-startIcon": { mr: condensed ? 0 : undefined },
+          }}
+        >
+          {condensed ? null : t("physics_settings")}
+        </Button>
+      </Tooltip>
+      <PhysicsMenu
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        nonModal
+        appMode={appMode}
+        mechanism={mechanism}
+        applyActions={applyActions}
+      />
+    </>
   );
 };
 
@@ -490,11 +501,11 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
         />
 
         {/* Gravity / collisions / floor — reachable in edition too: these are settings of the mechanism, not of the run. */}
-        <PhysicsToggles
+        <PhysicsButton
           appMode={appMode}
           mechanism={mechanism}
           applyActions={applyActions}
-          folded={tight}
+          condensed={condensed}
         />
 
         <Divider

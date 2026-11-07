@@ -1,6 +1,7 @@
 import { ID, Link, Mechanism, MechanicalElement, Point2, KinNodes } from "../../../types";
+import type { ContactFriction } from "../../../types/mechanism";
 import { ZERO } from "../../../types/point2";
-import { DEFAULT, GRAVITY } from "../../../constants/physics-specs";
+import { GRAVITY } from "../../../constants/physics-specs";
 import {
   BeltVia,
   belt_arrivals,
@@ -260,6 +261,10 @@ export type SimulationModel = {
   /** The floor's unit normal, baked in from `mechanism.simulation.floor.angle` at compile time — fixed for the run, like the anchor node itself (see `FLOOR_ANCHOR_KEY`).
    * Read by `collision_links` regardless of whether the floor is currently enabled, the same way `collisionCandidates.pointFloor`/`circleFloor` are always built. */
   floorNormal: Point2;
+  /** `mechanism.simulation.restitution`, baked in at compile time: an edit mid-run recompiles the model, so it is always the value in effect. */
+  restitution: number;
+  /** `mechanism.simulation.contactFriction`, baked in at compile time like `restitution`. */
+  contactFriction: ContactFriction;
   /**
    * The mechanism's own scale (see `positions_extent`), measured on its pose at compile time and fixed for the run.
    * Every extent-relative tolerance reads it — the solve's convergence and reporting thresholds, the collision margins.
@@ -844,6 +849,8 @@ export function compile_simulation_model(
     compiledFrictions,
     collisionCandidates,
     floorNormal,
+    restitution: mechanism.simulation.restitution,
+    contactFriction: { ...mechanism.simulation.contactFriction },
     extent,
     layout: make_snapshot_layout(snapshotKeys, [...nodes.angles.keys()], belts),
     fill: {
@@ -1956,7 +1963,8 @@ function solve_dynamic_frame(
     for (const key of grabForce.torques.keys())
       grabOmegaBeforeSolve.set(key, angleVelocities.get(key) ?? 0);
     // Diagnostics (reactions, unsatisfied) only collected on the LAST substep — an earlier one reads an intermediate, not-yet-converged state (see `DYNAMIC_SUBSTEPS`), and collecting them costs a per-link bookkeeping step across the whole sweep a caller measuring pure solver performance skips.
-    const restitution = { coefficient: DEFAULT.RESTITUTION, lost: 0 };
+    const restitution = { coefficient: model.restitution, lost: 0 };
+    const friction = { ...model.contactFriction, lost: 0 };
     const stepReactions: LinkReaction[] | undefined =
       isLastSubstep && collectDiagnostics ? [] : undefined;
     const dynamics: DynamicsInput = {
@@ -1976,6 +1984,7 @@ function solve_dynamic_frame(
       // Only a kept frame's accelerations are read, and every one of its substeps feeds them through the links' compliance.
       settle: collectDiagnostics,
       restitution,
+      friction,
     };
     result = PBD_kinematic_solver(
       positions,
@@ -2014,7 +2023,8 @@ function solve_dynamic_frame(
     // ── Restitution: bounce whatever collision constraints actually resolved this substep, instead of leaving them at the plain solve's inelastic (velocity ≈ 0) response.
     // The direct solve has already bounced them through the whole mechanism; the sweeps leave it to the pairs below, which move only the two points in contact.
     // Against the same fixed scale as `collision_links` above. ──
-    impactLoss += restitution.lost;
+    // A contact's slip is charged with its impacts: both are what the collisions take.
+    impactLoss += restitution.lost + friction.lost;
     if (!model.directSolve && (collisionsOn || floorOn))
       impactLoss += apply_collision_restitution(
         model.collisionCandidates,
@@ -2022,7 +2032,7 @@ function solve_dynamic_frame(
         model.dynamicMasses.posMasses,
         subVelocitiesBeforeSolve,
         velocities,
-        DEFAULT.RESTITUTION,
+        model.restitution,
         model.extent,
         collisionsOn,
         floorOn,
@@ -2048,7 +2058,7 @@ function solve_dynamic_frame(
         model.dynamicMasses.posMasses,
         subVelocitiesBeforeSolve,
         velocities,
-        DEFAULT.RESTITUTION,
+        model.restitution,
         model.extent,
       );
   }
@@ -3118,7 +3128,10 @@ export function parameter_snapshot(
     materials: mechanism.materials,
     profiles: mechanism.profiles,
     gravity: mechanism.simulation.gravity,
+    gravityStrength: mechanism.simulation.gravityStrength,
     collisions: mechanism.simulation.collisions,
+    restitution: mechanism.simulation.restitution,
+    contactFriction: mechanism.simulation.contactFriction,
     floor: mechanism.simulation.floor,
   };
 }
@@ -3243,7 +3256,10 @@ export function apply_parameter_snapshot_to_mechanism(
     simulation: {
       ...mechanism.simulation,
       gravity: snapshot.gravity,
+      gravityStrength: snapshot.gravityStrength,
       collisions: snapshot.collisions,
+      restitution: snapshot.restitution,
+      contactFriction: snapshot.contactFriction,
       floor: snapshot.floor,
     },
   };

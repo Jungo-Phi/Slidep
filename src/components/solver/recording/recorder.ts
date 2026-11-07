@@ -1,5 +1,5 @@
 import { LoadElement, Mechanism } from "../../../types";
-import { ZERO } from "../../../types/point2";
+import { DOWN, Point2 } from "../../../types/point2";
 import {
   ContactSample,
   DynamicSnapshot,
@@ -48,8 +48,8 @@ export class Recorder {
   /** The mechanism `model` was compiled from — kept only for `setLoads`, which recompiles `compiledLoads` against it without touching anything else the model bakes in. */
   private mechanism: Mechanism | null = null;
   private mode: RecorderMode = "kinematic";
-  /** Dynamic mode only: whether the predict step integrates `GRAVITY`. */
-  private gravityOn = true;
+  /** Dynamic mode only: the acceleration the predict step integrates. */
+  private gravity: Point2 = GRAVITY;
   /** Both modes: whether the next steps detect and resist collisions. */
   private collisionsOn = false;
   /** Both modes: whether the next steps detect and resist the floor.
@@ -99,9 +99,9 @@ export class Recorder {
       );
   }
 
-  /** Dynamic mode only: whether the next steps integrate gravity. */
-  setGravity(on: boolean): void {
-    this.gravityOn = on;
+  /** Dynamic mode only: the downward acceleration (m/s²) the next steps integrate, 0 with gravity off. */
+  setGravity(strength: number): void {
+    this.gravity = DOWN.mul(strength);
   }
 
   /** Both modes: whether the next steps detect and resist collisions. */
@@ -222,7 +222,7 @@ export class Recorder {
           this.floorOn,
         );
       } else {
-        const gravity = this.gravityOn ? GRAVITY : ZERO;
+        const gravity = this.gravity;
         // The efforts are read only on an instant that is kept: nothing reads those of a step that is dropped, and the statics are a large share of a step.
         let dynamicSnapshot = step_dynamic_simulation(
           this.model,

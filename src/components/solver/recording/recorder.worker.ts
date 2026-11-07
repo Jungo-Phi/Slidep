@@ -111,7 +111,7 @@ self.onmessage = (event: MessageEvent<ToRecorder>) => {
       recorder.setLoads(deserialize_loads(message.loads));
       break;
     case "gravity":
-      recorder.setGravity(message.on);
+      recorder.setGravity(message.strength);
       break;
     case "collisions":
       recorder.setCollisions(message.on);
