@@ -322,21 +322,82 @@ export function direct_iterate(
     }
     solve(s.analysis, rhs.length === m ? rhs : rhs.subarray(0, m));
 
-    // A motor asked for more than its torque saturates, a contact asked to pull lets go, and this step is not taken: the others' share was solved for rows that give what they cannot, and taking it would carry the mechanism along as if they had.
-    // Only the limited rows' impulse, cut at their limit, is applied, none for a kinematic motor, which stalls; the next iteration solves the rest with them out of the system.
-    let limited = false;
-    for (let r = 0; r < rows.count; r++) {
-      if (!active[r]) continue;
-      const i = system[r];
-      const link = rows.link[r];
-      if (link < 0) {
-        const d = drives[-1 - link];
-        if (Math.abs(d.lambda + rhs[i]) > d.bound) limited = true;
-      } else if (rows.unilateral[r] && lambda[rows.slot[r]] + rhs[i] < 0) limited = true;
-    }
-
-    // x += W·Jᵀ·Δλ, λ += Δλ.
     const twoCount = 2 * nodes.count;
+    // A motor asked for more than its torque saturates, a contact asked to pull lets go, and this step is not taken: the others' share was solved for rows that give what they cannot, and taking it would carry the mechanism along as if they had.
+    let limited = false;
+    /** What the rows cut at their limit during this iteration move, `W·Jᵀ·Δλ` per unknown, not yet applied; null while none has. */
+    let saturatedStep: Float64Array | null = null;
+    for (;;) {
+      limited = false;
+      let lockLimited = false;
+      for (let r = 0; r < rows.count; r++) {
+        if (!active[r]) continue;
+        const i = system[r];
+        const link = rows.link[r];
+        if (link < 0) {
+          const d = drives[-1 - link];
+          if (Math.abs(d.lambda + rhs[i]) > d.bound) {
+            limited = true;
+            if (d.lock) lockLimited = true;
+          }
+        } else if (rows.unilateral[r] && lambda[rows.slot[r]] + rhs[i] < 0) limited = true;
+      }
+      if (!limited || lockLimited) break;
+      // Each torque motor past its limit gives its whole torque, each contact asked to pull lets go, and the rest is solved again in the same step, against the motion they cause.
+      // Applied alone, a motor's impulse lands on the two ends of the arm it reads its rotation from: a short arm with a light tip, on a motor mounted on a moving frame, would be thrown far off that frame, and pulling it back from there leaks angular momentum, turning a free-standing mechanism bodily as if its motor pushed against the ground.
+      saturatedStep ??= new Float64Array(w.length);
+      for (let r = 0; r < rows.count; r++) {
+        if (!active[r]) continue;
+        const wanted = rhs[system[r]];
+        let dl: number;
+        if (rows.link[r] < 0) {
+          const d = drives[-1 - rows.link[r]];
+          const next = Math.max(-d.bound, Math.min(d.bound, d.lambda + wanted));
+          if (next === d.lambda + wanted) continue;
+          dl = next - d.lambda;
+          d.lambda = next;
+        } else {
+          const slot = rows.slot[r];
+          if (!rows.unilateral[r] || lambda[slot] + wanted >= 0) continue;
+          dl = -lambda[slot];
+          lambda[slot] = 0;
+          state.released[slot] = 1;
+        }
+        active[r] = 0;
+        for (let j = 0; j < rows.width[r]; j++) {
+          const at = r * MAX_WIDTH + j;
+          saturatedStep[rows.vars[at]] += w[rows.vars[at]] * rows.grads[at] * dl;
+        }
+      }
+      assemble(state, s, true);
+      for (let r = 0; r < rows.count; r++) {
+        const i = system[r];
+        if (i < 0) continue;
+        if (!active[r]) {
+          rhs[i] = 0;
+          continue;
+        }
+        let moved = 0;
+        for (let j = 0; j < rows.width[r]; j++) {
+          const at = r * MAX_WIDTH + j;
+          moved += rows.grads[at] * saturatedStep[rows.vars[at]];
+        }
+        rhs[i] = -residual_of(state, r) - moved;
+      }
+      solve(s.analysis, rhs.length === m ? rhs : rhs.subarray(0, m));
+    }
+    if (saturatedStep)
+      for (let v = 0; v < saturatedStep.length; v++) {
+        const step = saturatedStep[v];
+        if (step === 0) continue;
+        if (v < twoCount) {
+          if ((v & 1) === 0) nodes.x[v >> 1] += step;
+          else nodes.y[v >> 1] += step;
+        } else nodes.angle[v - twoCount] += step;
+      }
+
+    // Otherwise only the limited rows' impulse, cut at their limit, is applied, none for a kinematic motor, which stalls; the next iteration solves the rest with them out of the system.
+    // x += W·Jᵀ·Δλ, λ += Δλ.
     for (let r = 0; r < rows.count; r++) {
       if (!active[r]) continue;
       let dl = rhs[system[r]];
@@ -418,7 +479,7 @@ function rate_of(rows: Rows, r: number, twoCount: number, vx: ArrayLike<number>,
 
 /**
  * Bounce what just struck something: a contact that pushed, or a slider at an end stop, that arrived moving into it leaves at `restitution` times that speed.
- * Through the whole mechanism, not the two points that touch: one more solve at the velocity level, with the rows as the last iteration left them, where the struck rows aim at their rebound and every other row keeps its own rate.
+ * Through the whole mechanism, not the two points that touch: one more solve at the velocity level, with the rows as the last iteration left them, where the struck rows aim at their rebound and every other row keeps its own rate, but for a motor's, whose bounded torque gives no impulse over so short a time, and a contact's that would have to pull.
  * What is attached to a struck point then bounces with it, in the share its mass takes.
  *
  * `beforeX/Y/A` hold the velocities the substep started from; `nodes.vx`, `vy` and `vAngle` those it read back, bounced in place.
@@ -469,22 +530,42 @@ export function direct_bounce(
   }
   if (impacts.length === 0) return 0;
 
+  // A motor takes no part: its torque is bounded, so the impulse it gives over an impact is none.
+  // A contact only pushes: one the solve would make pull lets go, and the rest is solved again without it.
+  const target = rhs.slice(0, m);
+  const held = active.slice();
+  for (let r = 0; r < rows.count; r++) if (rows.link[r] < 0) held[r] = 0;
+  state.active = held;
   // Rigid: an impact is over before a compliance could give.
   const s = structure_for(rows, w, system, m);
-  assemble(state, s, false);
-  solve(s.analysis, rhs.length === m ? rhs : rhs.subarray(0, m));
+  try {
+    for (let pass = 0; pass <= rows.count; pass++) {
+      for (let r = 0; r < rows.count; r++) if (system[r] >= 0) rhs[system[r]] = held[r] ? target[system[r]] : 0;
+      assemble(state, s, false);
+      solve(s.analysis, rhs.length === m ? rhs : rhs.subarray(0, m));
+      let pulled = false;
+      for (let r = 0; r < rows.count; r++)
+        if (held[r] && rows.unilateral[r] && rhs[system[r]] < 0) {
+          held[r] = 0;
+          pulled = true;
+        }
+      if (!pulled) break;
+    }
+  } finally {
+    state.active = active;
+  }
 
   // The impulse each impact took for the change it asked, which is the mass it met.
   let lost = 0;
   for (const { rx, ry, ax, ay, closing, change } of impacts) {
-    if (change === 0) continue;
+    if (change === 0 || !held[rx]) continue;
     const impulse = ax * rhs[system[rx]] + (ry >= 0 ? ay * rhs[system[ry]] : 0);
     const mass = Math.abs(impulse / change);
     lost += 0.5 * (1 - restitution * restitution) * mass * closing * closing;
   }
 
   for (let r = 0; r < rows.count; r++) {
-    if (!active[r]) continue;
+    if (!held[r]) continue;
     const dl = rhs[system[r]];
     if (dl === 0) continue;
     for (let j = 0; j < rows.width[r]; j++) {
