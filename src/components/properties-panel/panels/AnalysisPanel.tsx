@@ -62,11 +62,11 @@ import {
 } from "../../solver/recording/negligibility-pool";
 import { gravity_vector } from "../../../constants/physics-specs";
 import type { LoadElement } from "../../../types/element";
+import { ProbeMetricSelector } from "../../canvas/ProbeMetricSelector";
 import {
   PROBE_METRIC_LABEL_KEYS,
   PROBE_METRIC_ORDER,
-  ProbeMetricSelector,
-} from "../../canvas/ProbeMetricSelector";
+} from "../../../utils/probe-metrics";
 import SignedNumberInput from "../components/SignedNumberInput";
 import ElementDisplay from "../components/ElementDisplay";
 import ProbeChart, { ChartCurve } from "../components/ProbeChart";
@@ -931,7 +931,6 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             : { value: shown.value, kind: chart.kind },
       };
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `shown_abscissa` reads nothing from the render.
     [],
   );
 

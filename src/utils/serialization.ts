@@ -376,8 +376,8 @@ export function clone_mechanism(mechanism: Mechanism): Mechanism {
   return deserialize_mechanism(serialize_mechanism(mechanism));
 }
 
-export function save_to_file(data: any, filename: string = "data.slidep") {
-  const jsonString = JSON.stringify(data, null, 2); // Formaté pour la lisibilité
+export function save_to_file(data: unknown, filename: string = "data.slidep") {
+  const jsonString = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonString], { type: "application/json" });
   download_blob(blob, filename);
 }

@@ -3,6 +3,7 @@ import {
   ANGLE,
   ANGULAR_DAMPING,
   ANGULAR_VELOCITY,
+  arrow_step,
   FORCE,
   LENGTH,
   MASS,
@@ -285,6 +286,33 @@ describe("round-trip", () => {
   });
 });
 
+describe("arrow_step", () => {
+  it("nudges a value by its own last shown decimal", () => {
+    expect(arrow_step(29.998, 3, 1, 1)).toBe(29.999);
+    expect(arrow_step(29.99, 3, 1, 1)).toBe(30);
+    expect(arrow_step(12.5, 3, -1, 1)).toBe(12.4);
+  });
+
+  it("coarsens as trailing zeros drop out of the shown value", () => {
+    expect(arrow_step(12.341, 3, -1, 1)).toBe(12.34);
+    expect(arrow_step(12.34, 3, -1, 1)).toBe(12.33);
+  });
+
+  it("moves a whole number by the whole step", () => {
+    expect(arrow_step(30, 3, 1, 5)).toBe(35);
+    expect(arrow_step(0, 2, -1, 0.05)).toBe(-0.05);
+  });
+
+  it("steps from what is shown, not from digits hidden past the precision", () => {
+    expect(arrow_step(29.99800000001, 3, 1, 1)).toBe(29.999);
+    expect(arrow_step(12.3456, 1, -1, 1)).toBe(12.2);
+  });
+
+  it("works the same on negative values", () => {
+    expect(arrow_step(-12.345, 3, 1, 1)).toBe(-12.344);
+  });
+});
+
 describe("same_shown_value", () => {
   it("holds two values a solver left differing below the shown digit to be the same", () => {
     expect(same_shown_value(0.5, 0.5 + 1e-9, LENGTH)).toBe(true);
@@ -297,6 +325,13 @@ describe("same_shown_value", () => {
   it("reads the precision it is given, not the value's own digits", () => {
     expect(same_shown_value(0.12, 0.1234, undefined, 1)).toBe(true);
     expect(same_shown_value(0.12, 0.1234, undefined, 3)).toBe(false);
+  });
+
+  it("defaults to the precision the kind's fields show", () => {
+    const coarse: QuantityKind = { adaptive: false, units: [{ symbol: "u", factor: 1 }], precision: 1 };
+    const fine: QuantityKind = { ...coarse, precision: 3 };
+    expect(same_shown_value(0.12, 0.1234, coarse)).toBe(true);
+    expect(same_shown_value(0.12, 0.1234, fine)).toBe(false);
   });
 
   it("separates two values an adaptive kind would not even show in the same unit", () => {

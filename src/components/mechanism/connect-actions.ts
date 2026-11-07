@@ -10,10 +10,12 @@ import type {
   MechanicalElement,
   NodeElement,
   PivotElement,
+  ProbeMetric,
   SlidepElement,
   SliderElement,
   UnionElement,
 } from "../../types/element";
+import { OVERLAY_KIND_ORDER } from "../../types/element";
 import type { MaterialDef, ProfileDef } from "../../types/material";
 import {
   Action,
@@ -31,6 +33,11 @@ import {
 } from "../../utils/belt-path";
 import { belt_junction_id } from "../../utils/belt-rules";
 import { constraint_key } from "../../utils/validate-mechanism";
+import { overlay_applies } from "../../utils/element-queries";
+import {
+  PROBE_METRIC_ORDER,
+  probe_metric_available,
+} from "../../utils/probe-metrics";
 import { DEFAULT } from "../../constants/physics-specs";
 
 /** Returns the mechanical element from the id. */
@@ -632,7 +639,7 @@ export function clone_for_simulation(
 }
 
 /**
- * Applies a single structural action (Create, Delete or Connect/Disconnect) to mutable simulated-state arrays.
+ * Applies a single structural action (Create, Delete or Connect/Disconnect), or a probe or overlay change carried by a fusion, to mutable simulated-state arrays.
  *
  * Any caller that emits several bundles of actions in one gesture must advance this state between them: a bundle computed against the state as it was before a previous one can name an element that is already gone, and the reducer throws on it.
  * `simMech` must come from `clone_for_simulation`.
@@ -737,6 +744,12 @@ export function apply_to_sim_state(
     case "ConnectsParentAxle":
       if ("parentAxleID" in el)
         el.parentAxleID = action.disconnect ? "----" : action.connectID;
+      break;
+    case "SetProbes":
+      el.probes = action.newProbes;
+      break;
+    case "SetShowOverlay":
+      el.overlays = { ...el.overlays, [action.kind]: action.newValue };
       break;
   }
 }
@@ -1215,11 +1228,15 @@ export function fuse_nodes(
   loads: LoadElement[] = [],
 ): Action[] {
   const actions: Action[] = [];
+  // A slidep is a new element, so it starts bare and takes the readings of both nodes it replaces.
+  let survivorID = selectedNode.id;
+  let absorbed: NodeElement[] = [hoveredNode];
   if (
     selectedNode.type === "pivot" &&
     !selectedNode.motor &&
     hoveredNode.type === "slider"
   ) {
+    absorbed = [selectedNode, hoveredNode];
     const slidep: SlidepElement = {
       type: "slidep",
       id: selectedNode.id,
@@ -1259,6 +1276,8 @@ export function fuse_nodes(
     );
   } else if (selectedNode.type === "slider" && hoveredNode.type === "pivot") {
     // Fuse them into a Slidep, symmetrical with the pivot+slider case: the slidep takes the pivot's own id, so every `gear.parentAxleID` pointing at it stays valid.
+    survivorID = hoveredNode.id;
+    absorbed = [selectedNode, hoveredNode];
     const parentBeam = node_on_beam_body(hoveredNode, mechanicalElements);
     const parentBeamID = selectedNode.parentBeamID
       ? selectedNode.parentBeamID
@@ -1303,7 +1322,7 @@ export function fuse_nodes(
       ...transfer_load_connections(selectedNode.id, hoveredNode.id, loads),
     );
   } else {
-    // Takeover de selectedNode sur hoveredNode
+    // `selectedNode` takes `hoveredNode` over.
     actions.push({ type: "DeleteElement", element: hoveredNode });
     // A mass never inherits an anchor: it is the one node that cannot be grounded.
     if (
@@ -1336,6 +1355,70 @@ export function fuse_nodes(
       ...transfer_load_connections(hoveredNode.id, selectedNode.id, loads),
     );
   }
+  // The survivor is read after the fusion, so the overlays it can show are judged on what it has become.
+  if (absorbed.some(has_readings)) {
+    const sim = start_simulation(mechanicalElements, constraintElements, loads);
+    sim.step(actions);
+    const survivor = sim.mechanicalElements.find((el) => el.id === survivorID);
+    if (survivor) actions.push(...transfer_readings(absorbed, survivor));
+  }
+  return actions;
+}
+
+/** A metric's place in the selector's list; one the selector never lists goes last rather than being lost. */
+function listed_rank(metric: ProbeMetric): number {
+  const rank = PROBE_METRIC_ORDER.indexOf(metric);
+  return rank === -1 ? PROBE_METRIC_ORDER.length : rank;
+}
+
+function has_readings(element: MechanicalElement): boolean {
+  return (
+    element.probes.length > 0 ||
+    Object.values(element.overlays).some((shown) => shown)
+  );
+}
+
+/**
+ * Carries the probes and overlays of the `absorbed` elements over to the `survivor` replacing them, so a fusion keeps what the user chose to watch.
+ *
+ * `survivor` must be read from the state the fusion leaves behind.
+ * A metric it already probes keeps its own components; a metric or an overlay it cannot offer is dropped.
+ */
+export function transfer_readings(
+  absorbed: readonly MechanicalElement[],
+  survivor: MechanicalElement,
+): Action[] {
+  const actions: Action[] = [];
+  const byMetric = new Map(survivor.probes.map((p) => [p.metric, p]));
+  for (const element of absorbed)
+    for (const probe of element.probes)
+      if (
+        !byMetric.has(probe.metric) &&
+        probe_metric_available(probe.metric, survivor)
+      )
+        byMetric.set(probe.metric, probe);
+  if (byMetric.size > survivor.probes.length)
+    actions.push({
+      type: "SetProbes",
+      elementID: survivor.id,
+      newProbes: [...byMetric.values()].sort(
+        (a, b) => listed_rank(a.metric) - listed_rank(b.metric),
+      ),
+      oldProbes: survivor.probes,
+    });
+  for (const kind of OVERLAY_KIND_ORDER)
+    if (
+      !survivor.overlays[kind] &&
+      overlay_applies(survivor, kind) &&
+      absorbed.some((element) => element.overlays[kind])
+    )
+      actions.push({
+        type: "SetShowOverlay",
+        elementID: survivor.id,
+        kind,
+        newValue: true,
+        oldValue: false,
+      });
   return actions;
 }
 

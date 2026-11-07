@@ -7,6 +7,7 @@ import {
   QuantityKind,
   QuantityUnit,
   display_unit,
+  field_precision,
   filter_quantity_input,
   is_entry_in_progress,
   parse_quantity,
@@ -15,8 +16,6 @@ import {
 import { useHistorySeal } from "../mechanism/history-seal";
 
 const RAW_UNIT: QuantityUnit = { symbol: "", factor: 1 };
-/** Decimal places a canvas edit rounds to — the same as `NumberInput`'s own default. */
-const PRECISION = 1;
 
 /**
  * How the editor lays out its inputs.
@@ -111,9 +110,11 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
       setVal1(n);
       setVal2(d);
     } else {
-      const openedUnit = kind ? display_unit(initialValue, kind, PRECISION) : RAW_UNIT;
+      // The same decimals `NumberInput` shows for this kind.
+      const precision = field_precision(kind);
+      const openedUnit = kind ? display_unit(initialValue, kind, precision) : RAW_UNIT;
       setUnit(openedUnit);
-      const mantissa = to_mantissa(initialValue, openedUnit, PRECISION).toString();
+      const mantissa = to_mantissa(initialValue, openedUnit, precision).toString();
       mantissaLength = mantissa.length;
       setVal1(openedUnit.symbol ? `${mantissa} ${openedUnit.symbol}` : mantissa);
     }

@@ -1,7 +1,7 @@
 import type { CanvasState, Mechanism } from "../../types";
 import { tool_state } from "../../constants/shortcuts";
 import { armed_tool_state } from "../canvas/tools/arm-tool";
-import type { PaletteElement } from "./ElementPalette";
+import type { PaletteElement } from "./edition-palette";
 
 /** The canvas state a click on `element` leads to, whichever palette it is clicked in. */
 export function palette_click_state(

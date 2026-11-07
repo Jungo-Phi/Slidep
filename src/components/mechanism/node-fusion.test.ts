@@ -12,6 +12,7 @@ import type { HoveredPart } from "../../types/hovered-part";
 import type {
   BeamElement,
   ID,
+  JoinElement,
   MechanicalElement,
   NodeElement,
   PivotElement,
@@ -214,5 +215,93 @@ describe("une extrémité quittant un nœud qui tient la barre autrement", () =>
     ) as PivotElement;
     expect(held.rotatingEdgesIDs).toContain(BAR);
     expect(validate_mechanism(after)).toBeNull();
+  });
+});
+
+describe("les sondes et relevés suivent la fusion", () => {
+  const VECTOR = { x: true, y: true, norm: false };
+  const SCALAR = { x: false, y: false, norm: true };
+
+  it("passent du join au pivot posé dessus", () => {
+    const join: JoinElement = {
+      type: "join",
+      id: SLIDER,
+      probes: [{ metric: "velocity", components: VECTOR }],
+      overlays: { trajectory: true },
+      position: P(0, 0),
+      isGrounded: false,
+      fixedEdgesIDs: [],
+    };
+    const placed = pivot(PIVOT, 0);
+    const elements: MechanicalElement[] = [join, placed];
+
+    const after = apply_actions(
+      mechanism(elements),
+      fuse_nodes(placed, join, elements, []),
+    );
+
+    const survivor = after.mechanicalElements.find(
+      (el) => el.id === PIVOT,
+    ) as PivotElement;
+    expect(survivor.probes).toEqual(join.probes);
+    expect(survivor.overlays.trajectory).toBe(true);
+  });
+
+  it("laissent au survivant ses propres composantes sur une métrique commune", () => {
+    const kept: PivotElement = {
+      ...pivot(PIVOT, 0),
+      probes: [{ metric: "velocity", components: SCALAR }],
+    };
+    const absorbed: PivotElement = {
+      ...pivot(FRESH, 0),
+      probes: [
+        { metric: "velocity", components: VECTOR },
+        { metric: "position", components: VECTOR },
+      ],
+    };
+    const elements: MechanicalElement[] = [kept, absorbed];
+
+    const after = apply_actions(
+      mechanism(elements),
+      fuse_nodes(kept, absorbed, elements, []),
+    );
+
+    const survivor = after.mechanicalElements.find(
+      (el) => el.id === PIVOT,
+    ) as PivotElement;
+    expect(survivor.probes).toEqual([
+      { metric: "position", components: VECTOR },
+      { metric: "velocity", components: SCALAR },
+    ]);
+  });
+
+  it("réunissent sur le slidep celles du pivot et du slider", () => {
+    const turning: PivotElement = {
+      ...pivot(PIVOT, 0),
+      overlays: { velocity: true },
+    };
+    const sliding: SliderElement = {
+      type: "slider",
+      id: SLIDER,
+      probes: [{ metric: "position", components: VECTOR }],
+      overlays: {},
+      position: P(0, 0),
+      isGrounded: false,
+      parentBeamID: undefined,
+      fixedEdgesIDs: [],
+      slidingFriction: 0,
+    };
+    const elements: MechanicalElement[] = [turning, sliding];
+
+    const after = apply_actions(
+      mechanism(elements),
+      fuse_nodes(turning, sliding, elements, []),
+    );
+
+    const slidep = after.mechanicalElements.find(
+      (el) => el.type === "slidep",
+    ) as SlidepElement;
+    expect(slidep.probes).toEqual(sliding.probes);
+    expect(slidep.overlays.velocity).toBe(true);
   });
 });

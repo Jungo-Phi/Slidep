@@ -12,6 +12,8 @@ import {
   QuantityKind,
   QuantityUnit,
   display_unit,
+  arrow_step,
+  field_precision,
   filter_quantity_input,
   is_entry_in_progress,
   parse_quantity,
@@ -50,11 +52,8 @@ interface NumberInputProps {
   adornment?: NumberInputAdornment;
   /** Rounds the field's right edge into a pill matching the adornment (SignedNumberInput's direction icon). */
   pillAdornment?: boolean;
-  /** Decimal places shown and stepped to. Defaults to 1, fine for every value at unit scale (kg, N/m…); friction-like coefficients need more. */
+  /** Decimal places shown. Defaults to `kind`'s own (see `field_precision`), fine for every value at unit scale (kg, N/m…); friction-like coefficients need more. */
   precision?: number;
-  /** The increment the arrows snap to between two whole numbers, in the displayed unit.
-   * Defaults to the last decimal `precision` shows, which is what a spinner conventionally steps; give it where the two disagree, a field showing three decimals of a value read in units being unusable at a thousandth per click. */
-  fineStep?: number;
   /** Formats and parses `value` (always SI) as a physical quantity instead of a bare number.
    * The unit is plain text alongside the digits — part of what is shown and edited, not a decoration next to it — so typing over it ("12mm", "3cm", "150kN") is how a unit is overridden for that one entry. */
   kind?: QuantityKind;
@@ -90,8 +89,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   unsigned = false,
   adornment,
   pillAdornment = false,
-  precision = 1,
-  fineStep,
+  precision: givenPrecision,
   kind,
   disabled: shownDisabled = false,
   live = false,
@@ -102,6 +100,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   width: textWidth,
 }) => {
   const disabled = shownDisabled || live;
+  const precision = givenPrecision ?? field_precision(kind);
   const unit = kind ? display_unit(value, kind, precision) : RAW_UNIT;
   const format = (v: number) => {
     const mantissa = to_mantissa(v, unit, precision).toString();
@@ -133,8 +132,6 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const adornmentWidth = adornment ? height - 8 : 0;
   const width = (textWidth ?? (large ? 100 : 96)) + adornmentWidth;
   const rounding = precision;
-  // The finest step the up/down arrows snap to before falling back to `step`.
-  const grain = fineStep ?? Math.pow(10, -rounding);
   // Pill-shaped right edge for the direction adornment (SignedNumberInput only).
   const adornmentRadius = (height + 4) / 2;
 
@@ -174,7 +171,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   }, []);
 
   // The arrows keep the focus in the field, so an edit in progress is what they step from.
-  // In the unit `format` currently displays, matching what `step`/`grain` are stepping in.
+  // In the unit `format` currently displays, matching what `arrow_step` steps in.
   const baseValue = useCallback(() => {
     if (document.activeElement !== inputRef.current)
       return valueRef.current / unit.factor;
@@ -191,19 +188,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           Date.now() - (holdStartRef.current ?? 0) > longHoldDelay
             ? step * 5
             : step;
-        const current = baseValue();
-        const snapped = Math.round(current / grain) * grain;
-        return direction === 1
-          ? snapped > current
-            ? snapped
-            : snapped === Math.round(current)
-              ? snapped + actualStep
-              : snapped + grain
-          : snapped < current
-            ? snapped
-            : snapped === Math.round(current)
-              ? snapped - actualStep
-              : snapped - grain;
+        return arrow_step(baseValue(), precision, direction, actualStep);
       };
       const step_once = () => {
         seal.arm(sealKey);
@@ -216,7 +201,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     },
     [
       baseValue,
-      grain,
+      precision,
       holdDelay,
       holdInterval,
       onChange,

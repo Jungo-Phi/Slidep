@@ -54,6 +54,8 @@ export interface QuantityKind {
    * Multiples still prefix the whole symbol as usual ("kN·m"), so this only changes negative `exp`.
    */
   submultipleOnSuffix?: string;
+  /** Decimal places a field editing this kind shows, absent one given by the field itself; 1 otherwise. */
+  precision?: number;
 }
 
 export const LENGTH: QuantityKind = {
@@ -65,6 +67,7 @@ export const LENGTH: QuantityKind = {
     { symbol: "km", factor: 1e3 },
     { symbol: "µm", factor: 1e-6 },
   ],
+  precision: 2,
 };
 
 export const ANGLE: QuantityKind = {
@@ -75,6 +78,7 @@ export const ANGLE: QuantityKind = {
     { symbol: "°", factor: Math.PI / 180 },
     { symbol: "rad", factor: 1 },
   ],
+  precision: 3,
 };
 
 /**
@@ -260,6 +264,33 @@ export function display_unit(
   return unit;
 }
 
+/** Decimal places a field editing `kind` shows by default — a bare number's included. */
+export function field_precision(kind?: QuantityKind): number {
+  return kind?.precision ?? 1;
+}
+
+/**
+ * Where a field's up/down arrow takes `current`, a mantissa shown at `precision` decimal places.
+ * A whole number moves by `wholeStep`; any other moves by its own last shown decimal, so a value is nudged at the precision it was given.
+ * Trailing zeros are not shown, so the step coarsens on its own as the value reaches rounder numbers (12.34 → 12.4 → 13 → 14).
+ */
+export function arrow_step(
+  current: number,
+  precision: number,
+  direction: 1 | -1,
+  wholeStep: number,
+): number {
+  const shown = Math.round(current * 10 ** precision) / 10 ** precision;
+  let decimals = 0;
+  while (decimals < precision && Math.round(shown * 10 ** decimals) / 10 ** decimals !== shown) {
+    decimals++;
+  }
+  if (decimals === 0) return shown + direction * wholeStep;
+  // In whole units of the last decimal, so the result carries no float residue (12.345 - 0.001).
+  const scale = 10 ** decimals;
+  return (Math.round(shown * scale) + direction) / scale;
+}
+
 /** `valueSI` as a mantissa in `unit`, rounded to `precision` decimal places. */
 export function to_mantissa(
   valueSI: number,
@@ -291,7 +322,7 @@ export function same_shown_value(
   a: number,
   b: number,
   kind?: QuantityKind,
-  precision = 1,
+  precision = field_precision(kind),
 ): boolean {
   const unitA = kind ? display_unit(a, kind, precision) : RAW_UNIT;
   const unitB = kind ? display_unit(b, kind, precision) : RAW_UNIT;

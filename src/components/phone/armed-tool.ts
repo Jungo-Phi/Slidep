@@ -2,7 +2,7 @@ import { CanvasState, Mechanism } from "../../types";
 import {
   edition_palette,
   PaletteElement,
-} from "../element-palette/ElementPalette";
+} from "../element-palette/edition-palette";
 
 /** The palette tool armed in `canvasState`, if any — the selection tool being no tool to show. */
 export function armed_palette_element(

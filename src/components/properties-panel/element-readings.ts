@@ -1,6 +1,6 @@
 import { MechanicalElement, OverlayKind, Point2, ProbeMetric } from "../../types";
 import { StringKey } from "../../i18n";
-import { probe_metric_available } from "../canvas/ProbeMetricSelector";
+import { probe_metric_available } from "../../utils/probe-metrics";
 import { DynamicSnapshot } from "../../types/runtime-state";
 import { PhysicsOverlayKind } from "../../constants/physics-display-specs";
 import { ICON_COLORS } from "../../theme/canvas-theme";

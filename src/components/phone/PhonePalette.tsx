@@ -5,7 +5,7 @@ import { t } from "../../i18n";
 import {
   edition_palette,
   PaletteElement,
-} from "../element-palette/ElementPalette";
+} from "../element-palette/edition-palette";
 import { palette_click_state } from "../element-palette/palette-click";
 import { SIMULATION_TOOLS } from "../../constants/canvas-state-sim-effect";
 import {

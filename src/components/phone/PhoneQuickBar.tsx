@@ -19,7 +19,7 @@ import { ToolStateType } from "../../constants/shortcuts";
 import {
   edition_palette,
   PaletteElement,
-} from "../element-palette/ElementPalette";
+} from "../element-palette/edition-palette";
 import { get_element_icon } from "../element-palette/elementIcon";
 import {
   delete_element,

@@ -21,16 +21,25 @@
 
 ### Retours utilisateurs
 
-Vous avez créé un slidep !
+- 🔨 Ajouter la pop-up "Vous avez créé un slidep !"
+- 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
 
-**Lisibilité**
+**Sélection multiple**
 
-- 🚨 Transférer les propriétées de mesures et overlays au remplacement d'un node / edge
-- 🔨 Angles plus précis
-- 🔨 Raccourcis pour revenir au début de la simulation
-- 🆕 CTRL+C / CTRL+V
+- 🆕 Ajouter le copié-collé (CTRL+C / CTRL+V)
+- 🚨 Shift + Click sur l'unique élément sélectionné ne le désélectionne pas
+- 🤔 Symétrie / Rotation / Scale d'éléments multiples.
+- 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément : activer/désactiver les collisions, supprimer, ajouter des mesures, etc.)
+- 🚨 Le déplacement d'une sélection multiple devrait conserver les positions relatives des éléments déplacés
+- 🔨 Le déplacement d'une sélection multiple doit snap à la grille
+
+**Gogo**
+
+- 🔨🔨 Rendre le solveur plus précis pour éviter les bruits du genre "29.998"
 - 🔨🔨 Rendre la simu plus rapide (Test sur Walking jansen) !
 - 🆕 Colorer les éléments
+
+**Lisibilité**
 
 - 🤔 Outil "déconnecter" ? (ce qu'on ne peut faire actuellement que par le panneau contextuel)
 - 🤔 Outil "couper" pour les poutres ? (Le join pourrait faire ça)
@@ -260,21 +269,11 @@ Vous avez créé un slidep !
 - 🤔 Preview de la courroie explusée d'un gear ?
 - 🔨 Le hover d'un edge lors du placement d'un objet sur une de ses extrémités devrait mettre en évidence tout l'edge
 
-**Sélection multiple**
-
-- 🚨 Shift + Click sur l'unique élément sélectionné ne le désélectionne pas
-- 🆕 Ajouter le copié-collé
-- 🤔 Symétrie / Rotation / Scale d'éléments multiples.
-- 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément : activer/désactiver les collisions, supprimer, ajouter des mesures, etc.)
-- 🚨 Le déplacement d'une sélection multiple devrait conserver les positions relatives des éléments déplacés
-- 🔨 Le déplacement d'une sélection multiple doit snap à la grille
-
 **Panneaux et UI**
 
 - 🆕 Changer le nom de l'onglet du browser en "Mon mécanisme - Slidep"
 - ❇️ Unifier les tailles des éléments UI
 - ❇️ S'assurer que la police est toujours la même
-- 🆕 Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🆕 Ajouter un paramètre pour cacher les unités de la grille
 
 ### À faire quand tout le reste est fait

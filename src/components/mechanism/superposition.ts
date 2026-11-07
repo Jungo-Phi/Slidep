@@ -25,6 +25,7 @@ import {
   disconnect_element,
   get_connection_pair_types,
   start_simulation,
+  transfer_readings,
   type Simulation,
 } from "./connect-actions";
 
@@ -288,9 +289,9 @@ function transfer_loads(
 }
 
 /**
- * Fuses the absorbed edge into the survivor: its body nodes, constraints and loads move over, then it is deleted like any other element.
+ * Fuses the absorbed edge into the survivor: its body nodes, constraints, loads, probes and overlays move over, then it is deleted like any other element.
  *
- * The transfers run first on purpose — whatever they have moved no longer names the absorbed edge, so the deletion only takes what could not follow.
+ * The transfers run first on purpose: whatever they have moved names the survivor instead, so the deletion only takes what could not follow.
  */
 export function fuse_edges(
   survivorID: ID,
@@ -313,6 +314,7 @@ export function fuse_edges(
   transfer_body_nodes(absorbedID, survivorID, sim);
   transfer_constraints(absorbedID, survivorID, reversed, sim);
   transfer_loads(absorbedID, survivorID, reversed, sim);
+  sim.step(transfer_readings([absorbed], survivor));
   sim.step(
     delete_element(
       absorbedID,

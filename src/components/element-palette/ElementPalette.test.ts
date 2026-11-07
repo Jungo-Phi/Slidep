@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edition_palette } from "./ElementPalette";
+import { edition_palette } from "./edition-palette";
 import { HOVER_TARGETS } from "../canvas/picking/get-hover";
 import {
   CanvasState,

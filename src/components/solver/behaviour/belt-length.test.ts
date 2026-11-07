@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Point2 } from "../../../types/point2";
-import { Link } from "../../../types";
+import { ID, Link } from "../../../types";
 import { PBD_kinematic_solver } from "../kinematics/PBD_kinematic_solver";
 import { update_belt_disconnects } from "../dynamics/simulation-engine";
 import {
@@ -487,7 +487,7 @@ describe("loose belt sheds its last pulley → inert (user-decided)", () => {
     closed,
     disconnected: [true, false],
     wraps: [0, 0.05],
-    owner: "belt-x" as any,
+    owner: "belt-x" as ID,
   });
 
   it("disconnects even the LAST active pulley (loose → inert segment)", () => {

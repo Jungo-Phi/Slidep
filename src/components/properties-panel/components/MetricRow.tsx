@@ -3,7 +3,7 @@ import { Box, Tooltip, Typography } from "@mui/material";
 import { ProbeMetric } from "../../../types";
 import { MetricSample } from "../../solver/recording/probe-series";
 import { FormattedMetric, format_metric } from "../metric-display";
-import { PROBE_METRIC_LABEL_KEYS } from "../../canvas/ProbeMetricSelector";
+import { PROBE_METRIC_LABEL_KEYS } from "../../../utils/probe-metrics";
 import Vector from "../../common/Vector";
 import { t } from "../../../i18n";
 

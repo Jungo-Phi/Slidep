@@ -455,4 +455,48 @@ describe("superposition — ce que la fusion emporte", () => {
     expect(after.constraintElements.map((c) => c.id)).toEqual([KEPT]);
     expect(validate_mechanism(after)).toBeNull();
   });
+
+  it("passe au ressort qui remplace la barre les sondes et relevés qu'il sait offrir", () => {
+    const length = { metric: "length" as const, components: SCALAR };
+    const watched: BeamElement = {
+      ...beam(BAR, A, B),
+      probes: [length, { metric: "stress", components: SCALAR }],
+      overlays: { trajectory: true },
+    };
+    const before = mechanism([
+      pivot(A, 0, [BAR]),
+      pivot(B, 100, [BAR]),
+      watched,
+    ]);
+    const after = apply(before, draw(spring(OTHER, A, B)));
+
+    const survivor = find(after, OTHER) as SpringElement;
+    // A spring has no section, so a stress has nothing to be read from.
+    expect(survivor.probes).toEqual([length]);
+    expect(survivor.overlays.trajectory).toBe(true);
+  });
+
+  it("cumule les sondes de toutes les arêtes absorbées par une même survivante", () => {
+    const before = mechanism([
+      pivot(A, 0, [BAR, OTHER]),
+      pivot(B, 100, [BAR, OTHER]),
+      {
+        ...spring(BAR, A, B),
+        probes: [{ metric: "length", components: SCALAR }],
+      },
+      {
+        ...damper(OTHER, A, B),
+        probes: [{ metric: "axial-force", components: SCALAR }],
+      },
+    ]);
+    const after = apply(before, draw(beam(C, A, B)));
+
+    const survivor = find(after, C) as BeamElement;
+    expect(survivor.probes.map((p) => p.metric)).toEqual([
+      "length",
+      "axial-force",
+    ]);
+  });
 });
+
+const SCALAR = { x: false, y: false, norm: true };
