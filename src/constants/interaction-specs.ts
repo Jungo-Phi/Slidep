@@ -16,6 +16,9 @@ export interface HitTolerance {
 /** How far (screen px) a paste steps aside when it would otherwise land exactly on what is already there. */
 export const PASTE_OFFSET_PX = 24;
 
+/** How far (screen px) a mirrored element may end up from its mirrored place before what holds it back gets cut. */
+export const MIRROR_TOLERANCE_PX = 1;
+
 /** For a mouse or a pen. Read it through `hit_tolerance()`, which picks the table of the pointer in use. */
 export const HIT_TOLERANCE: HitTolerance = {
   EDGE: 10,

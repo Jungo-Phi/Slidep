@@ -1,4 +1,10 @@
-import React, { useRef, useEffect, useCallback, forwardRef } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+  forwardRef,
+} from "react";
 import { useAmbient } from "../common/use-ambient";
 import {
   Action,
@@ -96,17 +102,23 @@ import {
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import { dismiss_popups } from "../common/dismiss-popups";
 import { is_canvas_shortcut, TOOL_SHORTCUTS } from "../../constants/shortcuts";
-import { PASTE_OFFSET_PX } from "../../constants/interaction-specs";
+import { selected_ids } from "../../types/canvas-state";
 import { grid_snap_step } from "../../utils/grid";
 import {
   CLIPBOARD_MIME,
-  clipboard_center,
   copied_selection,
-  parse_clipboard,
-  paste_actions,
-  paste_delta,
+  forget_paste_spots,
+  plan_paste,
+  remember_copy,
   serialize_clipboard,
 } from "../mechanism/clipboard";
+import { ContextMenu } from "./context-menu/ContextMenu";
+import {
+  is_at_rest,
+  selecting,
+  selection_entries,
+  void_entries,
+} from "./context-menu/context-entries";
 import { is_probes_only_bundle } from "../mechanism/action-kind";
 import {
   draw_axes,
@@ -238,6 +250,9 @@ export interface MechanicalCanvasProps {
   hoveredLibraryEntryID?: ID | null;
   /** Whether the mechanisms gallery is open — keyboard shortcuts are disabled when it is, except Escape. */
   galleryOpen: boolean;
+  /** The framing "recenter" goes back to, from the right-click menu. */
+  recenterTarget: ViewportState | null;
+  onRecenter: (target: ViewportState) => void;
   /** A press released without dragging — a tap or a click — with whether it landed on an element, and the state it left the canvas in. */
   onTap?: (onElement: boolean, state: CanvasState) => void;
   /** The canvas took a new size (CSS px), for the view to follow it. */
@@ -322,6 +337,8 @@ const MechanicalCanvasView = forwardRef<
       onSelectOverlay,
       focusedOverlay,
       galleryOpen,
+      recenterTarget,
+      onRecenter,
       onTap,
       onResize,
     },
@@ -348,10 +365,14 @@ const MechanicalCanvasView = forwardRef<
     // The fingers on the canvas, by pointer id, in insertion order: the first two are the ones a pinch follows.
     const touchesRef = useRef<Map<number, ScreenPoint>>(new Map());
     // Set from the second finger until the last one lifts: meanwhile the fingers only move the view.
-    /** Where the clipboard content `text` already sits, so that pasting it again does not stack it there. */
-    const pasteSpotsRef = useRef<{ text: string; centers: WorldPoint[] } | null>(
-      null,
-    );
+    /** Where a right press landed, while it may still turn out to be a click rather than a pan. */
+    const rightPressRef = useRef<ScreenPoint | null>(null);
+    const [contextMenu, setContextMenu] = useState<{
+      left: number;
+      top: number;
+      world: WorldPoint;
+      onElement: boolean;
+    } | null>(null);
     const pinchingRef = useRef(false);
     // A finger whose press is played when it lifts (see `aims_until_lift`).
     const heldPressRef = useRef(false);
@@ -1233,9 +1254,14 @@ const MechanicalCanvasView = forwardRef<
         });
       } else if (event.button === 2) {
         mouseButtonDownRef.current = "right";
-        handleEvent({
-          type: "MouseRightButtonDown",
-        });
+        // At rest, the release decides between a menu and the end of a pan, and neither may lose the selection.
+        // A tool or a placement steps back at once, as Escape does.
+        if (is_at_rest(canvasStateRef.current))
+          rightPressRef.current = mousePositionRef.current;
+        else
+          handleEvent({
+            type: "MouseRightButtonDown",
+          });
       }
     };
 
@@ -1264,6 +1290,11 @@ const MechanicalCanvasView = forwardRef<
         point.distance_to(pressOriginRef.current) >= hit_tolerance().DRAG_START
       )
         pressDraggedRef.current = true;
+      if (
+        rightPressRef.current &&
+        point.distance_to(rightPressRef.current) >= hit_tolerance().DRAG_START
+      )
+        rightPressRef.current = null;
 
       handleEvent({
         type: "MouseMove",
@@ -1278,6 +1309,21 @@ const MechanicalCanvasView = forwardRef<
         event.currentTarget.releasePointerCapture(event.pointerId);
       if (event.pointerType === "touch") onTouchUp(event.pointerId, true);
       else onMouseUpHandler();
+      if (rightPressRef.current) {
+        rightPressRef.current = null;
+        openContextMenu(event.clientX, event.clientY);
+      }
+    };
+
+    // A right click on something outside the selection selects it first, so that the menu is about what it was opened on.
+    // Empty space leaves the selection alone: only Escape or a left click lets go of it.
+    const openContextMenu = (left: number, top: number) => {
+      const { hoveredPart: hovered, worldMousePos } = computeHover();
+      const state = canvasStateRef.current;
+      const onElement = names_element(hovered);
+      if (onElement && !selected_ids(state).includes(hovered.id))
+        setCanvasStateNow({ type: "SelectedElement", elementID: hovered.id });
+      setContextMenu({ left, top, world: worldMousePos, onElement });
     };
 
     // A finger taken away by the browser never aimed anything: its held press is dropped, not played.
@@ -1286,6 +1332,7 @@ const MechanicalCanvasView = forwardRef<
     ) => {
       if (event.currentTarget.hasPointerCapture(event.pointerId))
         event.currentTarget.releasePointerCapture(event.pointerId);
+      rightPressRef.current = null;
       if (event.pointerType === "touch") onTouchUp(event.pointerId, false);
       else onMouseUpHandler();
     };
@@ -1671,6 +1718,8 @@ const MechanicalCanvasView = forwardRef<
           event.preventDefault();
           (document.activeElement as HTMLElement | null)?.blur?.();
         }
+        // Ctrl+A selects the mechanism, not the text of the page around it.
+        if (ctrlKey && key === "a") event.preventDefault();
         handleEvent({
           type: "KeyDown",
           key: event.key,
@@ -1708,9 +1757,9 @@ const MechanicalCanvasView = forwardRef<
         event.preventDefault();
         const text = serialize_clipboard(content);
         event.clipboardData.setData(CLIPBOARD_MIME, text);
+        remember_copy(text);
         if (event.type !== "cut") return;
-        // What was cut has left its spot free, so pasting it back there needs no stepping aside.
-        pasteSpotsRef.current = { text, centers: [] };
+        forget_paste_spots(text);
         dismiss_popups();
         applyActions(
           delete_elements(
@@ -1735,33 +1784,19 @@ const MechanicalCanvasView = forwardRef<
           return;
         const text = event.clipboardData?.getData(CLIPBOARD_MIME);
         if (!text) return;
-        const content = parse_clipboard(text);
-        if (!content) return;
+        const mechanism = restingRef.current;
+        const plan = plan_paste(
+          text,
+          cursorOnCanvasRef.current ? computeHover().worldMousePos : undefined,
+          mechanism,
+          snapToGrid ? grid_snap_step(mechanism.viewport.scale) : undefined,
+        );
+        if (!plan) return;
 
         event.preventDefault();
-        const mechanism = restingRef.current;
-        const center = clipboard_center(content);
-        if (pasteSpotsRef.current?.text !== text)
-          pasteSpotsRef.current = { text, centers: [center] };
-        const spots = pasteSpotsRef.current;
-        const { scale } = mechanism.viewport;
-        const delta = paste_delta(
-          center,
-          cursorOnCanvasRef.current ? computeHover().worldMousePos : center,
-          spots.centers,
-          PASTE_OFFSET_PX / scale,
-          snapToGrid ? grid_snap_step(scale) : undefined,
-        );
-        spots.centers.push(center.add(delta));
-
-        const { actions, pastedIDs } = paste_actions(content, delta, mechanism);
         dismiss_popups();
-        applyActions(actions);
-        setCanvasStateNow(
-          pastedIDs.length === 1
-            ? { type: "SelectedElement", elementID: pastedIDs[0] }
-            : { type: "SelectedMultiple", elementIDs: pastedIDs },
-        );
+        applyActions(plan.actions);
+        setCanvasStateNow(selecting(plan.pastedIDs));
       };
 
       document.addEventListener("copy", handleCopyOrCut);
@@ -2001,6 +2036,37 @@ const MechanicalCanvasView = forwardRef<
           aria-label={t("canvas_label")}
           role="img"
         />
+        {contextMenu && is_at_rest(canvasState) && (
+          <ContextMenu
+            anchor={{
+              kind: "position",
+              left: contextMenu.left,
+              top: contextMenu.top,
+            }}
+            entries={
+              contextMenu.onElement
+                ? selection_entries(
+                    selected_ids(canvasState),
+                    mechanism,
+                    appMode !== "edition",
+                  )
+                : void_entries(mechanism, appMode !== "edition")
+            }
+            host={{
+              mechanism,
+              applyActions,
+              setCanvasState: setCanvasStateNow,
+              position: contextMenu.world,
+              grid: snapToGrid
+                ? grid_snap_step(mechanism.viewport.scale)
+                : undefined,
+              recenterTarget,
+              onRecenter,
+              setHoveredPart,
+            }}
+            onClose={() => setContextMenu(null)}
+          />
+        )}
         {rejection && (
           <Tooltip
             open

@@ -18,7 +18,9 @@ import {
   UnionElement,
   WorldPoint,
 } from "../../types";
+import { PASTE_OFFSET_PX } from "../../constants/interaction-specs";
 import { element_ref_fields } from "../../types/element-refs";
+import { getStorageItem, setStorageItem } from "../../utils/storage";
 import { belt_junction_id } from "../../utils/belt-rules";
 import { is_nameable } from "../../utils/element-queries";
 import { CURRENT_FORMAT_VERSION } from "../../utils/migrate-mechanism";
@@ -160,9 +162,9 @@ export function parse_clipboard(text: string): ClipboardContent | null {
   }
 }
 
-/** The centre of the box around the content's mechanical elements. */
-export function clipboard_center(content: ClipboardContent): WorldPoint {
-  const points = content.mechanicalElements.flatMap((el) =>
+/** The centre of the box around `elements`. */
+export function elements_center(elements: MechanicalElement[]): WorldPoint {
+  const points = elements.flatMap((el) =>
     "position" in el ? [el.position] : [el.positionStart, el.positionEnd],
   );
   const xs = points.map((p) => p.x);
@@ -195,6 +197,52 @@ export function paste_delta(
   while (occupied.some((o) => center.add(delta).sub(o).length() < size / 2))
     delta = delta.add(step);
   return delta;
+}
+
+const LAST_COPY_KEY = "last-copy";
+
+/** Keeps `text` for a paste with no keyboard behind it: a page can write to the system clipboard unprompted, but only a keyboard paste lets it read back. */
+export function remember_copy(text: string): void {
+  setStorageItem(LAST_COPY_KEY, text);
+}
+
+/** The last copy made in any tab, for a paste from a menu. */
+export function last_copy(): string | null {
+  return getStorageItem<string | null>(LAST_COPY_KEY, null);
+}
+
+/** Where the content last pasted already sits, so that pasting it again does not stack it there. */
+let pasteSpots: { text: string; centers: WorldPoint[] } | null = null;
+
+/** Tells the next paste that `text` was cut: its spot is free, so it may land right back there. */
+export function forget_paste_spots(text: string): void {
+  pasteSpots = { text, centers: [] };
+}
+
+/**
+ * The bundle that pastes the clipboard `text` around `wanted`, or null when it cannot be pasted.
+ * Without `wanted`, it lands next to the original.
+ * `grid` is the snap step, when the grid snap is on.
+ */
+export function plan_paste(
+  text: string,
+  wanted: WorldPoint | undefined,
+  mechanism: Mechanism,
+  grid?: number,
+): { actions: Action[]; pastedIDs: ID[] } | null {
+  const content = parse_clipboard(text);
+  if (!content) return null;
+  const center = elements_center(content.mechanicalElements);
+  if (pasteSpots?.text !== text) pasteSpots = { text, centers: [center] };
+  const delta = paste_delta(
+    center,
+    wanted ?? center,
+    pasteSpots.centers,
+    PASTE_OFFSET_PX / mechanism.viewport.scale,
+    grid,
+  );
+  pasteSpots.centers.push(center.add(delta));
+  return paste_actions(content, delta, mechanism);
 }
 
 /** Every string of `value` that `ids` knows, replaced; a `Point2` holds no reference and stays a `Point2`. */

@@ -91,7 +91,8 @@ export const TOOL_STATE_BY_KEY: Readonly<Record<string, ToolStateType>> =
 export function is_canvas_shortcut(key: string, ctrlKey: boolean): boolean {
   if (key === " " || key === "Delete") return true;
   const lowerKey = key.toLowerCase();
-  if (ctrlKey && (lowerKey === "z" || lowerKey === "y")) return true;
+  if (ctrlKey && (lowerKey === "z" || lowerKey === "y" || lowerKey === "a"))
+    return true;
   return !ctrlKey && !!TOOL_STATE_BY_KEY[lowerKey];
 }
 

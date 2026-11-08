@@ -1726,7 +1726,16 @@ export function canvasStateReducer(
           break;
         default: {
           // A Ctrl combination belongs to the browser or the clipboard: Ctrl+C must not arm the damper.
-          if (event.ctrlKey) break;
+          if (event.ctrlKey) {
+            if (event.key.toLowerCase() === "a" && !isSimulating)
+              setCanvasState(
+                multiple_selection_state(
+                  mechanicalElements.map((element) => element.id),
+                  mechanicalElements,
+                ),
+              );
+            break;
+          }
           const toolState = TOOL_STATE_BY_KEY[event.key.toLowerCase()];
           if (toolState && (!isSimulating || SIMULATION_TOOLS.has(toolState)))
             setCanvasState(

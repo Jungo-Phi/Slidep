@@ -1,5 +1,6 @@
 import {
   Action,
+  ConstraintElement,
   LoadElement,
   Mechanism,
   MechanicalElement,
@@ -15,6 +16,12 @@ import {
   ProfileDef,
 } from "../../types";
 import { is_nameable } from "../../utils/element-queries";
+import {
+  with_mirrored_angle_sense,
+  with_mirrored_load,
+  with_mirrored_position,
+  with_mirrored_senses,
+} from "./mirror-geometry";
 import { simulation_values, with_simulation_value } from "./simulation-values";
 import {
   get_constraint_element_from_id,
@@ -549,6 +556,26 @@ export function actionReducer(
           revert ? action.oldValue : action.newValue,
         );
         break;
+      case "MirrorElements": {
+        // Undone, the bundle's `UpdatePositionsToValidState` has already put every position back.
+        const place = <T extends MechanicalElement | ConstraintElement>(el: T): T =>
+          revert ? el : with_mirrored_position(el, action.axis, action.center);
+        const mirrored = new Set(action.elementIDs);
+        mechanicalElements = mechanicalElements.map((el) =>
+          mirrored.has(el.id)
+            ? with_mirrored_senses(place(el), action.axis)
+            : el,
+        );
+        const constraints = new Set(action.constraintIDs);
+        constraintElements = constraintElements.map((el) =>
+          constraints.has(el.id) ? with_mirrored_angle_sense(place(el)) : el,
+        );
+        const loads = new Set(action.loadIDs);
+        loadElements = loadElements.map((load) =>
+          loads.has(load.id) ? with_mirrored_load(load) : load,
+        );
+        break;
+      }
       case "UpdatePositionsToValidState":
         let positions: Map<string, Point2>;
         let radii: Map<string, number>;

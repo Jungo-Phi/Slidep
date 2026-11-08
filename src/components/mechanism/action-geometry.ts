@@ -53,6 +53,8 @@ const ACTION_GEOMETRY: Record<
   MoveEdgeEnd: BEFORE_PULL,
   MoveEdgeBody: BEFORE_PULL,
   MoveElements: BEFORE_PULL,
+  // After: its wrap senses and angle senses are part of the graph the solve reads.
+  MirrorElements: AFTER_PULL,
   MoveConstraint: NONE_COALESCING,
   GroundNode: NONE,
   CloseBelt: AFTER,

@@ -104,6 +104,9 @@ export type OverlayFlags = Partial<Record<OverlayKind, boolean>>;
 
 export type OverlayKind = "trajectory" | "force" | "velocity" | "weight" | "inertia";
 
+/** Which way a mirror turns things over: `"horizontal"` swaps left and right, `"vertical"` top and bottom. */
+export type MirrorAxis = "horizontal" | "vertical";
+
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   "trajectory",
   "velocity",

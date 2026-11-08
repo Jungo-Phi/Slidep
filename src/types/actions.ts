@@ -2,6 +2,7 @@ import {
   BeamStressLens,
   ID,
   LoadFrame,
+  MirrorAxis,
   MotorConfig,
   OverlayKind,
   ProbeConfig,
@@ -132,6 +133,17 @@ export type Action =
       elementIDs: ID[];
       newPos: WorldPoint;
       delta: WorldPoint;
+    }
+  | {
+      type: "MirrorElements";
+      /** Everything the mirror carries, what the selection drags along included. */
+      elementIDs: ID[];
+      /** The constraints and loads wholly on those elements. */
+      constraintIDs: ID[];
+      loadIDs: ID[];
+      axis: MirrorAxis;
+      /** The point the mirror line passes through. */
+      center: WorldPoint;
     }
   | {
       type: "MoveConstraint";

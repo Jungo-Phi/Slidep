@@ -4,6 +4,7 @@ import {
   DamperElement,
   EdgeElement,
   GearElement,
+  ID,
   MassElement,
   Mechanism,
   PivotElement,
@@ -62,6 +63,30 @@ export const change_motor_speed = (
   newConfig: { ...shown, speed },
   oldConfig: element.motor,
 });
+
+/**
+ * The motor driven from `beamID`, or from the ground without one.
+ * The pivot's anchor follows: a motor drives from the ground or from a beam, never both.
+ * The config is built from `shown`, for the same reason as `change_motor_speed`.
+ */
+export const set_motor_anchor = (
+  element: PivotElement,
+  shown: NonNullable<PivotElement["motor"]>,
+  beamID: ID | undefined,
+): Action[] => {
+  const grounded = beamID === undefined;
+  return [
+    {
+      type: "SetMotorConfig",
+      id: element.id,
+      newConfig: { ...shown, parentBeamID: beamID },
+      oldConfig: shown,
+    },
+    ...(element.isGrounded === grounded
+      ? []
+      : [{ type: "GroundNode", id: element.id, grounded } satisfies Action]),
+  ];
+};
 
 export const change_gear_radius = (
   element: GearElement,

@@ -56,6 +56,7 @@ const ACTION_POINT_FIELDS: {
   MoveEdgeBody: { newPosition: true, oldPosition: true },
   MoveConstraint: { newPosition: true, oldPosition: true },
   MoveElements: { newPos: true, delta: true },
+  MirrorElements: { center: true },
   ChangeGearRadius: { target: true },
   ChangeForce: { newVector: true, oldVector: true },
   ChangeDistributedForce: { newDirection: true, oldDirection: true },

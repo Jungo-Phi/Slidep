@@ -405,6 +405,23 @@ export function resolveGeometricConstraints(
           }
         });
         break;
+      case "MirrorElements":
+        // Already at their mirrored place: the bundle applied before this solve.
+        trigger.elementIDs.forEach((elementID) => {
+          const element = get_mechanical_element_from_id(
+            elementID,
+            mechanism.mechanicalElements,
+          );
+          const keys =
+            "position" in element
+              ? [`${element.id}`]
+              : [`${element.id}:start`, `${element.id}:end`];
+          for (const key of keys) {
+            nodes.posMasses.set(key, 1);
+            carried.add(key);
+          }
+        });
+        break;
       case "ChangeGearRadius": {
         if (trigger.committed) {
           nodes.radii.set(`${trigger.id}`, trigger.newRadius);

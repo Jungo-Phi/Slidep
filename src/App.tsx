@@ -1072,6 +1072,8 @@ const App: React.FC = () => {
 
   // The same canvas and panel whichever layout holds them.
   const canvasProps: MechanicalCanvasProps = {
+    recenterTarget,
+    onRecenter: recenter,
     setCanvasState,
     canvasState,
     applyActions,

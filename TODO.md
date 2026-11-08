@@ -23,22 +23,25 @@
 
 - 🔨 Ajouter la pop-up "Vous avez créé un slidep !"
 - 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
+- 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
 
 **Sélection multiple**
 
-- 🤔 Symétrie / Rotation / Scale d'éléments multiples.
+- 🤔  / Rotation / Scale d'éléments multiples.
 - 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément : activer/désactiver les collisions, supprimer, ajouter des mesures, etc.)
 
 **Gogo**
 
-- 🔨🔨 Rendre le solveur plus précis pour éviter les bruits (du genre "29.998")
 - 🔨🔨 Rendre la simu plus rapide (Test sur Walking jansen) !
+- 🔨 Visuel du moteur ancré sur une poutre
 - 🆕 Colorer les éléments
-- Visuel du moteur ancré sur une poutre
-- Les hitboxes de direction moteur et overlay se supperposent
-- Sur mobile, les hitboxes sont trop larges
-- Sur mobile, après avoir posé un élément mal placé, on veut souvent le redéplacer juste derrière, mais actuellement ça crée un nouvel élément. L'outil Sélection est lui même parfois difficile à comprendre.
-- Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
+
+**Hitbox**
+
+- 🔨 Les hitboxes de direction moteur et overlay se supperposent
+- 🔨 Sur mobile, les hitboxes sont trop larges
+- 🔨 Rendre les hitbox exactes (contraintes, noeuds)
+- 🔨 Les contraintes (égal, horizontal, etc.) sont trop proches des noeuds (hitbox)
 
 **Lisibilité**
 
@@ -47,13 +50,13 @@
 
 - 🔨 Hover sol en simulation
 - 🔨 Finir les traits de DimensionAngle
-- 🔨 Rendre les hitbox exactes (contraintes, noeuds)
-- 🔨 Les contraintes (égal, horizontal, etc.) sont trop proches des noeuds (hitbox)
 - 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
 - 🤔 Mettre en place un versionning
 - 🤔 Ajouter un élément depuis les connexions du panneau latéral ?
 - 🤔 Masse sur plan incliné : difficile à placer et mauvais résultats
 - 🤔 Fusionner statique et édition ?
+- 🤔 Sur mobile, après avoir posé un élément mal placé, on veut souvent le redéplacer juste derrière, mais actuellement ça crée un nouvel élément. L'outil Sélection est lui même parfois difficile à comprendre.
+- 🤔 Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
 
 
 **Découvrabilité et onboarding**

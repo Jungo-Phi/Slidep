@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Box, ButtonBase, IconButton, Typography } from "@mui/material";
-import { Delete } from "@mui/icons-material";
+import { Delete, MoreVert } from "@mui/icons-material";
+import { ContextMenu } from "../canvas/context-menu/ContextMenu";
+import { selection_entries } from "../canvas/context-menu/context-entries";
 import {
   Action,
   CanvasState,
@@ -117,6 +119,7 @@ export const PhoneQuickBar: React.FC<PhoneQuickBarProps> = ({
     });
   }, [armedType]);
 
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
@@ -208,6 +211,24 @@ export const PhoneQuickBar: React.FC<PhoneQuickBarProps> = ({
             />
           )}
         </Box>
+        <IconButton
+          aria-label={t("more_actions")}
+          aria-haspopup="menu"
+          onClick={(event) => setMenuAnchor(event.currentTarget)}
+        >
+          <MoreVert />
+        </IconButton>
+        {menuAnchor && (
+          <ContextMenu
+            anchor={{ kind: "element", element: menuAnchor }}
+            // Deleting has its own button right there.
+            entries={selection_entries(ids, mechanism, false)
+              .map((group) => group.filter((entry) => entry.id !== "delete"))
+              .filter((group) => group.length > 0)}
+            host={{ mechanism, applyActions, setCanvasState }}
+            onClose={() => setMenuAnchor(null)}
+          />
+        )}
         <IconButton
           color="error"
           aria-label={t("delete")}

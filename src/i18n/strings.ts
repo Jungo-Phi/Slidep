@@ -3234,6 +3234,51 @@ export const STRINGS = {
     de: "Meine Mechanismen.zip",
     es: "Mis mecanismos.zip",
   },
+  delete_key: { fr: "Suppr", en: "Del", de: "Entf", es: "Supr" },
+  mirror_horizontal: {
+    fr: "Symétrie horizontale",
+    en: "Flip horizontally",
+    de: "Horizontal spiegeln",
+    es: "Simetría horizontal",
+  },
+  mirror_vertical: {
+    fr: "Symétrie verticale",
+    en: "Flip vertically",
+    de: "Vertikal spiegeln",
+    es: "Simetría vertical",
+  },
+  copy: { fr: "Copier", en: "Copy", de: "Kopieren", es: "Copiar" },
+  cut: { fr: "Couper", en: "Cut", de: "Ausschneiden", es: "Cortar" },
+  paste_here: {
+    fr: "Coller ici",
+    en: "Paste here",
+    de: "Hier einfügen",
+    es: "Pegar aquí",
+  },
+  select_all: {
+    fr: "Tout sélectionner",
+    en: "Select all",
+    de: "Alles auswählen",
+    es: "Seleccionar todo",
+  },
+  add_measure: {
+    fr: "Ajouter une mesure",
+    en: "Add a measurement",
+    de: "Messung hinzufügen",
+    es: "Añadir una medida",
+  },
+  reverse_direction: {
+    fr: "Inverser le sens",
+    en: "Reverse direction",
+    de: "Drehrichtung umkehren",
+    es: "Invertir el sentido",
+  },
+  close_belt: {
+    fr: "Fermer la courroie",
+    en: "Close the belt",
+    de: "Riemen schließen",
+    es: "Cerrar la correa",
+  },
   // Lower case and unaccented: it lands in a filename.
   default_filename: {
     fr: "mecanisme",

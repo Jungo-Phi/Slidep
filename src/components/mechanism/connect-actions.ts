@@ -844,6 +844,55 @@ export function delete_elements(
 }
 
 /**
+ * Detaches `elementID` from everything it holds or is held by, where it stands.
+ * A gear stays on its axle: that link is what makes it a gear, and deleting either end takes the other along.
+ */
+export function disconnect_all(
+  elementID: ID,
+  mechanicalElements: MechanicalElement[],
+  constraintElements: ConstraintElement[],
+  loadElements: LoadElement[],
+): Action[] {
+  const sim = start_simulation(
+    mechanicalElements,
+    constraintElements,
+    loadElements,
+  );
+  const current = () =>
+    get_mechanical_element_from_id(elementID, sim.mechanicalElements);
+  for (const containerType of get_connection_types(current())) {
+    if (
+      containerType === "ConnectsParentAxle" ||
+      containerType === "ConnectsFixedGears"
+    )
+      continue;
+    for (const id of [...get_connections(current(), containerType)]) {
+      const connected = () =>
+        get_mechanical_element_from_id(id, sim.mechanicalElements);
+      sim.step([
+        disconnect_element(
+          current(),
+          connected(),
+          containerType,
+          sim.mechanicalElements,
+        ),
+      ]);
+      // Replayed one at a time: each removal shifts the indices the next one is computed from.
+      for (const pairType of get_connection_pair_types(elementID, connected()))
+        sim.step([
+          disconnect_element(
+            connected(),
+            current(),
+            pairType,
+            sim.mechanicalElements,
+          ),
+        ]);
+    }
+  }
+  return sim.actions;
+}
+
+/**
  * Moves whatever `edge` is connected to from `sourceNodeID` over to `destNodeID`.
  *
  * Returns the actions to perform disconnections and connections.

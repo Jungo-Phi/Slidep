@@ -39,6 +39,7 @@ import {
   change_mass,
   change_motor_speed,
   change_stiffness,
+  set_motor_anchor,
   toggle_ground,
 } from "../element-value-actions";
 import SignedNumberInput from "../components/SignedNumberInput";
@@ -772,45 +773,14 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
                     (beam) => beam.id === motorConfig.parentBeamID,
                   )}
                   onSelectExtra={() =>
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: {
-                          ...motorConfig,
-                          parentBeamID: undefined,
-                        },
-                        oldConfig: motorConfig,
-                      },
-                      ...(element.isGrounded
-                        ? []
-                        : ([
-                            {
-                              type: "GroundNode",
-                              id: element.id,
-                              grounded: true,
-                            },
-                          ] satisfies Action[])),
-                    ])
+                    applyActions(
+                      set_motor_anchor(element, motorConfig, undefined),
+                    )
                   }
                   onSelectElement={(beam) =>
-                    applyActions([
-                      {
-                        type: "SetMotorConfig",
-                        id: element.id,
-                        newConfig: { ...motorConfig, parentBeamID: beam.id },
-                        oldConfig: motorConfig,
-                      },
-                      ...(element.isGrounded
-                        ? ([
-                            {
-                              type: "GroundNode",
-                              id: element.id,
-                              grounded: false,
-                            },
-                          ] satisfies Action[])
-                        : []),
-                    ])
+                    applyActions(
+                      set_motor_anchor(element, motorConfig, beam.id),
+                    )
                   }
                   onHoverElement={(beam) =>
                     setHoveredPart(element_to_hovered_part(beam, false))
