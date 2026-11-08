@@ -353,7 +353,7 @@ function repair_viewport(
 }
 
 /** Applies the field's own repair when it declares one, else drops the dead IDs generically. */
-function prune_field<T extends UnionElement>(
+export function prune_field<T extends UnionElement>(
   element: T,
   field: string,
   spec: AnyRefSpec,

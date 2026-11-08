@@ -126,6 +126,13 @@ export function multiple_selection_state(
   return { type: "SelectedMultiple", elementIDs: kept };
 }
 
+/** `state` with the current press marked as having decided the selection: a Shift click is complete on the way down. */
+function press_settled(state: CanvasState): CanvasState {
+  return state.type === "Selecting" || state.type === "SelectedElement"
+    ? { ...state, pressSettled: true }
+    : state;
+}
+
 /** `EditingValue` for a load's value label (force/moment magnitude, or a distributed force's start/end), or `undefined` if `hoveredPart` isn't one. */
 function load_value_editing_state(
   hoveredPart: HoveredPart,
@@ -441,13 +448,24 @@ export function canvasStateReducer(
               });
             } else if (hoveredPart.id === state.elementID) {
               // A click on the element that holds the selection.
-              setCanvasState({ type: "Selecting" });
+              setCanvasState({ type: "Selecting", pressSettled: true });
+            } else if (
+              !mechanicalElements.some((element) => element.id === hoveredPart.id)
+            ) {
+              // An overlay takes no part in a multiple selection, so the click leaves the selection as it is.
+              setCanvasState({
+                type: "SelectedElement",
+                elementID: state.elementID,
+                pressSettled: true,
+              });
             } else {
               // A click on another element.
               setCanvasState(
-                multiple_selection_state(
-                  [state.elementID, hoveredPart.id],
-                  mechanicalElements,
+                press_settled(
+                  multiple_selection_state(
+                    [state.elementID, hoveredPart.id],
+                    mechanicalElements,
+                  ),
                 ),
               );
             }
@@ -512,11 +530,13 @@ export function canvasStateReducer(
           } else if (event.shiftKey) {
             // Multiple selection, with Shift.
             setCanvasState(
-              multiple_selection_state(
-                state.elementIDs.includes(hoveredPart.id)
-                  ? state.elementIDs.filter((id: ID) => id !== hoveredPart.id)
-                  : [...state.elementIDs, hoveredPart.id],
-                mechanicalElements,
+              press_settled(
+                multiple_selection_state(
+                  state.elementIDs.includes(hoveredPart.id)
+                    ? state.elementIDs.filter((id: ID) => id !== hoveredPart.id)
+                    : [...state.elementIDs, hoveredPart.id],
+                  mechanicalElements,
+                ),
               ),
             );
             break;
@@ -728,7 +748,7 @@ export function canvasStateReducer(
             );
           break;
         case "Selecting":
-          if (!names_element(hoveredPart)) break;
+          if (state.pressSettled || !names_element(hoveredPart)) break;
           const constraint = constraintElements.find(
             (element) => element.id === hoveredPart.id,
           );
@@ -1348,6 +1368,10 @@ export function canvasStateReducer(
           break;
         }
         case "Selecting":
+          if (state.pressSettled) {
+            setCanvasState({ type: "Selecting" });
+            break;
+          }
           // Handled on button down, as an immediate toggle: the click must not also select the carrying pivot on release.
           if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
@@ -1357,6 +1381,13 @@ export function canvasStateReducer(
           });
           break;
         case "SelectedElement":
+          if (state.pressSettled) {
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: state.elementID,
+            });
+            break;
+          }
           if (hoveredPart.type === "MotorArrow") break;
           if (!names_element(hoveredPart)) break;
           if (hoveredPart.id === state.elementID) {
@@ -1694,6 +1725,8 @@ export function canvasStateReducer(
           undoMechanism();
           break;
         default: {
+          // A Ctrl combination belongs to the browser or the clipboard: Ctrl+C must not arm the damper.
+          if (event.ctrlKey) break;
           const toolState = TOOL_STATE_BY_KEY[event.key.toLowerCase()];
           if (toolState && (!isSimulating || SIMULATION_TOOLS.has(toolState)))
             setCanvasState(

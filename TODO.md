@@ -26,18 +26,19 @@
 
 **Sélection multiple**
 
-- 🆕 Ajouter le copié-collé (CTRL+C / CTRL+V)
-- 🚨 Shift + Click sur l'unique élément sélectionné ne le désélectionne pas
 - 🤔 Symétrie / Rotation / Scale d'éléments multiples.
 - 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément : activer/désactiver les collisions, supprimer, ajouter des mesures, etc.)
-- 🚨 Le déplacement d'une sélection multiple devrait conserver les positions relatives des éléments déplacés
-- 🔨 Le déplacement d'une sélection multiple doit snap à la grille
 
 **Gogo**
 
-- 🔨🔨 Rendre le solveur plus précis pour éviter les bruits du genre "29.998"
+- 🔨🔨 Rendre le solveur plus précis pour éviter les bruits (du genre "29.998")
 - 🔨🔨 Rendre la simu plus rapide (Test sur Walking jansen) !
 - 🆕 Colorer les éléments
+- Visuel du moteur ancré sur une poutre
+- Les hitboxes de direction moteur et overlay se supperposent
+- Sur mobile, les hitboxes sont trop larges
+- Sur mobile, après avoir posé un élément mal placé, on veut souvent le redéplacer juste derrière, mais actuellement ça crée un nouvel élément. L'outil Sélection est lui même parfois difficile à comprendre.
+- Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
 
 **Lisibilité**
 

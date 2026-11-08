@@ -108,7 +108,11 @@ export type CanvasStateType =
 
 // Define the possible states of the canvas interaction
 export type CanvasState =
-  | { type: "Selecting" } // Selection tool active
+  | {
+      type: "Selecting"; // Selection tool active
+      /** The press still held already decided the selection, so its release must not act on what lies under the cursor. */
+      pressSettled?: true;
+    }
   | {
       type: "SelectingMultiple";
       startPos: WorldPoint;
@@ -121,6 +125,8 @@ export type CanvasState =
       elementID: ID;
       pendingHit?: HoveredPart;
       downPos?: WorldPoint;
+      /** The press still held already decided the selection, so its release must not act on what lies under the cursor. */
+      pressSettled?: true;
     }
   | ({
       type: "MovingNode";

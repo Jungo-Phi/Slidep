@@ -4,9 +4,9 @@
 
 import { CanvasState, CanvasStateType } from "../types";
 
-/** The payload-free canvas states, the only ones a key can arm. */
+/** The canvas states that require no payload, the only ones a key can arm. */
 type PayloadFree<S> = S extends { type: CanvasStateType }
-  ? keyof S extends "type"
+  ? Partial<Omit<S, "type">> extends Omit<S, "type">
     ? S["type"]
     : never
   : never;
@@ -92,7 +92,7 @@ export function is_canvas_shortcut(key: string, ctrlKey: boolean): boolean {
   if (key === " " || key === "Delete") return true;
   const lowerKey = key.toLowerCase();
   if (ctrlKey && (lowerKey === "z" || lowerKey === "y")) return true;
-  return !!TOOL_STATE_BY_KEY[lowerKey];
+  return !ctrlKey && !!TOOL_STATE_BY_KEY[lowerKey];
 }
 
 /** A payload-free state as a `CanvasState`, which TypeScript cannot distribute on its own. */

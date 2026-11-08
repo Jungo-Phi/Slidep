@@ -66,7 +66,10 @@ import { draw_center_of_mass } from "./drawing/draw-measure";
 import MeasureWidget, {
   type MeasureReadoutHandle,
 } from "./MeasureWidget";
-import { get_element_from_id } from "../mechanism/connect-actions";
+import {
+  delete_elements,
+  get_element_from_id,
+} from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
 import { is_node_element } from "../../utils/element-queries";
 import { is_zero_load } from "../../utils/load-scale";
@@ -92,7 +95,18 @@ import {
 } from "../properties-panel/element-value-actions";
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import { dismiss_popups } from "../common/dismiss-popups";
-import { is_canvas_shortcut } from "../../constants/shortcuts";
+import { is_canvas_shortcut, TOOL_SHORTCUTS } from "../../constants/shortcuts";
+import { PASTE_OFFSET_PX } from "../../constants/interaction-specs";
+import { grid_snap_step } from "../../utils/grid";
+import {
+  CLIPBOARD_MIME,
+  clipboard_center,
+  copied_selection,
+  parse_clipboard,
+  paste_actions,
+  paste_delta,
+  serialize_clipboard,
+} from "../mechanism/clipboard";
 import { is_probes_only_bundle } from "../mechanism/action-kind";
 import {
   draw_axes,
@@ -334,6 +348,10 @@ const MechanicalCanvasView = forwardRef<
     // The fingers on the canvas, by pointer id, in insertion order: the first two are the ones a pinch follows.
     const touchesRef = useRef<Map<number, ScreenPoint>>(new Map());
     // Set from the second finger until the last one lifts: meanwhile the fingers only move the view.
+    /** Where the clipboard content `text` already sits, so that pasting it again does not stack it there. */
+    const pasteSpotsRef = useRef<{ text: string; centers: WorldPoint[] } | null>(
+      null,
+    );
     const pinchingRef = useRef(false);
     // A finger whose press is played when it lifts (see `aims_until_lift`).
     const heldPressRef = useRef(false);
@@ -1624,11 +1642,13 @@ const MechanicalCanvasView = forwardRef<
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
         if (galleryOpen && event.key !== "Escape") return;
-        const shortcut = is_canvas_shortcut(event.key, event.ctrlKey);
+        // Cmd on a Mac: left out, Cmd+C would arm the damper as it copies.
+        const ctrlKey = event.ctrlKey || event.metaKey;
+        const shortcut = is_canvas_shortcut(event.key, ctrlKey);
         // The entry an undo or redo is about to replay: popups showing only what it edits stay open to show the result.
         const { history, future } = restingRef.current;
         const key = event.key.toLowerCase();
-        const replayed = !event.ctrlKey
+        const replayed = !ctrlKey
           ? undefined
           : key === "z"
             ? history[history.length - 1]
@@ -1654,12 +1674,105 @@ const MechanicalCanvasView = forwardRef<
         handleEvent({
           type: "KeyDown",
           key: event.key,
-          ctrlKey: event.ctrlKey,
+          ctrlKey,
         });
       };
       document.addEventListener("keydown", handleGlobalKeyDown);
       return () => document.removeEventListener("keydown", handleGlobalKeyDown);
     }, [handleEvent, closeProbeMetricsPopover, galleryOpen]);
+
+    // The clipboard events rather than the keys: they alone may write to the system clipboard without a permission prompt, and they also answer the browser's Edit menu.
+    useEffect(() => {
+      const clipboardAvailable = () =>
+        !isTypingInInput() &&
+        !galleryOpen &&
+        appModeRef.current === "edition" &&
+        mouseButtonDownRef.current === "none";
+
+      const handleCopyOrCut = (event: ClipboardEvent) => {
+        if (!clipboardAvailable() || !event.clipboardData) return;
+        // Text selected in a panel stays the browser's to copy.
+        const textSelection = window.getSelection();
+        if (textSelection && !textSelection.isCollapsed) return;
+        const state = canvasStateRef.current;
+        const selectedIDs =
+          state.type === "SelectedElement"
+            ? [state.elementID]
+            : state.type === "SelectedMultiple"
+              ? state.elementIDs
+              : [];
+        const mechanism = restingRef.current;
+        const content = copied_selection(selectedIDs, mechanism);
+        if (!content) return;
+
+        event.preventDefault();
+        const text = serialize_clipboard(content);
+        event.clipboardData.setData(CLIPBOARD_MIME, text);
+        if (event.type !== "cut") return;
+        // What was cut has left its spot free, so pasting it back there needs no stepping aside.
+        pasteSpotsRef.current = { text, centers: [] };
+        dismiss_popups();
+        applyActions(
+          delete_elements(
+            selectedIDs,
+            mechanism.mechanicalElements,
+            mechanism.constraintElements,
+            mechanism.loads,
+          ),
+        );
+        setCanvasStateNow({ type: "Selecting" });
+      };
+
+      const handlePaste = (event: ClipboardEvent) => {
+        if (!clipboardAvailable()) return;
+        // A gesture under way owns the canvas: only a selection or a tool waiting for its first click gives way to a paste.
+        const stateType = canvasStateRef.current.type;
+        if (
+          stateType !== "SelectedElement" &&
+          stateType !== "SelectedMultiple" &&
+          !(stateType in TOOL_SHORTCUTS)
+        )
+          return;
+        const text = event.clipboardData?.getData(CLIPBOARD_MIME);
+        if (!text) return;
+        const content = parse_clipboard(text);
+        if (!content) return;
+
+        event.preventDefault();
+        const mechanism = restingRef.current;
+        const center = clipboard_center(content);
+        if (pasteSpotsRef.current?.text !== text)
+          pasteSpotsRef.current = { text, centers: [center] };
+        const spots = pasteSpotsRef.current;
+        const { scale } = mechanism.viewport;
+        const delta = paste_delta(
+          center,
+          cursorOnCanvasRef.current ? computeHover().worldMousePos : center,
+          spots.centers,
+          PASTE_OFFSET_PX / scale,
+          snapToGrid ? grid_snap_step(scale) : undefined,
+        );
+        spots.centers.push(center.add(delta));
+
+        const { actions, pastedIDs } = paste_actions(content, delta, mechanism);
+        dismiss_popups();
+        applyActions(actions);
+        setCanvasStateNow(
+          pastedIDs.length === 1
+            ? { type: "SelectedElement", elementID: pastedIDs[0] }
+            : { type: "SelectedMultiple", elementIDs: pastedIDs },
+        );
+      };
+
+      document.addEventListener("copy", handleCopyOrCut);
+      document.addEventListener("cut", handleCopyOrCut);
+      document.addEventListener("paste", handlePaste);
+      return () => {
+        document.removeEventListener("copy", handleCopyOrCut);
+        document.removeEventListener("cut", handleCopyOrCut);
+        document.removeEventListener("paste", handlePaste);
+      };
+    }, [applyActions, computeHover, galleryOpen, setCanvasStateNow, snapToGrid]);
 
     useEffect(() => {
       const canvas = canvasRef.current;

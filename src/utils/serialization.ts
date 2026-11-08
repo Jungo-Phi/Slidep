@@ -343,6 +343,20 @@ export function serialize_mechanism(mechanism: Mechanism): SerializedMechanism {
   };
 }
 
+/** Elements that went through plain JSON, with their points revived. */
+export function deserialize_mechanical_elements(
+  serialized: SerializedMechanicalElement[],
+): MechanicalElement[] {
+  return serialized.map(deserialize_mechanical_element);
+}
+
+/** Elements that went through plain JSON, with their points revived. */
+export function deserialize_constraint_elements(
+  serialized: SerializedConstraintElement[],
+): ConstraintElement[] {
+  return serialized.map(deserialize_constraint_element);
+}
+
 export function deserialize_mechanism(
   serializedMechanism: SerializedMechanism,
 ): Mechanism {

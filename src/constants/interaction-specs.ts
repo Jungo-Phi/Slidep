@@ -13,6 +13,9 @@ export interface HitTolerance {
   readonly DRAG_START: number;
 }
 
+/** How far (screen px) a paste steps aside when it would otherwise land exactly on what is already there. */
+export const PASTE_OFFSET_PX = 24;
+
 /** For a mouse or a pen. Read it through `hit_tolerance()`, which picks the table of the pointer in use. */
 export const HIT_TOLERANCE: HitTolerance = {
   EDGE: 10,
