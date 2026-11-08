@@ -216,6 +216,10 @@ export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   MovingBeltBody: { gear: "rim" },
   ChangingGearRadius: SIZING_GEAR,
   MovingSelectionMultiple: NOTHING,
+  // The pivot lands on a node, or on the grid.
+  MovingTransformPivot: { node: "centre" },
+  TransformingSelection: NOTHING,
+  EditingSelectionTransform: NOTHING,
   MovingConstraint: NOTHING,
   // A load being dragged follows its own snapping, on the free cursor.
   MovingForce: NOTHING,

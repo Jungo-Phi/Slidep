@@ -25,11 +25,6 @@
 - 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
 
-**Sélection multiple**
-
-- 🤔  / Rotation / Scale d'éléments multiples.
-- 🤔 Click droit sur le canvas devrait proposer des choses (undo/redo, copy/paste, recentrer, etc.) (et sur un élément : activer/désactiver les collisions, supprimer, ajouter des mesures, etc.)
-
 **Gogo**
 
 - 🔨🔨 Rendre la simu plus rapide (Test sur Walking jansen) !

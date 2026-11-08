@@ -55,6 +55,8 @@ const ACTION_GEOMETRY: Record<
   MoveElements: BEFORE_PULL,
   // After: its wrap senses and angle senses are part of the graph the solve reads.
   MirrorElements: AFTER_PULL,
+  // After: the radii and lengths it scales are part of the graph the solve reads.
+  TransformElements: AFTER_PULL,
   MoveConstraint: NONE_COALESCING,
   GroundNode: NONE,
   CloseBelt: AFTER,

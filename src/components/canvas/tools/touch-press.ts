@@ -165,6 +165,9 @@ export function aims_until_lift(
     case "MovingDistributedForce":
     case "MovingMoment":
     case "MovingSelectionMultiple":
+    case "MovingTransformPivot":
+    case "TransformingSelection":
+    case "EditingSelectionTransform":
     case "MovingConstraint":
     case "ErasingMultiple":
     case "DraggingFloorHeight":

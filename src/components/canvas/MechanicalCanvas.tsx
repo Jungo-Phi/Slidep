@@ -2,6 +2,7 @@ import React, {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
   useState,
   forwardRef,
 } from "react";
@@ -103,6 +104,16 @@ import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import { dismiss_popups } from "../common/dismiss-popups";
 import { is_canvas_shortcut, TOOL_SHORTCUTS } from "../../constants/shortcuts";
 import { selected_ids } from "../../types/canvas-state";
+import { apply_actions } from "../mechanism/apply-actions";
+import { transform_actions } from "../mechanism/transform-actions";
+import { draw_transform_gizmo } from "./drawing/draw-transform-gizmo";
+import { TRANSFORM_SCALE_PRECISION } from "../../constants/interaction-specs";
+import {
+  default_pivot,
+  gizmo_sizes,
+  SCALE_PREFIX,
+  transform_handle_at,
+} from "./tools/transform-gizmo";
 import { grid_snap_step } from "../../utils/grid";
 import {
   CLIPBOARD_MIME,
@@ -367,6 +378,8 @@ const MechanicalCanvasView = forwardRef<
     // Set from the second finger until the last one lifts: meanwhile the fingers only move the view.
     /** Where a right press landed, while it may still turn out to be a click rather than a pan. */
     const rightPressRef = useRef<ScreenPoint | null>(null);
+    const transformPreviewRef = useRef<Mechanism | null>(null);
+    const typedTransformRef = useRef<number | null>(null);
     const [contextMenu, setContextMenu] = useState<{
       left: number;
       top: number;
@@ -473,8 +486,34 @@ const MechanicalCanvasView = forwardRef<
     restingRef.current = mechanism;
     // Off the resting pose, like everything a spring is drawn from but its two ends: what the simulation plays is the same spring throughout, and a mechanism whose span breathes as it moves must not recount its coils under the user's eyes.
     coilPitchRef.current = spring_coil_pitch(mechanism.mechanicalElements);
+    // A rotation or a scale under way shows what it would do, the mechanism itself only being touched when its value box is left.
+    const [typedTransform, setTypedTransform] = useState<number | null>(null);
+    typedTransformRef.current = typedTransform;
+    const transformPreview = useMemo(() => {
+      if (
+        canvasState.type !== "TransformingSelection" &&
+        canvasState.type !== "EditingSelectionTransform"
+      )
+        return null;
+      const value =
+        canvasState.type === "EditingSelectionTransform"
+          ? (typedTransform ?? canvasState.value)
+          : canvasState.value;
+      const actions = transform_actions(
+        canvasState.elementIDs,
+        canvasState.pivot,
+        canvasState.kind === "rotate" ? value : 0,
+        canvasState.kind === "scale" ? value : 1,
+        mechanism,
+      );
+      return actions.length > 0 ? apply_actions(mechanism, actions) : null;
+    }, [canvasState, typedTransform, mechanism]);
+    transformPreviewRef.current = transformPreview;
     mechanismRef.current =
-      modePreviewRef.current ?? liveFrameRef.current?.mechanism ?? mechanism;
+      modePreviewRef.current ??
+      transformPreviewRef.current ??
+      liveFrameRef.current?.mechanism ??
+      mechanism;
     hoveredPartRef.current = hoveredPart;
     canvasStateRef.current = canvasState;
 
@@ -602,7 +641,10 @@ const MechanicalCanvasView = forwardRef<
       // Both change every frame, which no render follows.
       const live = liveFrameRef.current;
       mechanismRef.current =
-        modePreviewRef.current ?? live?.mechanism ?? restingRef.current;
+        modePreviewRef.current ??
+        transformPreviewRef.current ??
+        live?.mechanism ??
+        restingRef.current;
 
       // Writing width/height reallocates the backing store even when the value is unchanged, so the canvas only follows the container when it moves.
       const rect = canvasRectRef.current ?? measureCanvas();
@@ -767,6 +809,43 @@ const MechanicalCanvasView = forwardRef<
         bendingStressScale: live?.bendingStressScale ?? 0,
         shearStressScale: live?.shearStressScale ?? 0,
       });
+
+      const transformState = canvasStateRef.current;
+      if (
+        appModeRef.current === "edition" &&
+        (transformState.type === "SelectedMultiple" ||
+          transformState.type === "MovingTransformPivot" ||
+          transformState.type === "TransformingSelection" ||
+          transformState.type === "EditingSelectionTransform")
+      ) {
+        const pivot =
+          transformState.pivot ??
+          default_pivot(transformState.elementIDs, drawnElements);
+        const hovered = hoveredPartRef.current;
+        if (pivot)
+          draw_transform_gizmo(
+            ctx,
+            pivot,
+            viewport,
+            transformState.type === "TransformingSelection" ||
+              transformState.type === "EditingSelectionTransform"
+              ? transformState.kind
+              : transformState.type === "MovingTransformPivot"
+                ? "pivot"
+                : hovered.type === "Void"
+                  ? hovered.handle
+                  : undefined,
+            transformState.type === "TransformingSelection"
+              ? transformState
+              : transformState.type === "EditingSelectionTransform"
+                ? {
+                    ...transformState,
+                    value: typedTransformRef.current ?? transformState.value,
+                    typing: true,
+                  }
+                : undefined,
+          );
+      }
 
       // The ruler reads the mechanism as it is drawn — under a simulation, the live pose, not the one it was laid on.
       // Pushed straight into the widget: these numbers change every frame, and React is not the way to move four of them.
@@ -1428,6 +1507,29 @@ const MechanicalCanvasView = forwardRef<
         currMech.mechanicalElements,
         currMech.viewport,
       );
+      // On top of what it stands over: it is small, and only there for a selection that was made to be acted on.
+      const resting = canvasStateRef.current;
+      if (resting.type === "SelectedMultiple" && appModeRef.current === "edition") {
+        const pivot =
+          resting.pivot ??
+          default_pivot(resting.elementIDs, currMech.mechanicalElements);
+        const part =
+          pivot &&
+          transform_handle_at(
+            mousePositionRef.current,
+            world2screen(pivot, currMech.viewport),
+          );
+        if (part)
+          return {
+            hoveredPart: {
+              type: "Void",
+              handle: part,
+              position: worldMousePos,
+            },
+            worldMousePos,
+            snapFeedback: NO_FEEDBACK,
+          };
+      }
       const newHoveredPart = get_hovered_part(
         currMech.mechanicalElements,
         currMech.constraintElements,
@@ -1880,7 +1982,9 @@ const MechanicalCanvasView = forwardRef<
     const cursor =
       hoveredPart.type === "Void" && hoveredPart.rejected
         ? "not-allowed"
-        : cursorState.type === "SimulationDragging"
+        : cursorState.type === "SimulationDragging" ||
+            cursorState.type === "TransformingSelection" ||
+            cursorState.type === "MovingTransformPivot"
           ? "grabbing"
           : canSimulationGrab &&
               ["Selecting", "SelectedElement"].includes(cursorState.type) &&
@@ -2168,6 +2272,41 @@ const MechanicalCanvasView = forwardRef<
                   elementID: editingElement.id,
                 });
               }
+            }}
+          />
+        )}
+        {canvasState.type === "EditingSelectionTransform" && (
+          <OnCanvasValueEditor
+            mode="single"
+            initialValue={canvasState.value}
+            kind={canvasState.kind === "rotate" ? ANGLE : undefined}
+            precision={
+              canvasState.kind === "scale" ? TRANSFORM_SCALE_PRECISION : undefined
+            }
+            prefix={canvasState.kind === "scale" ? SCALE_PREFIX : undefined}
+            signed={canvasState.kind === "rotate"}
+            allowZero={canvasState.kind === "rotate"}
+            position={world2screen(canvasState.pivot, mechanism.viewport).add(
+              new Point2<"screen">(gizmo_sizes().VALUE_OFFSET, 0),
+            )}
+            onEntered={setTypedTransform}
+            onCommit={(value) => {
+              const { elementIDs, kind, pivot } = canvasState;
+              setTypedTransform(null);
+              const actions = transform_actions(
+                elementIDs,
+                pivot,
+                kind === "rotate" ? value : 0,
+                kind === "scale" ? value : 1,
+                mechanism,
+              );
+              if (actions.length > 0) applyActions(actions);
+              setCanvasStateNow({ type: "SelectedMultiple", elementIDs, pivot });
+            }}
+            onCancel={() => {
+              const { elementIDs, pivot } = canvasState;
+              setTypedTransform(null);
+              setCanvasStateNow({ type: "SelectedMultiple", elementIDs, pivot });
             }}
           />
         )}

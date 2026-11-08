@@ -55,6 +55,12 @@ interface OnCanvasValueEditorProps {
   allowZero: boolean;
   onCommit: (newValue: number) => void;
   onCancel: () => void;
+  /** Decimals shown when the field opens, for a bare number with no `kind` to say. */
+  precision?: number;
+  /** Shown before the value, outside what can be edited. "single" mode only. */
+  prefix?: string;
+  /** What the fields hold as it is typed, null while it makes no value: for a caller previewing the result before it is committed. */
+  onEntered?: (value: number | null) => void;
 }
 
 export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
@@ -67,6 +73,9 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
   allowZero,
   onCommit,
   onCancel,
+  precision: fieldPrecision,
+  prefix,
+  onEntered,
 }) => {
   const seal = useHistorySeal();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -111,7 +120,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
       setVal2(d);
     } else {
       // The same decimals `NumberInput` shows for this kind.
-      const precision = field_precision(kind);
+      const precision = fieldPrecision ?? field_precision(kind);
       const openedUnit = kind ? display_unit(initialValue, kind, precision) : RAW_UNIT;
       setUnit(openedUnit);
       const mantissa = to_mantissa(initialValue, openedUnit, precision).toString();
@@ -123,7 +132,7 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
       if (mantissaLength === null) inputRef1.current?.select();
       else inputRef1.current?.setSelectionRange(0, mantissaLength);
     }, 10);
-  }, [mode, initialValue, kind]);
+  }, [mode, initialValue, kind, fieldPrecision]);
 
   /** What the fields hold, or null when they make no value the editor can take. */
   const entered = ((): number | null => {
@@ -139,6 +148,12 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
     if (v1 === 0 && !allowZero) return null;
     return v1;
   })();
+
+  const onEnteredRef = useRef(onEntered);
+  onEnteredRef.current = onEntered;
+  useEffect(() => {
+    onEnteredRef.current?.(entered);
+  }, [entered]);
 
   // A refusal shows up while typing rather than at Enter, so pressing it on a value the editor will not take is not a silent no-op.
   // A field still being filled stays neutral.
@@ -323,6 +338,19 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
           padding: "0 4px",
         }}
       >
+        {prefix && (
+          <Typography
+            sx={{
+              color: "text.primary",
+              ml: 0.5,
+              userSelect: "none",
+              fontSize: "16px",
+              fontFamily: "Arial",
+            }}
+          >
+            {prefix}
+          </Typography>
+        )}
         <TextField
           size="small"
           value={val1}

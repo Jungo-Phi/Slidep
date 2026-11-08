@@ -1,6 +1,6 @@
 import { HoveredPart } from "./hovered-part";
 import type { Measure, MeasureAnchor } from "./measure";
-import { ID } from "./element";
+import { ID, TransformKind } from "./element";
 import type { Link } from "./kinematic-solver-links";
 import { WorldPoint } from "./mechanism";
 
@@ -50,6 +50,9 @@ export type CanvasStateType =
   | "SelectingMultiple"
   | "SelectedMultiple"
   | "MovingSelectionMultiple"
+  | "MovingTransformPivot"
+  | "TransformingSelection"
+  | "EditingSelectionTransform"
   | "Erasing"
   | "ErasingMultiple"
   | "PlacingBeamStart"
@@ -119,7 +122,43 @@ export type CanvasState =
       elementIDs: ID[];
       hoveredElementIDs: ID[];
     } // User has started a drag to select multiple elements
-  | { type: "SelectedMultiple"; elementIDs: ID[] }
+  | {
+      type: "SelectedMultiple";
+      elementIDs: ID[];
+      /** Where the rotation and the scale of this selection pivot; by default, the centre of the selection. */
+      pivot?: WorldPoint;
+    }
+  // The pivot being dragged.
+  | {
+      type: "MovingTransformPivot";
+      elementIDs: ID[];
+      pivot: WorldPoint;
+      /** Where it goes back to if the drag is abandoned; unset for the selection's default. */
+      startPivot?: WorldPoint;
+    }
+  // A rotation or a scale being dragged: the mechanism is only touched once its value box is left.
+  | {
+      type: "TransformingSelection";
+      elementIDs: ID[];
+      kind: TransformKind;
+      pivot: WorldPoint;
+      /** Where the press landed. */
+      from: WorldPoint;
+      /** Radians counter-clockwise for a rotation, a factor for a scale. */
+      value: number;
+      /** How far down the selection can be scaled, measured at the press. */
+      minScale: number;
+    }
+  // The dragged value open for typing: leaving the box applies it, Escape drops it.
+  | {
+      type: "EditingSelectionTransform";
+      elementIDs: ID[];
+      kind: TransformKind;
+      pivot: WorldPoint;
+      /** Where the press landed, which the swept angle is still drawn from. */
+      from: WorldPoint;
+      value: number;
+    }
   | {
       type: "SelectedElement";
       elementID: ID;

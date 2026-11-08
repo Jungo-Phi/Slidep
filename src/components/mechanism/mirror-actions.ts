@@ -11,6 +11,7 @@ import {
   MechanicalElement,
   Mechanism,
   MirrorAxis,
+  WorldPoint,
 } from "../../types";
 import { element_refs } from "../../types/element-refs";
 import { clone_mechanism, screen2world_length } from "../../utils";
@@ -34,9 +35,9 @@ const edge_ends = (element: MechanicalElement): (ID | undefined)[] =>
 
 /**
  * `selectedIDs` and everything that moves with them: what an edge holds, a gear's axle and what it carries, the pulleys of a selected belt.
- * A belt follows on its own once all its pulleys do, its route being theirs.
+ * A belt follows on its own once all its pulleys do, its route being theirs, and any other edge once both its ends do.
  */
-function carried_with(
+export function carried_with(
   selectedIDs: ID[],
   elements: MechanicalElement[],
 ): Set<ID> {
@@ -60,13 +61,22 @@ function carried_with(
     }
   };
   drain();
-  for (const element of elements)
+  for (const element of elements) {
     if (
       element.type === "belt" &&
       element.attachedGearsIDs.length > 0 &&
       element.attachedGearsIDs.every((gear) => carried.has(gear.id))
     )
       pending.push(element.id);
+    // An edge whose two ends both follow follows too: left out, what is stated on it would pull them back.
+    const ends = edge_ends(element);
+    if (
+      element.type !== "belt" &&
+      ends.length > 0 &&
+      ends.every((end) => end && carried.has(end))
+    )
+      pending.push(element.id);
+  }
   drain();
   return carried;
 }
@@ -135,29 +145,43 @@ function cut_body_links(mechanism: Mechanism, carried: Set<ID>): Action[] {
   return sim.actions;
 }
 
-/** Whether the solve leaves everything carried where the mirror put it. */
-function holds_in_place(mechanism: Mechanism, action: Action): boolean {
-  if (action.type !== "MirrorElements") return true;
+/**
+ * Whether the solve of `bundle`, pulled by its first action, leaves everything `carried` where `expected` says.
+ * Run before a transform decides to cut anything, so that nothing is cut when the rest can simply follow.
+ */
+export function holds_in_place(
+  mechanism: Mechanism,
+  bundle: Action[],
+  carried: Set<ID>,
+  expected: (point: WorldPoint) => WorldPoint,
+): boolean {
   const solved = resolveGeometricConstraints(
-    actionReducer(clone_mechanism(mechanism), [action], false),
-    [action],
-    [action],
+    actionReducer(clone_mechanism(mechanism), bundle, false),
+    [bundle[0]],
+    bundle,
   );
   const tolerance = screen2world_length(MIRROR_TOLERANCE_PX, mechanism.viewport);
-  const off = (key: string, point: Parameters<typeof mirrored_point>[0]) => {
+  const off = (key: string, point: WorldPoint) => {
     const at = solved.positions.get(key);
-    return (
-      !!at &&
-      at.distance_to(mirrored_point(point, action.axis, action.center)) > tolerance
-    );
+    return !!at && at.distance_to(expected(point)) > tolerance;
   };
   return !mechanism.mechanicalElements.some((element) => {
-    if (!action.elementIDs.includes(element.id)) return false;
+    if (!carried.has(element.id)) return false;
     return "position" in element
       ? off(element.id, element.position)
       : off(`${element.id}:start`, element.positionStart) ||
           off(`${element.id}:end`, element.positionEnd);
   });
+}
+
+/** What ties `carried` to the rest and has to go for it to reach its place. */
+export function cut_from_rest(mechanism: Mechanism, carried: Set<ID>): Action[] {
+  return [
+    ...mechanism.constraintElements
+      .filter((c) => straddles(c, mechanism.mechanicalElements, carried))
+      .map((element): Action => ({ type: "DeleteElement", element })),
+    ...cut_body_links(mechanism, carried),
+  ];
 }
 
 /** The bundle that mirrors `selectedIDs` across a line through their centre. */
@@ -169,6 +193,7 @@ export function mirror_actions(
   const { mechanicalElements: elements, constraintElements, loads } = mechanism;
   const selected = elements.filter((el) => selectedIDs.includes(el.id));
   const carried = carried_with(selectedIDs, elements);
+  const center = elements_center(selected);
   const mirror: Action = {
     type: "MirrorElements",
     elementIDs: [...carried],
@@ -179,14 +204,13 @@ export function mirror_actions(
       .filter((load) => carried.has(load.targetID))
       .map((load) => load.id),
     axis,
-    center: elements_center(selected),
+    center,
   };
-  if (holds_in_place(mechanism, mirror)) return [mirror];
-  return [
-    mirror,
-    ...constraintElements
-      .filter((c) => straddles(c, elements, carried))
-      .map((element): Action => ({ type: "DeleteElement", element })),
-    ...cut_body_links(mechanism, carried),
-  ];
+  if (
+    holds_in_place(mechanism, [mirror], carried, (point) =>
+      mirrored_point(point, axis, center),
+    )
+  )
+    return [mirror];
+  return [mirror, ...cut_from_rest(mechanism, carried)];
 }

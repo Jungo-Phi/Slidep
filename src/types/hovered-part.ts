@@ -1,6 +1,6 @@
 import type { StringKey } from "../i18n";
 import { PhysicsOverlayKind, ReadingKind } from "../constants/physics-display-specs";
-import { ID } from "./element";
+import { ID, TransformHandlePart } from "./element";
 import type { QuantityKind } from "../utils/quantity-format";
 import type { CohesionField } from "../components/solver/recording/cohesion-field";
 import { WorldPoint } from "./mechanism";
@@ -40,6 +40,8 @@ export type HoveredPart =
       /** Named rather than written out, so hovering says nothing about the language it is read in. */
       rejected?: StringKey;
       rejectedVars?: Record<string, string | number>;
+      /** A handle of a multiple selection's gizmo: empty space as far as the mechanism goes, since it names no element. */
+      handle?: TransformHandlePart;
     }
   | (HoveredElement & { type: "Node"; beamBodyHover: boolean })
   | (HoveredElement & { type: "Edge"; part: "start" | "end" | "body" })
@@ -109,6 +111,7 @@ export function same_hover_target(a: HoveredPart, b: HoveredPart): boolean {
     section: "section" in part ? part.section : undefined,
     beamBodyHover: "beamBodyHover" in part ? part.beamBodyHover : undefined,
     rejected: "rejected" in part ? part.rejected : undefined,
+    handle: "handle" in part ? part.handle : undefined,
     reading: "reading" in part ? part.reading : undefined,
   });
   const da = detail(a);
@@ -118,6 +121,7 @@ export function same_hover_target(a: HoveredPart, b: HoveredPart): boolean {
     da.section === db.section &&
     da.beamBodyHover === db.beamBodyHover &&
     da.rejected === db.rejected &&
+    da.handle === db.handle &&
     da.reading?.elementID === db.reading?.elementID &&
     da.reading?.kind === db.reading?.kind &&
     da.reading?.which === db.reading?.which

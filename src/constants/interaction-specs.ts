@@ -16,6 +16,41 @@ export interface HitTolerance {
 /** How far (screen px) a paste steps aside when it would otherwise land exactly on what is already there. */
 export const PASTE_OFFSET_PX = 24;
 
+/** The gizmo of a multiple selection, in screen px. Read it through `gizmo_sizes()`, which picks the table of the pointer in use. */
+export const TRANSFORM_GIZMO = {
+  RING: 26,
+  RING_HIT: 6,
+  HANDLE_GAP: 5,
+  HANDLE_LENGTH: 12,
+  HANDLE_WIDTH: 13,
+  HANDLE_HIT: 11,
+  /** How far from the pivot its value and value box sit. */
+  VALUE_OFFSET: 80,
+  /** How far the scale handle has to be pulled to double the selection. */
+  PX_PER_DOUBLING: 120,
+};
+
+/** For a finger: wider than what it touches, and shaking when it lands. */
+export const TOUCH_TRANSFORM_GIZMO: typeof TRANSFORM_GIZMO = {
+  ...TRANSFORM_GIZMO,
+  RING: 40,
+  RING_HIT: 14,
+  HANDLE_GAP: 8,
+  HANDLE_LENGTH: 20,
+  HANDLE_WIDTH: 22,
+  HANDLE_HIT: 22,
+  VALUE_OFFSET: 100,
+};
+
+/** Decimals a scale's value is shown and typed with. */
+export const TRANSFORM_SCALE_PRECISION = 2;
+
+/** The steps a rotation and a scale land on while the grid snap is on. */
+export const TRANSFORM_SNAP = {
+  ANGLE: Math.PI / 12,
+  SCALE: 0.1,
+};
+
 /** How far (screen px) a mirrored element may end up from its mirrored place before what holds it back gets cut. */
 export const MIRROR_TOLERANCE_PX = 1;
 

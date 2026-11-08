@@ -146,6 +146,20 @@ export type Action =
       center: WorldPoint;
     }
   | {
+      type: "TransformElements";
+      /** Everything the transform carries, what the selection drags along included. */
+      elementIDs: ID[];
+      /** The constraints wholly on those elements, whose labels go with them. */
+      constraintIDs: ID[];
+      /** The point that stays put. */
+      center: WorldPoint;
+      /** Radians, counter-clockwise in the world. */
+      angle: number;
+      scale: number;
+      /** The lengths held by value on what is carried, with the value each had: dividing by `scale` on the way back would not quite land on it. */
+      scaledValues: { id: ID; oldValue: number; newValue: number }[];
+    }
+  | {
       type: "MoveConstraint";
       id: ID;
       newPosition: WorldPoint;

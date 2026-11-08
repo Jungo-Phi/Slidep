@@ -406,7 +406,8 @@ export function resolveGeometricConstraints(
         });
         break;
       case "MirrorElements":
-        // Already at their mirrored place: the bundle applied before this solve.
+      case "TransformElements":
+        // Already at their new place: the bundle applied before this solve.
         trigger.elementIDs.forEach((elementID) => {
           const element = get_mechanical_element_from_id(
             elementID,
@@ -490,10 +491,16 @@ export function resolveGeometricConstraints(
     }
   }
 
-  // Momentary: pushes apart what this bundle detached.
-  links.push(
-    ...separation_links(bundleActions, mechanism, belt_terminal_axes(mechanism)),
+  /** Whether this bundle lands the selection on a place it states, which nothing is to push it off. */
+  const landing = triggers.some(
+    (t) => t.type === "MirrorElements" || t.type === "TransformElements",
   );
+
+  // Momentary: pushes apart what this bundle detached, unless the bundle has moved it apart itself.
+  if (!landing)
+    links.push(
+      ...separation_links(bundleActions, mechanism, belt_terminal_axes(mechanism)),
+    );
 
   // A grabbed key is free to follow the cursor, grounded or not.
   if (grab) nodes.posMasses.set(grab.key, 1);
@@ -557,6 +564,15 @@ export function resolveGeometricConstraints(
       link.type !== "MinDistance" ||
       !dimensioned.has(key_pair(link.key1, link.key2)),
   );
+  // A mirror, a rotation or a scale lands the selection where it says, even if that leaves an edge tying it to the rest shorter than the floor: the floor would push the selection off its place.
+  if (landing) {
+    const landed = new Set([...carried].map(rep));
+    links = links.filter(
+      (link) =>
+        link.type !== "MinDistance" ||
+        (!landed.has(link.key1) && !landed.has(link.key2)),
+    );
+  }
 
   // A typed value is imposed, not pulled: the rest of the sketch yields, or reports itself violated when it cannot.
   if (pin) {

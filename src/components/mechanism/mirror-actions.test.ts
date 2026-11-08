@@ -12,6 +12,7 @@ import {
   Point2,
   WorldPoint,
 } from "../../types";
+import { MIRROR_TOLERANCE_PX } from "../../constants/interaction-specs";
 import { KinematicSnapshot } from "../../types/runtime-state";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { validate_mechanism } from "../../utils/validate-mechanism";
@@ -131,7 +132,11 @@ describe.each(Object.entries(MECHANISMS))("mirroring %s", (_, json) => {
         const source = element_in(mechanism, id);
         points_of(source).forEach((point, i) => {
           const target = mirrored_point(point, axis, expected);
-          expect(points_of(element_in(after, id))[i].distance_to(target)).toBeLessThan(0.05);
+          // What `holds_in_place` accepts before it cuts anything: a pixel at this zoom, on top of the settling.
+          const pixel = MIRROR_TOLERANCE_PX / mechanism.viewport.scale;
+          expect(points_of(element_in(after, id))[i].distance_to(target)).toBeLessThan(
+            allowed + pixel * 1.01,
+          );
         });
       }
     });

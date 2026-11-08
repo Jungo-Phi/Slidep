@@ -46,6 +46,8 @@ export interface CanvasPalette {
   ELEMENT_STROKE: string;
   FILL_BODY: string;
   FILL_NODE: string;
+  /** What sits on the accent; the on-canvas value editor is filled with it too. */
+  ON_ACCENT: string;
   ACCENT: string;
   ACCENT_DARK: string;
 
@@ -644,6 +646,7 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
     ELEMENT_STROKE: s.ink,
     FILL_BODY: s.fillBody,
     FILL_NODE: s.fillNode,
+    ON_ACCENT: s.onAccent,
     ACCENT: s.accent,
     ACCENT_DARK: s.accentDark,
 

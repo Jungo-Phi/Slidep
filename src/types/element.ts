@@ -107,6 +107,12 @@ export type OverlayKind = "trajectory" | "force" | "velocity" | "weight" | "iner
 /** Which way a mirror turns things over: `"horizontal"` swaps left and right, `"vertical"` top and bottom. */
 export type MirrorAxis = "horizontal" | "vertical";
 
+/** What a drag on a multiple selection's gizmo changes. */
+export type TransformKind = "rotate" | "scale";
+
+/** The parts of that gizmo a pointer can take hold of. */
+export type TransformHandlePart = TransformKind | "pivot";
+
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   "trajectory",
   "velocity",

@@ -9,6 +9,7 @@ import {
   PivotElement,
   UnionElement,
   Point2,
+  WorldPoint,
   ForceElement,
   DistributedForceElement,
   MomentElement,
@@ -17,6 +18,7 @@ import {
 } from "../../types";
 import { is_nameable } from "../../utils/element-queries";
 import {
+  transformed_point,
   with_mirrored_angle_sense,
   with_mirrored_load,
   with_mirrored_position,
@@ -574,6 +576,47 @@ export function actionReducer(
         loadElements = loadElements.map((load) =>
           loads.has(load.id) ? with_mirrored_load(load) : load,
         );
+        break;
+      }
+      case "TransformElements": {
+        const carried = new Set(action.elementIDs);
+        const turn = revert ? -action.angle : action.angle;
+        const values = new Map(
+          action.scaledValues.map(({ id, oldValue, newValue }) => [
+            id,
+            revert ? oldValue : newValue,
+          ]),
+        );
+        const moved = (point: WorldPoint) =>
+          transformed_point(point, action.center, action.angle, action.scale);
+        mechanicalElements = mechanicalElements.map((el) => {
+          let next = el;
+          const value = values.get(el.id);
+          if (value !== undefined && (next.type === "spring" || next.type === "damper"))
+            next = { ...next, restLength: value };
+          if (!carried.has(el.id)) return next;
+          if (next.type === "gear") next = { ...next, angle: next.angle + turn };
+          // Undone, the bundle's `UpdatePositionsToValidState` has already put every position and radius back.
+          if (revert) return next;
+          if ("position" in next) next = { ...next, position: moved(next.position) };
+          else
+            next = {
+              ...next,
+              positionStart: moved(next.positionStart),
+              positionEnd: moved(next.positionEnd),
+            };
+          if (next.type === "gear")
+            next = { ...next, radius: next.radius * action.scale };
+          return next;
+        });
+        const labelled = new Set(action.constraintIDs);
+        constraintElements = constraintElements.map((el) => {
+          const value = values.get(el.id);
+          let next = value !== undefined ? ({ ...el, value } as ConstraintElement) : el;
+          if (!revert && "position" in next && labelled.has(el.id))
+            next = { ...next, position: moved(next.position) };
+          return next;
+        });
         break;
       }
       case "UpdatePositionsToValidState":

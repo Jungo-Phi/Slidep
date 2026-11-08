@@ -23,6 +23,23 @@ export function mirrored_point(
     : new Point2<"world">(point.x, 2 * center.y - point.y);
 }
 
+/** Where `point` goes when turned by `angle` and scaled by `scale` about `center`. */
+export function transformed_point(
+  point: WorldPoint,
+  center: WorldPoint,
+  angle: number,
+  scale: number,
+): WorldPoint {
+  const dx = (point.x - center.x) * scale;
+  const dy = (point.y - center.y) * scale;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return new Point2<"world">(
+    center.x + dx * cos - dy * sin,
+    center.y + dx * sin + dy * cos,
+  );
+}
+
 /** `element` at its mirrored place. */
 export function with_mirrored_position<
   T extends MechanicalElement | ConstraintElement,

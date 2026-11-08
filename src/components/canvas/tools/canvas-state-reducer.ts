@@ -80,6 +80,12 @@ import {
 import { grid_snap_step } from "../../../utils/grid";
 import { belt_body_grab_pin, elements_by_id } from "../../solver/kinematics/parsing";
 import { GRAB_BELT_KEY } from "../../solver/snapshot";
+import { min_transform_scale } from "../../mechanism/transform-actions";
+import {
+  default_pivot,
+  dragged_angle,
+  dragged_scale,
+} from "./transform-gizmo";
 import { HIT_TOLERANCE } from "../../../constants/interaction-specs";
 import { handle_placing_element } from "./placing-element-actions";
 import { handle_placing_constraint } from "./placing-constraint-actions";
@@ -263,6 +269,20 @@ function step_back(state: CanvasState): CanvasState {
   const ruler = ruler_step_back(state);
   if (ruler) return ruler;
   switch (state.type) {
+    case "MovingTransformPivot":
+      return {
+        type: "SelectedMultiple",
+        elementIDs: state.elementIDs,
+        pivot: state.startPivot,
+      };
+    // Back to the selection as it was: nothing of the gesture has reached the mechanism yet.
+    case "TransformingSelection":
+    case "EditingSelectionTransform":
+      return {
+        type: "SelectedMultiple",
+        elementIDs: state.elementIDs,
+        pivot: state.pivot,
+      };
     case "PlacingBeamEnd":
       return { type: "PlacingBeamStart" };
     case "PlacingSpringEnd":
@@ -509,6 +529,34 @@ export function canvasStateReducer(
           });
           break;
         case "SelectedMultiple":
+          if (hoveredPart.type === "Void" && hoveredPart.handle) {
+            const pivot =
+              state.pivot ?? default_pivot(state.elementIDs, mechanicalElements);
+            if (!pivot) break;
+            setCanvasState(
+              hoveredPart.handle === "pivot"
+                ? {
+                    type: "MovingTransformPivot",
+                    elementIDs: state.elementIDs,
+                    pivot,
+                    startPivot: state.pivot,
+                  }
+                : {
+                    type: "TransformingSelection",
+                    elementIDs: state.elementIDs,
+                    kind: hoveredPart.handle,
+                    pivot,
+                    from: worldMousePos,
+                    value: hoveredPart.handle === "rotate" ? 0 : 1,
+                    minScale: min_transform_scale(
+                      state.elementIDs,
+                      mechanicalElements,
+                      viewport,
+                    ),
+                  },
+            );
+            break;
+          }
           if (hoveredPart.type === "Void") {
             if (event.shiftKey) {
               setCanvasState({
@@ -1268,6 +1316,25 @@ export function canvasStateReducer(
           });
           break;
         }
+        case "MovingTransformPivot":
+          setCanvasState({ ...state, pivot: hoveredPart.position });
+          break;
+        case "TransformingSelection":
+          setCanvasState({
+            ...state,
+            value:
+              state.kind === "rotate"
+                ? dragged_angle(state.pivot, state.from, worldMousePos, snapToGrid)
+                : dragged_scale(
+                    state.pivot,
+                    state.from,
+                    worldMousePos,
+                    viewport.scale,
+                    state.minScale,
+                    snapToGrid,
+                  ),
+          });
+          break;
         case "ErasingMultiple":
           if (hoveredPart.position.equals(oldPosition)) break;
           setCanvasState({
@@ -1626,6 +1693,24 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedMultiple",
             elementIDs: state.elementIDs,
+          });
+          break;
+        case "MovingTransformPivot":
+          setCanvasState({
+            type: "SelectedMultiple",
+            elementIDs: state.elementIDs,
+            pivot: state.pivot,
+          });
+          break;
+        // Even a press that did not move: the box is how an exact value is typed.
+        case "TransformingSelection":
+          setCanvasState({
+            type: "EditingSelectionTransform",
+            elementIDs: state.elementIDs,
+            kind: state.kind,
+            pivot: state.pivot,
+            from: state.from,
+            value: state.value,
           });
           break;
         case "MovingSelectionMultiple":

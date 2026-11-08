@@ -50,6 +50,7 @@ const GRID_SNAPPED_STATES = new Set<CanvasStateType>([
   "MovingNode",
   "MovingEdgeBody",
   "MovingSelectionMultiple",
+  "MovingTransformPivot",
   "PlacingBeamStart",
   "PlacingBeamEnd",
   "PlacingBeltStart",
