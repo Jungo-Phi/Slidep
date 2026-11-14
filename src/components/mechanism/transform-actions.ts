@@ -9,45 +9,16 @@ import {
   Action,
   ConstraintElement,
   ID,
-  MechanicalElement,
   Mechanism,
-  ViewportState,
   WorldPoint,
 } from "../../types";
 import { element_refs } from "../../types/element-refs";
-import { DIM } from "../../constants/rendering-specs";
-import { screen2world_length } from "../../utils";
 import {
   carried_with,
   cut_from_rest,
   holds_in_place,
 } from "./mirror-actions";
 import { transformed_point } from "./mirror-geometry";
-
-/**
- * The smallest scale `selectedIDs` can take: under it, an edge or a gear would fall below the size the canvas keeps every one of them at, and the solver would push back.
- * Never above 1, since what is already smaller may stay as it is.
- */
-export function min_transform_scale(
-  selectedIDs: ID[],
-  elements: MechanicalElement[],
-  viewport: ViewportState,
-): number {
-  const carried = carried_with(selectedIDs, elements);
-  const minEdge = screen2world_length(DIM.MIN_EDGE_LENGTH, viewport);
-  const minRadius = screen2world_length(DIM.MIN_GEAR_RADIUS, viewport);
-  let scale = 0;
-  for (const element of elements) {
-    if (!carried.has(element.id)) continue;
-    if (element.type === "gear")
-      scale = Math.max(scale, minRadius / element.radius);
-    else if ("positionStart" in element && element.type !== "belt") {
-      const length = element.positionStart.distance_to(element.positionEnd);
-      if (length > 0) scale = Math.max(scale, minEdge / length);
-    }
-  }
-  return Math.min(1, scale);
-}
 
 /** The lengths stored by value on what is carried, each with the value `scale` gives it. */
 function scaled_values(
@@ -120,20 +91,16 @@ function realigned(mechanism: Mechanism, carried: Set<ID>, angle: number): Actio
 
 /**
  * The bundle that turns `selectedIDs` by `angle` and scales them by `scale` about `center`, or nothing if that changes nothing.
- * The scale is held to `min_transform_scale`.
+ * Any positive scale is taken: the editing solver floors a length at the one it starts from when that is already small, so it does not push a shrunk selection back.
  */
 export function transform_actions(
   selectedIDs: ID[],
   center: WorldPoint,
   angle: number,
-  requestedScale: number,
+  scale: number,
   mechanism: Mechanism,
 ): Action[] {
   const elements = mechanism.mechanicalElements;
-  const scale = Math.max(
-    requestedScale,
-    min_transform_scale(selectedIDs, elements, mechanism.viewport),
-  );
   if (angle === 0 && scale === 1) return [];
   const carried = carried_with(selectedIDs, elements);
   const bundle: Action[] = [

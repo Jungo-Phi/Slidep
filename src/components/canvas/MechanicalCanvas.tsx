@@ -107,11 +107,11 @@ import { selected_ids } from "../../types/canvas-state";
 import { apply_actions } from "../mechanism/apply-actions";
 import { transform_actions } from "../mechanism/transform-actions";
 import { draw_transform_gizmo } from "./drawing/draw-transform-gizmo";
-import { TRANSFORM_SCALE_PRECISION } from "../../constants/interaction-specs";
 import {
   default_pivot,
   gizmo_sizes,
   SCALE_PREFIX,
+  scale_precision,
   transform_handle_at,
 } from "./tools/transform-gizmo";
 import { grid_snap_step } from "../../utils/grid";
@@ -2281,7 +2281,9 @@ const MechanicalCanvasView = forwardRef<
             initialValue={canvasState.value}
             kind={canvasState.kind === "rotate" ? ANGLE : undefined}
             precision={
-              canvasState.kind === "scale" ? TRANSFORM_SCALE_PRECISION : undefined
+              canvasState.kind === "scale"
+                ? scale_precision(canvasState.value)
+                : undefined
             }
             prefix={canvasState.kind === "scale" ? SCALE_PREFIX : undefined}
             signed={canvasState.kind === "rotate"}

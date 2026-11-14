@@ -146,8 +146,6 @@ export type CanvasState =
       from: WorldPoint;
       /** Radians counter-clockwise for a rotation, a factor for a scale. */
       value: number;
-      /** How far down the selection can be scaled, measured at the press. */
-      minScale: number;
     }
   // The dragged value open for typing: leaving the box applies it, Escape drops it.
   | {
@@ -155,8 +153,6 @@ export type CanvasState =
       elementIDs: ID[];
       kind: TransformKind;
       pivot: WorldPoint;
-      /** Where the press landed, which the swept angle is still drawn from. */
-      from: WorldPoint;
       value: number;
     }
   | {

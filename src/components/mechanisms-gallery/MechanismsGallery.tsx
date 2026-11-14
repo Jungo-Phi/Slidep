@@ -438,10 +438,6 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
                 anchorEl={moreAnchor}
                 open={!!moreAnchor}
                 onClose={() => setMoreAnchor(null)}
-                // The icons in the text's own colour, as everywhere in the app, rather than MUI's grey.
-                MenuListProps={{
-                  sx: { "& .MuiListItemIcon-root": { color: "inherit" } },
-                }}
               >
                 <MenuItem onClick={pickMore(onImport)}>
                   <ListItemIcon>

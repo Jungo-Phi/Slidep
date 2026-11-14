@@ -177,6 +177,8 @@ export const OnCanvasValueEditor: React.FC<OnCanvasValueEditorProps> = ({
       // An unusable entry keeps the editor open, on the red field that says why.
       if (entered !== null) commit(entered);
     } else if (e.key === "Escape") {
+      // Kept from the canvas' own Escape: the editor is gone by the time the key reaches the document, so the canvas would take it as a second press and drop the selection too.
+      e.stopPropagation();
       onCancel();
     } else if (mode === "ratio") {
       if (e.key === "ArrowRight") {

@@ -10,7 +10,14 @@ import {
   TRANSFORM_SNAP,
   TOUCH_TRANSFORM_GIZMO,
 } from "../../../constants/interaction-specs";
-import { MechanicalElement, Point2, ScreenPoint, WorldPoint } from "../../../types";
+import {
+  MechanicalElement,
+  Point2,
+  ScreenPoint,
+  ViewportState,
+  WorldPoint,
+} from "../../../types";
+import { world2screen } from "../../../utils";
 import type {
   ID,
   TransformHandlePart,
@@ -36,10 +43,13 @@ const SCALE_DIRECTION = new Point2<"screen">(Math.SQRT1_2, Math.SQRT1_2);
 export const gizmo_sizes = () =>
   pointer_kind() === "touch" ? TOUCH_TRANSFORM_GIZMO : TRANSFORM_GIZMO;
 
-/** The three corners of the scale handle, apex first, outside the ring and pointing away from it. */
-export function scale_handle_corners(pivot: ScreenPoint): ScreenPoint[] {
-  const { RING, HANDLE_GAP, HANDLE_LENGTH, HANDLE_WIDTH } = gizmo_sizes();
-  const base = pivot.add(SCALE_DIRECTION.mul(RING + HANDLE_GAP));
+/** The three corners of the scale handle, apex first, outside a circle of `radius` (the ring unless given) and pointing away from it. */
+export function scale_handle_corners(
+  pivot: ScreenPoint,
+  radius = gizmo_sizes().RING,
+): ScreenPoint[] {
+  const { HANDLE_GAP, HANDLE_LENGTH, HANDLE_WIDTH } = gizmo_sizes();
+  const base = pivot.add(SCALE_DIRECTION.mul(radius + HANDLE_GAP));
   const apex = base.add(SCALE_DIRECTION.mul(HANDLE_LENGTH));
   const side = new Point2<"screen">(-SCALE_DIRECTION.y, SCALE_DIRECTION.x).mul(
     HANDLE_WIDTH / 2,
@@ -66,7 +76,7 @@ export function transform_handle_at(
 /** The value of a drag as its box shows it, in the same format as the field that opens on release. */
 export function transform_value_text(kind: TransformKind, value: number): string {
   if (kind === "scale")
-    return `${SCALE_PREFIX} ${to_mantissa(value, UNIT_FREE, TRANSFORM_SCALE_PRECISION)}`;
+    return `${SCALE_PREFIX} ${to_mantissa(value, UNIT_FREE, scale_precision(value))}`;
   return format_quantity(value, ANGLE, field_precision(ANGLE));
 }
 
@@ -94,27 +104,65 @@ export function dragged_angle(
 }
 
 /**
- * The factor a drag from `from` to `to` scales by, from how far it pulled away from the pivot.
- * Doubles per fixed distance rather than following the ratio of the distances: on a handle this close to the pivot, that ratio would be far too sensitive to hold.
+ * How far `point` stands from the pivot along the diagonal the scale handle points down, in screen px: negative past the pivot, up and to the left.
+ * A scale is read along that line alone, so the pointer can keep going past the pivot for the smallest factors.
+ */
+export function along_scale_axis(
+  pivot: WorldPoint,
+  point: WorldPoint,
+  viewport: ViewportState,
+): number {
+  return world2screen(point, viewport)
+    .sub(world2screen(pivot, viewport))
+    .dot(SCALE_DIRECTION);
+}
+
+/**
+ * The factor a drag from `from` to `to` scales by, from how far it went along the handle's diagonal.
+ * Doubles per fixed distance rather than following the ratio of the distances: on a handle this close to the pivot, that ratio would be far too sensitive to hold, and it lets the factor keep shrinking past the pivot.
  */
 export function dragged_scale(
   pivot: WorldPoint,
   from: WorldPoint,
   to: WorldPoint,
-  pxPerWorld: number,
-  minScale: number,
+  viewport: ViewportState,
   snap: boolean,
 ): number {
-  const outward = from.sub(pivot);
-  const length = outward.length();
   const pulled =
-    length > 0
-      ? (((to.x - from.x) * outward.x + (to.y - from.y) * outward.y) / length) *
-        pxPerWorld
-      : 0;
+    along_scale_axis(pivot, to, viewport) - along_scale_axis(pivot, from, viewport);
   const scale = 2 ** (pulled / TRANSFORM_GIZMO.PX_PER_DOUBLING);
-  const held = snap
-    ? Math.round(scale / TRANSFORM_SNAP.SCALE) * TRANSFORM_SNAP.SCALE
-    : scale;
-  return Math.max(minScale, held);
+  return snap ? snapped_scale(scale) : scale;
+}
+
+/** `scale` on the nearest step of `TRANSFORM_SNAP.SCALE_STEPS`. */
+export function snapped_scale(scale: number): number {
+  const step = scale_step(scale);
+  // Rounded to the step's own decimals: `0.15 / 0.05 * 0.05` lands a hair off, which the value box would show.
+  return Number((Math.round(scale / step) * step).toFixed(decimals_of(step) + 1));
+}
+
+/** The step a scale snaps by around `scale`. */
+function scale_step(scale: number): number {
+  const steps = TRANSFORM_SNAP.SCALE_STEPS;
+  const [first, second] = steps;
+  const [previous, last] = steps.slice(-2);
+  // Out of the table, its two end rungs repeat a decade further each time.
+  let decade = 0;
+  while (scale >= previous.from * 10 ** (decade + 1)) decade++;
+  while (scale < first.from * 10 ** decade) decade--;
+  if (decade > 0)
+    return (scale < last.from * 10 ** decade ? previous.step : last.step) * 10 ** decade;
+  if (decade < 0)
+    return (scale < second.from * 10 ** decade ? first.step : second.step) * 10 ** decade;
+  let step = first.step;
+  for (const rung of steps) if (scale >= rung.from) step = rung.step;
+  return step;
+}
+
+/** How many decimals `value` needs before its first significant digit shows. */
+const decimals_of = (value: number) => Math.max(0, -Math.floor(Math.log10(value)));
+
+/** Decimals a scale is shown and typed with: `TRANSFORM_SCALE_PRECISION`, and two significant digits for a factor too small for it. */
+export function scale_precision(scale: number): number {
+  return Math.max(TRANSFORM_SCALE_PRECISION, decimals_of(scale) + 1);
 }

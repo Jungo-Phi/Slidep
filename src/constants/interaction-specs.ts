@@ -26,8 +26,8 @@ export const TRANSFORM_GIZMO = {
   HANDLE_HIT: 11,
   /** How far from the pivot its value and value box sit. */
   VALUE_OFFSET: 80,
-  /** How far the scale handle has to be pulled to double the selection. */
-  PX_PER_DOUBLING: 120,
+  /** How far the scale handle has to be pulled along its diagonal to double the selection. */
+  PX_PER_DOUBLING: 80,
 };
 
 /** For a finger: wider than what it touches, and shaking when it lands. */
@@ -48,7 +48,16 @@ export const TRANSFORM_SCALE_PRECISION = 2;
 /** The steps a rotation and a scale land on while the grid snap is on. */
 export const TRANSFORM_SNAP = {
   ANGLE: Math.PI / 12,
-  SCALE: 0.1,
+  /**
+   * A scale's steps, from the factor each starts at: fine around ×1, where a few tenths matter, coarser as the factor grows and a tenth gets too small to see.
+   * Out of the table, its two end rungs repeat a decade further each time: every 5 from ×25 and every 10 from ×100 upward, every 0.01 under ×0.1 and every 0.005 under ×0.025 downward.
+   */
+  SCALE_STEPS: [
+    { from: 0.1, step: 0.05 },
+    { from: 0.25, step: 0.1 },
+    { from: 2.5, step: 0.5 },
+    { from: 10, step: 1 },
+  ],
 };
 
 /** How far (screen px) a mirrored element may end up from its mirrored place before what holds it back gets cut. */

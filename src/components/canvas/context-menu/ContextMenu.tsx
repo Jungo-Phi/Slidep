@@ -29,13 +29,15 @@ import {
   VisibilityOff,
 } from "@mui/icons-material";
 import { useNonModalPopup } from "../../common/use-non-modal-popup";
-import { OVERLAY_ICON_SIZE } from "../../properties-panel/element-readings";
 import { ContextEntries, ContextEntry, ContextHost } from "./context-entries";
 
 /** `Flip` draws a vertical line with a shape on each side: turned, it says top and bottom. */
 const FlipVertical: React.FC<SvgIconProps> = (props) => (
   <Flip {...props} sx={{ transform: "rotate(90deg)" }} />
 );
+
+/** The size of a MUI icon at `fontSize="small"`: the app's own icons are drawn on the same 24 grid with the same margin, so they match it at the same size. */
+const MENU_ICON_SIZE = 20;
 
 const ICONS: Record<string, React.ElementType> = {
   "mirror-horizontal": Flip,
@@ -90,13 +92,13 @@ const Row: React.FC<{
       selected={entry.selected}
       sx={dangerSx}
     >
-      <ListItemIcon sx={dangerSx}>
+      <ListItemIcon>
         {entry.iconSrc ? (
           <Box
             component="img"
             src={entry.iconSrc}
             alt=""
-            sx={{ width: OVERLAY_ICON_SIZE, height: OVERLAY_ICON_SIZE }}
+            sx={{ width: MENU_ICON_SIZE, height: MENU_ICON_SIZE }}
           />
         ) : (
           Icon && <Icon fontSize="small" />

@@ -806,6 +806,12 @@ const components: ThemeOptions["components"] = {
       disableElevation: true,
     },
   },
+  // A menu's icons in its text's own ink, as everywhere in the app, rather than MUI's grey (`action.active`); a danger row's red reaches them the same way.
+  MuiListItemIcon: {
+    styleOverrides: {
+      root: { color: "inherit" },
+    },
+  },
   MuiPaper: {
     styleOverrides: {
       root: ({ theme }) => ({

@@ -24,6 +24,7 @@
 - 🔨 Ajouter la pop-up "Vous avez créé un slidep !"
 - 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
+- 🔨 Re-dessiner les icons en plus grand avec 2px de marge
 
 **Gogo**
 

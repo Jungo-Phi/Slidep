@@ -10,7 +10,6 @@ import {
   MechanicalElement,
   Mechanism,
   Point2,
-  ViewportState,
   WorldPoint,
 } from "../../types";
 import { MIRROR_TOLERANCE_PX } from "../../constants/interaction-specs";
@@ -26,7 +25,7 @@ import { actionReducer } from "./action-reducer";
 import { apply_actions } from "./apply-actions";
 import { elements_center } from "./clipboard";
 import { transformed_point } from "./mirror-geometry";
-import { min_transform_scale, transform_actions } from "./transform-actions";
+import { transform_actions } from "./transform-actions";
 
 const MECHANISMS = { coreXY, huygens, jansen, poulie, treillis };
 const load = (json: string): Mechanism => load_mechanism(JSON.parse(json)).mechanism;
@@ -75,6 +74,7 @@ describe.each(Object.entries(MECHANISMS))("transforming %s", (_, json) => {
     ["a rotation", 0.5, 1],
     ["a quarter turn", QUARTER, 1],
     ["a scale", 0, 1.7],
+    ["a shrink far under the size a gesture may draw", 0, 0.02],
   ])("puts the whole mechanism in place under %s, still valid", (_name, angle, scale) => {
     const allowed = (settling(mechanism) + 1e-6) * Math.max(1, scale) * 2;
     const after = apply_actions(mechanism, transform(angle, scale));
@@ -245,27 +245,6 @@ describe("alignment constraints", () => {
   });
 });
 
-describe("min_transform_scale", () => {
-  const viewport: ViewportState = { scale: 100, pan: new Point2<"screen">(0, 0) };
-  const beam = (length: number): MechanicalElement =>
-    ({
-      type: "beam",
-      id: "a-b-c-d-e" as ID,
-      positionStart: new Point2<"world">(0, 0),
-      positionEnd: new Point2<"world">(length, 0),
-      fixedNodesBodyIDs: [],
-    }) as unknown as MechanicalElement;
-
-  it("grows as the elements shrink, and never asks to enlarge them", () => {
-    const long = beam(10);
-    const short = beam(1);
-    expect(min_transform_scale([long.id], [long], viewport)).toBeLessThan(
-      min_transform_scale([short.id], [short], viewport),
-    );
-    const tiny = beam(1e-6);
-    expect(min_transform_scale([tiny.id], [tiny], viewport)).toBe(1);
-  });
-});
 
 describe("motion", () => {
   function run(mechanism: Mechanism, frames: number): Map<string, Point2> {

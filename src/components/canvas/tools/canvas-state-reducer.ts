@@ -80,7 +80,6 @@ import {
 import { grid_snap_step } from "../../../utils/grid";
 import { belt_body_grab_pin, elements_by_id } from "../../solver/kinematics/parsing";
 import { GRAB_BELT_KEY } from "../../solver/snapshot";
-import { min_transform_scale } from "../../mechanism/transform-actions";
 import {
   default_pivot,
   dragged_angle,
@@ -548,11 +547,6 @@ export function canvasStateReducer(
                     pivot,
                     from: worldMousePos,
                     value: hoveredPart.handle === "rotate" ? 0 : 1,
-                    minScale: min_transform_scale(
-                      state.elementIDs,
-                      mechanicalElements,
-                      viewport,
-                    ),
                   },
             );
             break;
@@ -1329,8 +1323,7 @@ export function canvasStateReducer(
                     state.pivot,
                     state.from,
                     worldMousePos,
-                    viewport.scale,
-                    state.minScale,
+                    viewport,
                     snapToGrid,
                   ),
           });
@@ -1709,7 +1702,6 @@ export function canvasStateReducer(
             elementIDs: state.elementIDs,
             kind: state.kind,
             pivot: state.pivot,
-            from: state.from,
             value: state.value,
           });
           break;

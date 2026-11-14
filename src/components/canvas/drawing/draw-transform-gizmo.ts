@@ -1,5 +1,5 @@
 import { COLORS } from "../../../theme/canvas-theme";
-import { DIM, STROKE_WIDTHS } from "../../../constants/rendering-specs";
+import { DIM, STROKE_WIDTHS, TEXT_SPECS } from "../../../constants/rendering-specs";
 import { ScreenPoint, WorldPoint, ViewportState } from "../../../types";
 import type { TransformHandlePart, TransformKind } from "../../../types";
 import { world2screen } from "../../../utils";
@@ -13,7 +13,8 @@ import {
  * The gizmo is scaffolding, not a part of the mechanism and not the simulation's accent: neutral ink at the same restraint as the ruler's corner button.
  * The strokes are heavier than a drawing's to make up for it.
  */
-const INK_ALPHA = { REST: 0.55, ACTIVE: 1, FILL: 0.15 };
+/** `REST` for a part neither under the cursor nor dragged: see-through, so the elements under it still show. */
+const INK_ALPHA = { REST: 0.35, ACTIVE: 1, FILL: 0.15 };
 const WIDTH = {
   REST: STROKE_WIDTHS.HOVERED,
   ACTIVE: STROKE_WIDTHS.HOVERED + STROKE_WIDTHS.HOVER_GAIN,
@@ -21,14 +22,10 @@ const WIDTH = {
 /** A pale edge under the ink, so the gizmo still reads over the elements it stands on. */
 const HALO = { ALPHA: 0.6, EXTRA_WIDTH: 2.5 };
 
-/** How large a scale's indicator may grow on screen: past that, it would only cover the canvas, and the number in the box says the rest. */
-const SCALE_INDICATOR_MAX_RADIUS = 220;
-
 /** The value under way, dragged or being typed, for the gizmo to show what it does. */
 export interface GizmoDrag {
   kind: TransformKind;
   value: number;
-  from: WorldPoint;
   /** The value box is open: it is a real field then, drawn by the editor. */
   typing?: boolean;
 }
@@ -44,40 +41,46 @@ export function draw_transform_gizmo(
 ): void {
   const pivot = world2screen(pivotWorld, viewport);
   const { RING } = gizmo_sizes();
+  /** How `part` is inked: plain while it is under the cursor or dragged, see-through otherwise. */
+  const look = (part: TransformHandlePart) =>
+    active === part
+      ? { width: WIDTH.ACTIVE, color: COLORS.ELEMENT_STROKE, opacity: INK_ALPHA.ACTIVE }
+      : { width: WIDTH.REST, color: COLORS.ELEMENT_STROKE, opacity: INK_ALPHA.REST };
   /** Strokes the current path as `part`, over its halo. */
   const stroke_part = (part: TransformHandlePart) => {
-    const isActive = active === part;
-    const width = isActive ? WIDTH.ACTIVE : WIDTH.REST;
-    ctx.globalAlpha = HALO.ALPHA;
+    const { width, color, opacity } = look(part);
+    ctx.globalAlpha = HALO.ALPHA * opacity;
     ctx.strokeStyle = COLORS.BACKGROUND;
     ctx.lineWidth = width + HALO.EXTRA_WIDTH;
     ctx.stroke();
-    ctx.globalAlpha = isActive ? INK_ALPHA.ACTIVE : INK_ALPHA.REST;
-    ctx.strokeStyle = COLORS.ELEMENT_STROKE;
+    ctx.globalAlpha = opacity;
+    ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.stroke();
   };
 
   ctx.save();
   ctx.lineJoin = "round";
-  if (drag?.kind === "rotate") draw_rotation_sweep(ctx, pivot, drag, viewport);
-  if (drag?.kind === "scale") draw_scale_band(ctx, pivot, drag);
+  if (drag?.kind === "rotate") draw_rotation_sweep(ctx, pivot, drag);
 
   ctx.beginPath();
   ctx.arc(pivot.x, pivot.y, RING, 0, 2 * Math.PI);
   stroke_part("rotate");
 
+  const scaling = drag?.kind === "scale";
+  if (scaling) draw_scale_band(ctx, pivot, drag);
+
   // Whole shapes rather than a fill and a stroke: those overlap along the edge, which translucent ink shows as a darker band inside it.
-  const corners = scale_handle_corners(pivot);
-  const scaleActive = active === "scale";
-  const scaleWidth = scaleActive ? WIDTH.ACTIVE : WIDTH.REST;
-  grown_triangle_path(ctx, corners, (scaleWidth + HALO.EXTRA_WIDTH) / 2);
-  ctx.globalAlpha = HALO.ALPHA;
+  // Against the scaled circle while a scale is under way, as if pushed by it.
+  const corners = scale_handle_corners(pivot, scaling ? RING * drag.value : RING);
+  const scaleLook = look("scale");
+  grown_triangle_path(ctx, corners, (scaleLook.width + HALO.EXTRA_WIDTH) / 2);
+  ctx.globalAlpha = HALO.ALPHA * scaleLook.opacity;
   ctx.fillStyle = COLORS.BACKGROUND;
   ctx.fill();
-  grown_triangle_path(ctx, corners, scaleWidth / 2);
-  ctx.globalAlpha = scaleActive ? INK_ALPHA.ACTIVE : INK_ALPHA.REST;
-  ctx.fillStyle = COLORS.ELEMENT_STROKE;
+  grown_triangle_path(ctx, corners, scaleLook.width / 2);
+  ctx.globalAlpha = scaleLook.opacity;
+  ctx.fillStyle = scaleLook.color;
   ctx.fill();
 
   // The same mark as the moment balance's reference point, and for the same reason: a point things are taken about.
@@ -126,52 +129,60 @@ function grown_triangle_path(
 }
 
 /** Fills and strokes the current path as an indicator: the ground under it faint, its edge plain. */
-function paint_indicator(ctx: CanvasRenderingContext2D, fillRule?: CanvasFillRule): void {
+function paint_indicator(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = COLORS.ELEMENT_STROKE;
   ctx.strokeStyle = COLORS.ELEMENT_STROKE;
   ctx.globalAlpha = INK_ALPHA.FILL;
-  ctx.fill(fillRule);
+  ctx.fill();
   ctx.globalAlpha = INK_ALPHA.ACTIVE;
   ctx.lineWidth = WIDTH.REST;
   ctx.stroke();
 }
 
-/** The angle swept so far: a sector from the pivot. */
+/** The angle turned so far: a sector from the pivot, read from 0°, whatever point of the ring was grabbed. */
 function draw_rotation_sweep(
   ctx: CanvasRenderingContext2D,
   pivot: ScreenPoint,
   drag: GizmoDrag,
-  viewport: ViewportState,
 ): void {
   const radius = gizmo_sizes().RING * 2;
-  const from = world2screen(drag.from, viewport);
-  const start = Math.atan2(from.y - pivot.y, from.x - pivot.x);
 
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(pivot.x, pivot.y);
   // A world turn counter-clockwise is one on screen too, and `arc` takes screen angles that grow clockwise.
-  ctx.arc(pivot.x, pivot.y, radius, start, start - drag.value, drag.value > 0);
+  ctx.arc(pivot.x, pivot.y, radius, 0, -drag.value, drag.value > 0);
   ctx.closePath();
   paint_indicator(ctx);
   ctx.restore();
 }
 
-/** The factor so far: the band between the ring and the ring scaled. */
+/**
+ * The factor so far: the ring scaled by it, in proportion, the band between the two faint.
+ * The ring itself is already drawn, so only the scaled circle gets an edge.
+ */
 function draw_scale_band(
   ctx: CanvasRenderingContext2D,
   pivot: ScreenPoint,
   drag: GizmoDrag,
 ): void {
   const { RING } = gizmo_sizes();
-  const scaled = Math.min(RING * drag.value, SCALE_INDICATOR_MAX_RADIUS);
+  const scaled = RING * drag.value;
 
   ctx.save();
+  ctx.fillStyle = COLORS.ELEMENT_STROKE;
+  ctx.strokeStyle = COLORS.ELEMENT_STROKE;
   ctx.beginPath();
   ctx.arc(pivot.x, pivot.y, RING, 0, 2 * Math.PI);
   ctx.moveTo(pivot.x + scaled, pivot.y);
   ctx.arc(pivot.x, pivot.y, scaled, 0, 2 * Math.PI);
-  paint_indicator(ctx, "evenodd");
+  ctx.globalAlpha = INK_ALPHA.FILL;
+  ctx.fill("evenodd");
+  ctx.beginPath();
+  ctx.arc(pivot.x, pivot.y, scaled, 0, 2 * Math.PI);
+  ctx.globalAlpha = INK_ALPHA.ACTIVE;
+  ctx.lineWidth = WIDTH.REST;
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -182,7 +193,7 @@ function draw_value_box(
   drag: GizmoDrag,
 ): void {
   const text = transform_value_text(drag.kind, drag.value);
-  ctx.font = "16px Arial";
+  ctx.font = TEXT_SPECS.TEXT_FONT;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const width = ctx.measureText(text).width + 16;
