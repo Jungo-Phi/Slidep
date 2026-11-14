@@ -333,7 +333,7 @@ export function same_shown_value(
 }
 
 /**
- * `valueSI`'s mantissa alone, no unit symbol — a permanent on-canvas length dimension, say, where the unit is fixed and known (mm) and showing it on every single label would only be noise.
+ * `valueSI`'s mantissa alone, no unit symbol — for a label whose unit is fixed and stated elsewhere, like a section schema's dimensions.
  * Reserved for a `kind` whose reader already knows the unit without being told; an adaptive kind's unit is informative (it says which decade the value is in) and should keep using `format_quantity` instead.
  */
 export function format_mantissa(

@@ -196,7 +196,6 @@ function draw_reading(
     draw_end(ctx, measure.end, end);
   }
 
-  // Unit shown, unlike a cote's: a cote is one of a drawing full of millimetres, a reading is on its own and says what it is in.
   ctx.lineWidth = STROKE_WIDTHS.STANDARD;
   draw_dimension_text(
     ctx,

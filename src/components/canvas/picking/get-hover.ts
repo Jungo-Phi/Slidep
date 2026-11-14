@@ -58,7 +58,12 @@ import {
 } from "../utils";
 import { has_dangling_ref } from "../../../types/element-refs";
 import { offset_ends, parallel_edge_offsets } from "../drawing/parallel-edges";
-import { floor_screen_geometry, motor_arrow_geometry } from "../drawing/drawing-functions";
+import {
+  dimension_angle_label,
+  floor_screen_geometry,
+  motor_arrow_geometry,
+  on_pill,
+} from "../drawing/drawing-functions";
 import { FloorConfig } from "../../../types/mechanism";
 import { floor_acute_angle } from "../../../utils/floor-geometry";
 import { gear_grab_handle } from "../../solver/kinematics/geometric-solver";
@@ -174,6 +179,9 @@ const MEASURING: HoverTargets = {
   gear: "whole",
   edge: "ends+body",
 };
+
+/** How far past its pill, in px, a value drawn on one still answers to the cursor. */
+const LABEL_HIT_MARGIN = 4;
 
 /** Nothing is a target: the gesture reads the free cursor. */
 const NOTHING: HoverTargets = {};
@@ -740,10 +748,25 @@ function get_hovered_part_of_element(
   if (!targets.overlays) return null;
 
   switch (element.type) {
+    case "dimension-angle": {
+      // Its value may be pushed off the point it was placed at (see `angle_cote_layout`): it is found where it is drawn.
+      const startEdge = mechanicalElements.find((e) => e.id === element.startEdgeID);
+      const endEdge = mechanicalElements.find((e) => e.id === element.endEdgeID);
+      const label =
+        startEdge && endEdge && "positionStart" in startEdge && "positionStart" in endEdge
+          ? dimension_angle_label(element, startEdge, endEdge, viewport)
+          : world2screen(element.position, viewport);
+      if (mouseScreen.distance_to(label) > hit_tolerance().CONSTRAINT) break;
+      return {
+        type: "Constraint",
+        position: element.position.clone(),
+        id: element.id,
+        deleting: state.type === "Erasing",
+      };
+    }
     case "dimension-edge":
     case "dimension-node-to-node":
     case "dimension-edge-to-node":
-    case "dimension-angle":
     case "dimension-radius":
     case "dimension-belt":
     case "gear-ratio":
@@ -1427,24 +1450,24 @@ export function get_hovered_part(
 
   // The floor's handles: checked last, so an overlapping mechanism element always wins.
   // Only where grabbing the floor makes sense — a placement/drag gesture passing near the line is choosing a point for that gesture, not reaching for the floor.
-  if (floor.enabled && FLOOR_HOVER_STATES.has(state.type)) {
-    const { anchor, direction, angleHandle, angleLabel } = floor_screen_geometry(
-      viewport,
-      floor,
-    );
-    if (mouseScreen.distance_to(angleHandle) <= hit_tolerance().NODE)
-      return { type: "FloorAngle", position: screen2world(angleHandle, viewport) };
+  // Never while simulating: the floor is then the ground the mechanism runs on, not something to edit.
+  if (floor.enabled && !isSimulating && FLOOR_HOVER_STATES.has(state.type)) {
+    const { anchor, direction, angleHandle, angleLabel, angleLabelSize } =
+      floor_screen_geometry(viewport, floor);
     // The label reads as a click target only where it's actually drawn — see the same threshold `draw_floor` hides it behind at exactly flat.
-    // A separate hover from the handle above: one drags the angle, the other opens its value to type, the same split a load's body and its value label have.
+    // A separate hover from the handle below: one drags the angle, the other opens its value to type, the same split a load's body and its value label have.
+    // Checked first, over its whole pill: drawn over the line and the handle, it is what the cursor is on wherever it covers them.
     const angleLabelShown = Math.abs(floor_acute_angle(floor.angle)) > 1e-6;
     if (
       angleLabelShown &&
-      mouseScreen.distance_to(angleLabel) <= hit_tolerance().CONSTRAINT
+      on_pill(mouseScreen, angleLabel, angleLabelSize, LABEL_HIT_MARGIN)
     )
       return {
         type: "FloorAngleValue",
         position: screen2world(angleLabel, viewport),
       };
+    if (mouseScreen.distance_to(angleHandle) <= hit_tolerance().NODE)
+      return { type: "FloorAngle", position: screen2world(angleHandle, viewport) };
     const foot = mouseScreen.project_on_line(anchor, anchor.add(direction));
     if (mouseScreen.distance_to(foot) <= hit_tolerance().EDGE)
       return { type: "FloorHeight", position: screen2world(foot, viewport) };

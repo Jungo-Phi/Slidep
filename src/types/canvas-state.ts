@@ -144,6 +144,8 @@ export type CanvasState =
       pivot: WorldPoint;
       /** Where the press landed. */
       from: WorldPoint;
+      /** The value the drag goes on from: none from a fresh press, the box's own when the handle is taken up again. */
+      start: number;
       /** Radians counter-clockwise for a rotation, a factor for a scale. */
       value: number;
     }

@@ -187,7 +187,10 @@ function is_selected(elementID: ID, state: CanvasState): boolean {
       state.elementID === elementID) ||
     ((state.type === "SelectingMultiple" ||
       state.type === "SelectedMultiple" ||
-      state.type === "MovingSelectionMultiple") &&
+      state.type === "MovingSelectionMultiple" ||
+      state.type === "MovingTransformPivot" ||
+      state.type === "TransformingSelection" ||
+      state.type === "EditingSelectionTransform") &&
       state.elementIDs.includes(elementID)) ||
     (state.type === "MovingConstraint" && state.elementID === elementID) ||
     (state.type === "EqualConstraintGear" && state.startGearID === elementID) ||

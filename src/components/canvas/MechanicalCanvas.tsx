@@ -32,6 +32,7 @@ import {
   WorldPoint,
 } from "../../types";
 import { world2screen, screen2world } from "../../utils";
+import type { DimensionAngle } from "../../types/element";
 import { pinch_step } from "../../utils/viewport";
 import {
   hit_tolerance,
@@ -111,6 +112,8 @@ import {
   default_pivot,
   gizmo_sizes,
   SCALE_PREFIX,
+  open_handle_at,
+  resumed_transform,
   scale_precision,
   transform_handle_at,
 } from "./tools/transform-gizmo";
@@ -140,6 +143,7 @@ import {
   draw_balance_marker,
   draw_moment_balance_marker,
   draw_snap_feedback,
+  dimension_angle_label,
   floor_screen_geometry,
   overlay_arrow_hit,
   overlay_moment_hit,
@@ -835,6 +839,7 @@ const MechanicalCanvasView = forwardRef<
                 : hovered.type === "Void"
                   ? hovered.handle
                   : undefined,
+            hovered.type === "Void" ? hovered.handle : undefined,
             transformState.type === "TransformingSelection"
               ? transformState
               : transformState.type === "EditingSelectionTransform"
@@ -1290,11 +1295,38 @@ const MechanicalCanvasView = forwardRef<
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       set_pointer_kind(event.pointerType);
+      const pressed = new Point2<"screen">(event.clientX, event.clientY).sub(
+        canvasOffsetRef.current,
+      );
+      const opened = canvasStateRef.current;
+      // Taken before the blur below, which would apply the box the handle is taken back from.
+      const resumed =
+        event.button === 0
+          ? resumed_transform(
+              opened,
+              pressed,
+              mechanismRef.current.viewport,
+              typedTransformRef.current,
+            )
+          : undefined;
+      if (resumed) {
+        setTypedTransform(null);
+        setCanvasStateNow(resumed);
+      }
+      // A press that closes a transform's box only closes it: landing on the gizmo, it would otherwise start the other transform.
+      const closesOnGizmo =
+        opened.type === "EditingSelectionTransform" &&
+        !resumed &&
+        transform_handle_at(
+          pressed,
+          world2screen(opened.pivot, mechanismRef.current.viewport),
+        ) !== undefined;
       // A field still being edited commits on blur, but the browser only moves focus on the mousedown that follows this pointerdown — after the gesture below has already changed the selection and unmounted (or re-targeted) the panel holding it, losing the edit.
       // Blurring it first lets it commit against the element it was editing.
       const active = document.activeElement;
       if (active instanceof HTMLElement && active !== event.currentTarget)
         active.blur();
+      if (closesOnGizmo) return;
       window.getSelection()?.removeAllRanges();
       // A gesture is rare enough to pay for one measurement, and it catches the case the observer cannot see: a canvas moved without being resized.
       measureCanvas();
@@ -1509,16 +1541,27 @@ const MechanicalCanvasView = forwardRef<
       );
       // On top of what it stands over: it is small, and only there for a selection that was made to be acted on.
       const resting = canvasStateRef.current;
-      if (resting.type === "SelectedMultiple" && appModeRef.current === "edition") {
+      if (
+        (resting.type === "SelectedMultiple" ||
+          resting.type === "EditingSelectionTransform") &&
+        appModeRef.current === "edition"
+      ) {
         const pivot =
           resting.pivot ??
           default_pivot(resting.elementIDs, currMech.mechanicalElements);
         const part =
-          pivot &&
-          transform_handle_at(
-            mousePositionRef.current,
-            world2screen(pivot, currMech.viewport),
-          );
+          resting.type === "EditingSelectionTransform"
+            ? open_handle_at(
+                resting,
+                mousePositionRef.current,
+                currMech.viewport,
+                typedTransformRef.current,
+              )
+            : pivot &&
+              transform_handle_at(
+                mousePositionRef.current,
+                world2screen(pivot, currMech.viewport),
+              );
         if (part)
           return {
             hoveredPart: {
@@ -1982,9 +2025,7 @@ const MechanicalCanvasView = forwardRef<
     const cursor =
       hoveredPart.type === "Void" && hoveredPart.rejected
         ? "not-allowed"
-        : cursorState.type === "SimulationDragging" ||
-            cursorState.type === "TransformingSelection" ||
-            cursorState.type === "MovingTransformPivot"
+        : cursorState.type === "SimulationDragging"
           ? "grabbing"
           : canSimulationGrab &&
               ["Selecting", "SelectedElement"].includes(cursorState.type) &&
@@ -2054,6 +2095,19 @@ const MechanicalCanvasView = forwardRef<
               isEditingValue ? canvasState.part : undefined,
             )
         : undefined;
+
+    // An angle constraint's value may be pushed off the point it was placed at (see `angle_cote_layout`): the field opens where the value is drawn.
+    const angle_constraint_label = (element: DimensionAngle): ScreenPoint => {
+      const [startEdge, endEdge] = [element.startEdgeID, element.endEdgeID].map(
+        (id) => mechanism.mechanicalElements.find((e) => e.id === id),
+      );
+      return startEdge &&
+        endEdge &&
+        "positionStart" in startEdge &&
+        "positionStart" in endEdge
+        ? dimension_angle_label(element, startEdge, endEdge, mechanism.viewport)
+        : world2screen(element.position, mechanism.viewport);
+    };
 
     // Commit an edited value for a load (force magnitude, moment value, or a distributed force's start/end magnitude).
     // Returns true if it handled the element, false for non-load elements (dimensions/constraints).
@@ -2222,12 +2276,14 @@ const MechanicalCanvasView = forwardRef<
             position={
               loadAnchor
                 ? loadAnchor()
-                : world2screen(
-                    "position" in editingElement
-                      ? editingElement.position
-                      : ZERO,
-                    mechanism.viewport,
-                  )
+                : editingElement.type === "dimension-angle"
+                  ? angle_constraint_label(editingElement)
+                  : world2screen(
+                      "position" in editingElement
+                        ? editingElement.position
+                        : ZERO,
+                      mechanism.viewport,
+                    )
             }
             follow={loadAnchor}
             onCommit={(newValue) => {
@@ -2293,6 +2349,8 @@ const MechanicalCanvasView = forwardRef<
             )}
             onEntered={setTypedTransform}
             onCommit={(value) => {
+              // The handle taken up again: the drag carries the value on, and the box goes without applying it.
+              if (canvasStateRef.current.type !== "EditingSelectionTransform") return;
               const { elementIDs, kind, pivot } = canvasState;
               setTypedTransform(null);
               const actions = transform_actions(
@@ -2306,6 +2364,7 @@ const MechanicalCanvasView = forwardRef<
               setCanvasStateNow({ type: "SelectedMultiple", elementIDs, pivot });
             }}
             onCancel={() => {
+              if (canvasStateRef.current.type !== "EditingSelectionTransform") return;
               const { elementIDs, pivot } = canvasState;
               setTypedTransform(null);
               setCanvasStateNow({ type: "SelectedMultiple", elementIDs, pivot });

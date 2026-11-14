@@ -1,5 +1,5 @@
 import { COLORS } from "../../../theme/canvas-theme";
-import { DIM, STROKE_WIDTHS, TEXT_SPECS } from "../../../constants/rendering-specs";
+import { DIM, SCAFFOLD_ALPHA, STROKE_WIDTHS, TEXT_SPECS } from "../../../constants/rendering-specs";
 import { ScreenPoint, WorldPoint, ViewportState } from "../../../types";
 import type { TransformHandlePart, TransformKind } from "../../../types";
 import { world2screen } from "../../../utils";
@@ -14,7 +14,7 @@ import {
  * The strokes are heavier than a drawing's to make up for it.
  */
 /** `REST` for a part neither under the cursor nor dragged: see-through, so the elements under it still show. */
-const INK_ALPHA = { REST: 0.35, ACTIVE: 1, FILL: 0.15 };
+const INK_ALPHA = { REST: SCAFFOLD_ALPHA, ACTIVE: 1, FILL: 0.15 };
 const WIDTH = {
   REST: STROKE_WIDTHS.HOVERED,
   ACTIVE: STROKE_WIDTHS.HOVERED + STROKE_WIDTHS.HOVER_GAIN,
@@ -35,17 +35,24 @@ export function draw_transform_gizmo(
   ctx: CanvasRenderingContext2D,
   pivotWorld: WorldPoint,
   viewport: ViewportState,
-  /** The handle under the cursor or being dragged. */
+  /** The handle under the cursor, being dragged, or whose value box is open. */
   active: TransformHandlePart | undefined,
+  /** The handle under the cursor. */
+  hovered: TransformHandlePart | undefined,
   drag: GizmoDrag | undefined,
 ): void {
   const pivot = world2screen(pivotWorld, viewport);
   const { RING } = gizmo_sizes();
-  /** How `part` is inked: plain while it is under the cursor or dragged, see-through otherwise. */
-  const look = (part: TransformHandlePart) =>
-    active === part
-      ? { width: WIDTH.ACTIVE, color: COLORS.ELEMENT_STROKE, opacity: INK_ALPHA.ACTIVE }
-      : { width: WIDTH.REST, color: COLORS.ELEMENT_STROKE, opacity: INK_ALPHA.REST };
+  /**
+   * How `part` is inked: plain while active, see-through otherwise.
+   * Thick while it is in hand or under the cursor: an open box leaves its handle plain but thin, so that a hover shows it can be taken up again.
+   */
+  const look = (part: TransformHandlePart) => ({
+    width:
+      hovered === part || (active === part && !drag?.typing) ? WIDTH.ACTIVE : WIDTH.REST,
+    color: COLORS.ELEMENT_STROKE,
+    opacity: active === part ? INK_ALPHA.ACTIVE : INK_ALPHA.REST,
+  });
   /** Strokes the current path as `part`, over its halo. */
   const stroke_part = (part: TransformHandlePart) => {
     const { width, color, opacity } = look(part);
@@ -63,25 +70,30 @@ export function draw_transform_gizmo(
   ctx.lineJoin = "round";
   if (drag?.kind === "rotate") draw_rotation_sweep(ctx, pivot, drag);
 
-  ctx.beginPath();
-  ctx.arc(pivot.x, pivot.y, RING, 0, 2 * Math.PI);
-  stroke_part("rotate");
-
   const scaling = drag?.kind === "scale";
+  // Under a scale, the scaled circle says it all: the ring would only be one more circle.
+  if (!scaling) {
+    ctx.beginPath();
+    ctx.arc(pivot.x, pivot.y, RING, 0, 2 * Math.PI);
+    stroke_part("rotate");
+  }
   if (scaling) draw_scale_band(ctx, pivot, drag);
 
-  // Whole shapes rather than a fill and a stroke: those overlap along the edge, which translucent ink shows as a darker band inside it.
-  // Against the scaled circle while a scale is under way, as if pushed by it.
-  const corners = scale_handle_corners(pivot, scaling ? RING * drag.value : RING);
-  const scaleLook = look("scale");
-  grown_triangle_path(ctx, corners, (scaleLook.width + HALO.EXTRA_WIDTH) / 2);
-  ctx.globalAlpha = HALO.ALPHA * scaleLook.opacity;
-  ctx.fillStyle = COLORS.BACKGROUND;
-  ctx.fill();
-  grown_triangle_path(ctx, corners, scaleLook.width / 2);
-  ctx.globalAlpha = scaleLook.opacity;
-  ctx.fillStyle = scaleLook.color;
-  ctx.fill();
+  // A rotation has no use for the scale handle.
+  if (drag?.kind !== "rotate") {
+    // Whole shapes rather than a fill and a stroke: those overlap along the edge, which translucent ink shows as a darker band inside it.
+    // Against the scaled circle while a scale is under way, as if pushed by it.
+    const corners = scale_handle_corners(pivot, scaling ? RING * drag.value : RING);
+    const scaleLook = look("scale");
+    grown_triangle_path(ctx, corners, (scaleLook.width + HALO.EXTRA_WIDTH) / 2);
+    ctx.globalAlpha = HALO.ALPHA * scaleLook.opacity;
+    ctx.fillStyle = COLORS.BACKGROUND;
+    ctx.fill();
+    grown_triangle_path(ctx, corners, scaleLook.width / 2);
+    ctx.globalAlpha = scaleLook.opacity;
+    ctx.fillStyle = scaleLook.color;
+    ctx.fill();
+  }
 
   // The same mark as the moment balance's reference point, and for the same reason: a point things are taken about.
   const half = DIM.MOMENT_BALANCE_MARKER_HALF_SIZE;
@@ -139,13 +151,13 @@ function paint_indicator(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 }
 
-/** The angle turned so far: a sector from the pivot, read from 0°, whatever point of the ring was grabbed. */
+/** The angle turned so far: a sector of the ring itself, read from 0°, whatever point of the ring was grabbed. */
 function draw_rotation_sweep(
   ctx: CanvasRenderingContext2D,
   pivot: ScreenPoint,
   drag: GizmoDrag,
 ): void {
-  const radius = gizmo_sizes().RING * 2;
+  const radius = gizmo_sizes().RING;
 
   ctx.save();
   ctx.beginPath();

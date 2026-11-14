@@ -17,7 +17,8 @@ import {
   ViewportState,
   WorldPoint,
 } from "../../../types";
-import { world2screen } from "../../../utils";
+import type { CanvasState } from "../../../types/canvas-state";
+import { screen2world, world2screen } from "../../../utils";
 import type {
   ID,
   TransformHandlePart,
@@ -57,14 +58,18 @@ export function scale_handle_corners(
   return [apex, base.add(side), base.sub(side)];
 }
 
-/** The handle under `mouse`, if any. The inside of the ring stays the mechanism's, the pivot aside. */
+/**
+ * The handle under `mouse`, if any. The inside of the ring stays the mechanism's, the pivot aside.
+ * `scaleRadius` is the circle the scale handle stands against: the ring, unless a scale has pushed it out.
+ */
 export function transform_handle_at(
   mouse: ScreenPoint,
   pivot: ScreenPoint,
+  scaleRadius = gizmo_sizes().RING,
 ): TransformHandlePart | undefined {
   const { RING, RING_HIT, HANDLE_LENGTH, HANDLE_GAP, HANDLE_HIT } = gizmo_sizes();
   const middle = pivot.add(
-    SCALE_DIRECTION.mul(RING + HANDLE_GAP + HANDLE_LENGTH / 2),
+    SCALE_DIRECTION.mul(scaleRadius + HANDLE_GAP + HANDLE_LENGTH / 2),
   );
   if (mouse.distance_to(middle) <= HANDLE_HIT) return "scale";
   const distance = mouse.distance_to(pivot);
@@ -89,16 +94,60 @@ export function default_pivot(
   return selected.length > 0 ? elements_center(selected) : undefined;
 }
 
-/** The angle a drag from `from` to `to` turns about `pivot`, in (-π, π]. */
+/**
+ * The handle under `mouse` while `state` has its value box open: only the one of the transform under way, where it is drawn, can be taken up again.
+ * Undefined in any other state.
+ */
+export function open_handle_at(
+  state: CanvasState,
+  mouse: ScreenPoint,
+  viewport: ViewportState,
+  typed: number | null,
+): TransformKind | undefined {
+  if (state.type !== "EditingSelectionTransform") return undefined;
+  const handle = transform_handle_at(
+    mouse,
+    world2screen(state.pivot, viewport),
+    state.kind === "scale" ? gizmo_sizes().RING * (typed ?? state.value) : undefined,
+  );
+  return handle === state.kind ? state.kind : undefined;
+}
+
+/**
+ * The handle taken up again while `state` has its value box open, the drag going on from that value — `typed` when the box holds one — or undefined if `mouse` is not on the handle shown.
+ * The box is dropped rather than applied: the drag carries its value on.
+ */
+export function resumed_transform(
+  state: CanvasState,
+  mouse: ScreenPoint,
+  viewport: ViewportState,
+  typed: number | null,
+): Extract<CanvasState, { type: "TransformingSelection" }> | undefined {
+  if (state.type !== "EditingSelectionTransform") return undefined;
+  if (!open_handle_at(state, mouse, viewport, typed)) return undefined;
+  const value = typed ?? state.value;
+  return {
+    type: "TransformingSelection",
+    elementIDs: state.elementIDs,
+    kind: state.kind,
+    pivot: state.pivot,
+    from: screen2world(mouse, viewport),
+    start: value,
+    value,
+  };
+}
+
+/** The angle a drag from `from` to `to` turns about `pivot`, added to `start`; a drag alone turns by (-π, π]. */
 export function dragged_angle(
   pivot: WorldPoint,
   from: WorldPoint,
   to: WorldPoint,
+  start: number,
   snap: boolean,
 ): number {
   const a = from.sub(pivot);
   const b = to.sub(pivot);
-  const angle = Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y);
+  const angle = start + Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y);
   if (!snap) return angle;
   return Math.round(angle / TRANSFORM_SNAP.ANGLE) * TRANSFORM_SNAP.ANGLE;
 }
@@ -118,7 +167,7 @@ export function along_scale_axis(
 }
 
 /**
- * The factor a drag from `from` to `to` scales by, from how far it went along the handle's diagonal.
+ * The factor a drag from `from` to `to` scales by, from how far it went along the handle's diagonal, times `start`.
  * Doubles per fixed distance rather than following the ratio of the distances: on a handle this close to the pivot, that ratio would be far too sensitive to hold, and it lets the factor keep shrinking past the pivot.
  */
 export function dragged_scale(
@@ -126,11 +175,12 @@ export function dragged_scale(
   from: WorldPoint,
   to: WorldPoint,
   viewport: ViewportState,
+  start: number,
   snap: boolean,
 ): number {
   const pulled =
     along_scale_axis(pivot, to, viewport) - along_scale_axis(pivot, from, viewport);
-  const scale = 2 ** (pulled / TRANSFORM_GIZMO.PX_PER_DOUBLING);
+  const scale = start * 2 ** (pulled / TRANSFORM_GIZMO.PX_PER_DOUBLING);
   return snap ? snapped_scale(scale) : scale;
 }
 

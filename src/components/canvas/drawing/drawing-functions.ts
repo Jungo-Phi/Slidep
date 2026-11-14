@@ -29,7 +29,10 @@ import {
   ICON_TINT,
   TEXT_SPECS,
   REDUNDANCY_SYMBOL,
+  SCAFFOLD_ALPHA,
 } from "../../../constants/rendering-specs";
+import { arial_text_width } from "../../../utils/text-width";
+import type { DimensionAngle } from "../../../types/element";
 import { FloorConfig } from "../../../types/mechanism";
 import type { ReactionPoint, StrandReading } from "../../solver/recording/probe-series";
 import {
@@ -81,9 +84,11 @@ import {
   MOMENT,
   STRESS,
   QuantityKind,
-  format_mantissa,
   format_quantity,
   rad_to_deg,
+  deg_to_rad,
+  field_precision,
+  ANGLE,
 } from "../../../utils/quantity-format";
 
 const TAU = 2 * Math.PI;
@@ -210,7 +215,7 @@ export function draw_axes(
 /**
  * The floor's screen-space geometry, shared by `draw_floor` and hit-testing (`get-hover.ts`) so both agree on exactly where the line and its handles are.
  * `anchor`/`normal` mirror `floor_anchor_and_normal`'s world-space ones; `direction` is along the line (screen space), for walking along it — the angle handle at `FLOOR.ANGLE_HANDLE_PX` in particular.
- * `angleLabel` is where the angle's value is drawn (meaningless at exactly flat, where neither `draw_floor` nor hit-testing use it).
+ * `angleLabel` is where the angle's value is drawn, `angleLabelSize` the size of its pill (meaningless at exactly flat, where neither `draw_floor` nor hit-testing use them).
  */
 export function floor_screen_geometry(
   viewport: ViewportState,
@@ -221,6 +226,7 @@ export function floor_screen_geometry(
   direction: ScreenPoint;
   angleHandle: ScreenPoint;
   angleLabel: ScreenPoint;
+  angleLabelSize: PillSize;
 } {
   const { anchor: worldAnchor, normal: worldNormal } =
     floor_anchor_and_normal(floor);
@@ -230,19 +236,53 @@ export function floor_screen_geometry(
   const direction = new Point2(normal.y, -normal.x).as_space<"screen">();
   // `direction` points at `floor.angle + π`, not `floor.angle`: a world vector at `floor.angle` mirrors and rotates into `(-cos, -sin)` of it, and `atan2` of that is the angle plus a half turn.
   // The handle must read back as `floor.angle` itself when grabbed (else the first drag frame flips the floor to its mirror image), so it sits against `direction` rather than along it.
-  // Halfway between horizontal and the line, screen angles — where `draw_dimension_angle` draws its label, so it has to sit on the arc rather than floating off it.
-  const screenAngle = world2screen_angle(floor_acute_angle(floor.angle));
-  const angleLabel = anchor.add(
-    new Point2(FLOOR.ANGLE_ARC_PX, 0)
-      .as_space<"screen">()
-      .rotate(screenAngle / 2),
+  const { horizontalEnd, floorEnd, angleArcPoint, angleDeg } = floor_angle_cote(
+    anchor,
+    floor,
+  );
+  const layout = angle_cote_layout(
+    anchor,
+    horizontalEnd,
+    anchor,
+    floorEnd,
+    false,
+    false,
+    angleArcPoint,
+    angleDeg,
   );
   return {
     anchor,
     normal,
     direction,
     angleHandle: anchor.sub(direction.mul(FLOOR.ANGLE_HANDLE_PX)),
-    angleLabel,
+    angleLabel: layout?.label ?? angleArcPoint,
+    angleLabelSize: angle_pill_size(angleDeg),
+  };
+}
+
+/**
+ * The floor's angle cote, in screen space: its two rays from `anchor` (the horizontal, and the line), the point its arc passes through halfway between them, and the angle it reads, in degrees.
+ */
+function floor_angle_cote(
+  anchor: ScreenPoint,
+  floor: FloorConfig,
+): {
+  horizontalEnd: ScreenPoint;
+  floorEnd: ScreenPoint;
+  angleArcPoint: ScreenPoint;
+  angleDeg: number;
+} {
+  const acuteAngle = floor_acute_angle(floor.angle);
+  const screenAngle = world2screen_angle(acuteAngle);
+  const ray = (angle: number) =>
+    anchor.add(
+      new Point2(FLOOR.ANGLE_ARC_PX, 0).as_space<"screen">().rotate(angle),
+    );
+  return {
+    horizontalEnd: ray(0),
+    floorEnd: ray(screenAngle),
+    angleArcPoint: ray(screenAngle / 2),
+    angleDeg: rad_to_deg(Math.abs(acuteAngle)),
   };
 }
 
@@ -317,8 +357,10 @@ export function draw_floor(
   isValueHovered: boolean = false,
 ) {
   if (!floor.enabled) return;
-  const { anchor, normal, direction, angleHandle, angleLabel } =
-    floor_screen_geometry(viewport, floor);
+  const { anchor, normal, direction, angleHandle } = floor_screen_geometry(
+    viewport,
+    floor,
+  );
   const clipped = clip_line_to_rect(anchor, direction, width, height);
   if (!clipped) return;
 
@@ -350,13 +392,11 @@ export function draw_floor(
 
   // The angle itself, read against the horizontal as the line's acute angle — a floor is a line, not a ray, so leaning it past 90° reads as the same line leaning the *other* way, never as an ever-growing angle.
   // Hidden at exactly flat, where there is nothing to measure.
-  const acuteAngle = floor_acute_angle(floor.angle);
-  const horizontalEnd = anchor.add(new Point2(FLOOR.ANGLE_ARC_PX, 0));
-  const screenAngle = world2screen_angle(acuteAngle);
-  const floorEnd = anchor.add(
-    new Point2(FLOOR.ANGLE_ARC_PX, 0).as_space<"screen">().rotate(screenAngle),
+  const { horizontalEnd, floorEnd, angleArcPoint, angleDeg } = floor_angle_cote(
+    anchor,
+    floor,
   );
-  if (Math.abs(acuteAngle) > 1e-6) {
+  if (angleDeg > 1e-6) {
     ctx.lineWidth = isValueHovered
       ? STROKE_WIDTHS.HOVERED
       : STROKE_WIDTHS.STANDARD;
@@ -368,29 +408,32 @@ export function draw_floor(
       floorEnd,
       false,
       false,
-      angleLabel,
-      rad_to_deg(Math.abs(acuteAngle)),
+      angleArcPoint,
+      angleDeg,
     );
   } else if (isHovered) {
     ctx.lineWidth = isAngleHovered
       ? STROKE_WIDTHS.HOVERED
       : STROKE_WIDTHS.STANDARD;
-    ctx.fillStyle = ctx.strokeStyle;
+    // A hint of the angle cote a tilt would show: the same drawing, with no value.
+    // See-through like the transform gizmo at rest — an offer, not a reading.
     const anglo = TAU / 20;
     const radius = FLOOR.ANGLE_ARC_PX;
-    const start = anchor.add(Point2.from_polar(radius, -anglo + 3 / radius));
-    const end = anchor.add(Point2.from_polar(radius, anglo - 3 / radius));
-    draw_arrow_head(ctx, start, TAU / 4 - anglo);
-    draw_arrow_head(ctx, end, anglo - TAU / 4);
-    ctx.beginPath();
-    ctx.arc(
-      anchor.x,
-      anchor.y,
-      Math.sqrt(radius ** 2 + 20 ** 2),
-      -anglo + DIM.ARROW_HEAD_LENGTH / radius,
-      anglo - DIM.ARROW_HEAD_LENGTH / radius,
+    ctx.save();
+    ctx.globalAlpha = SCAFFOLD_ALPHA;
+    draw_dimension_angle(
+      ctx,
+      anchor,
+      anchor.add(Point2.from_polar(radius, -anglo)),
+      anchor,
+      anchor.add(Point2.from_polar(radius, anglo)),
+      false,
+      false,
+      anchor.add(new Point2(radius, 0)),
+      0,
+      true,
     );
-    ctx.stroke();
+    ctx.restore();
   }
 }
 
@@ -1794,7 +1837,7 @@ export function draw_dimension(
   ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH);
 }
 
 export function draw_dimension_to_segment(
@@ -1860,9 +1903,252 @@ export function draw_dimension_to_segment(
   ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH);
 }
 
+/** How far an angle cote's arrow tips stand off the line they point at, in px, so a tip is not swallowed by the bar it touches. */
+const ANGLE_TIP_GAP = 3;
+/** The least arc, in px, left visible between the two heads when they point outward from inside; below it they turn round. */
+const ANGLE_MIN_INNER_ARC = 6;
+/** How far the arc runs on past a head turned outside the angle, in px — the tail it points along. */
+const ANGLE_OUTER_TAIL = 12;
+/** Below this radius, in px, there is no arc to draw: only the value is shown. */
+const ANGLE_MIN_RADIUS = 4;
+/** Below `START` degrees the value is too wide for the gap between the rays: it is pushed outward, progressively, until at `FULL` degrees it sits clear of the arc, its inner edge `GAP` px past the line. */
+const ANGLE_LABEL_CLEAR = { START: 18, FULL: 6, GAP: 3 };
+/** Decimal places an angle cote shows: those of the field that edits it, so what is read is what was typed. */
+const ANGLE_PRECISION = field_precision(ANGLE);
+
+/** The size, in px, of the pill a value is drawn on. */
+export type PillSize = { width: number; height: number };
+
+/** The text an angle cote shows for `value` degrees. */
+function angle_text(value: number): string {
+  return dimension_text(deg_to_rad(value), "", ANGLE, ANGLE_PRECISION);
+}
+
+/** The value's pill for an angle cote showing `value` degrees, sized without a canvas so hit-testing reads the same one the drawing does. */
+function angle_pill_size(value: number): PillSize {
+  return {
+    width:
+      arial_text_width(angle_text(value), TEXT_SPECS.TEXT_FONT_SIZE) +
+      DIM.VALUE_H_SHADOW,
+    height: DIM.VALUE_PILL_HEIGHT,
+  };
+}
+
+/** How far, in px, an upright pill reaches along the direction at `angle`: its shadow on that direction. */
+function pill_extent(pill: PillSize, angle: number): number {
+  return (
+    pill.width * Math.abs(Math.cos(angle)) +
+    pill.height * Math.abs(Math.sin(angle))
+  );
+}
+
+/** Whether `point` lies on a pill of `size` centred on `center`, give or take `margin` px. */
+export function on_pill(
+  point: ScreenPoint,
+  center: ScreenPoint,
+  size: PillSize,
+  margin: number,
+): boolean {
+  return (
+    Math.abs(point.x - center.x) <= size.width / 2 + margin &&
+    Math.abs(point.y - center.y) <= size.height / 2 + margin
+  );
+}
+
+/** 0 at `edge0`, 1 at `edge1`, eased in between. */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/** `a` brought within half a turn of `reference`. */
+function angle_near(a: number, reference: number): number {
+  return (
+    reference + ((((a - reference + TAU / 2) % TAU) + TAU) % TAU) - TAU / 2
+  );
+}
+
+type AngleRay = { angle: number; start: ScreenPoint; end: ScreenPoint };
+
+/** Where everything of an angle cote goes, in screen space — see `angle_cote_layout`. */
+export type AngleCoteLayout = {
+  origin: ScreenPoint;
+  /** The ray the sweep starts from, at `alpha`, and the one it ends on, at `alpha + sweep`. */
+  first: AngleRay;
+  second: AngleRay;
+  alpha: number;
+  sweep: number;
+  /** The arc's radius: the distance from `origin` to the point the cote was placed at. */
+  radius: number;
+  /** The direction of that point from `origin`, brought within half a turn of the sector's middle. */
+  labelAngle: number;
+  labelInSector: boolean;
+  /** How far the value has been pushed off the arc, from 0 (on it) to 1 (clear of it). */
+  clearing: number;
+  /** Where the value is drawn: the placed point, pushed outward for a small angle. */
+  label: ScreenPoint;
+  /** Undefined when the cote shows no value. */
+  pill?: PillSize;
+};
+
+/**
+ * The geometry of an angle cote between two edges' lines, through `position` where it was placed, for `value` degrees (undefined when no value is shown).
+ * Shared by the drawing and by everything that must find the value where it is drawn — hit-testing, the on-canvas editor.
+ * Null when the lines are parallel or `position` is on their crossing: there is then no arc, and the value sits at `position`.
+ */
+export function angle_cote_layout(
+  start1: ScreenPoint,
+  end1: ScreenPoint,
+  start2: ScreenPoint,
+  end2: ScreenPoint,
+  flipStart: boolean,
+  flipEnd: boolean,
+  position: ScreenPoint,
+  value: number | undefined,
+): AngleCoteLayout | null {
+  const origin = Point2.lines_intersection(start1, end1, start2, end2);
+  if (!origin) return null;
+  const radius = origin.distance_to(position);
+  if (radius < ANGLE_MIN_RADIUS) return null;
+
+  let first: AngleRay = {
+    angle: end1
+      .sub(start1)
+      .mul(flipStart ? -1 : 1)
+      .angle(),
+    start: start1,
+    end: end1,
+  };
+  let second: AngleRay = {
+    angle: end2
+      .sub(start2)
+      .mul(flipEnd ? -1 : 1)
+      .angle(),
+    start: start2,
+    end: end2,
+  };
+  // Sweep from `first` to `second` with increasing angle, over at most half a turn.
+  if ((((first.angle - second.angle) % TAU) + TAU) % TAU < TAU / 2)
+    [first, second] = [second, first];
+  const alpha = first.angle;
+  const sweep = (((second.angle - alpha) % TAU) + TAU) % TAU;
+
+  const labelAngle = angle_near(
+    position.sub(origin).angle(),
+    alpha + sweep / 2,
+  );
+  const labelInSector = labelAngle > alpha && labelAngle < alpha + sweep;
+  const pill = value === undefined ? undefined : angle_pill_size(value);
+
+  const clearing =
+    pill && labelInSector
+      ? smoothstep(
+          ANGLE_LABEL_CLEAR.START,
+          ANGLE_LABEL_CLEAR.FULL,
+          rad_to_deg(sweep),
+        )
+      : 0;
+  const clearance = pill
+    ? pill_extent(pill, labelAngle) / 2 +
+      STROKE_WIDTHS.STANDARD / 2 +
+      ANGLE_LABEL_CLEAR.GAP
+    : 0;
+  const label =
+    clearing > 0
+      ? origin.add(
+          Point2.from_polar(radius + clearing * clearance, labelAngle),
+        )
+      : position;
+
+  return {
+    origin,
+    first,
+    second,
+    alpha,
+    sweep,
+    radius,
+    labelAngle,
+    labelInSector,
+    clearing,
+    label,
+    pill,
+  };
+}
+
+type Segment = { positionStart: WorldPoint; positionEnd: WorldPoint };
+
+/** Where an angle constraint's value is drawn, in screen space, for hit-testing and the on-canvas editor to find it there; `startEdge` and `endEdge` are the edges it names. */
+export function dimension_angle_label(
+  element: DimensionAngle,
+  startEdge: Segment,
+  endEdge: Segment,
+  viewport: ViewportState,
+): ScreenPoint {
+  const position = world2screen(element.position, viewport);
+  return (
+    angle_cote_layout(
+      world2screen(startEdge.positionStart, viewport),
+      world2screen(startEdge.positionEnd, viewport),
+      world2screen(endEdge.positionStart, viewport),
+      world2screen(endEdge.positionEnd, viewport),
+      element.flipStart,
+      element.flipEnd,
+      position,
+      rad_to_deg(element.value),
+    )?.label ?? position
+  );
+}
+
+/**
+ * A thin extension line along the ray from `origin` at `angle`, carrying the line a segment lies on out to the arc at `radius`, when the segment itself stops short of it (or starts beyond it).
+ * The same language as `draw_dimension`'s side lines: a gap at the object's end, a short overshoot past the dimension line.
+ */
+function draw_angle_extension(
+  ctx: CanvasRenderingContext2D,
+  origin: ScreenPoint,
+  angle: number,
+  segStart: ScreenPoint,
+  segEnd: ScreenPoint,
+  radius: number,
+) {
+  const u = Point2.from_polar(1, angle).as_space<"screen">();
+  const t1 = segStart.sub(origin).dot(u);
+  const t2 = segEnd.sub(origin).dot(u);
+  const near = Math.min(t1, t2);
+  const far = Math.max(t1, t2);
+  const gap = DIM.HELPER_LINE_BASE_OFFSET;
+  const overshoot = 5;
+  let from: number;
+  let to: number;
+  if (radius > far + gap) {
+    from = far + gap;
+    to = radius + overshoot;
+  } else if (radius < near - gap) {
+    from = near - gap;
+    to = radius - overshoot;
+  } else return;
+  const a = origin.add(u.mul(from));
+  const b = origin.add(u.mul(to));
+  const widthStart = ctx.lineWidth;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.lineWidth = widthStart;
+}
+
+/**
+ * An angle cote: an arc centred where the two edges' lines cross, from one ray to the other, through `position` where it was placed.
+ *
+ * Each ray is its edge's direction, reversed by its flip; the cote spans the sector of less than half a turn between them.
+ * Heads point outward from inside the arc when there is room for both, and turn round to point inward from outside it when there is not — the drafting convention for a small angle, rather than the arc wrapping all the way round.
+ * The arc runs on to `position` when the value has been dragged out of the sector, and thin extension lines carry each edge out to the arc when the bar itself stops short of it.
+ * The value is drawn where `angle_cote_layout` puts it: at `position`, or pushed outward off the arc for a small angle.
+ */
 export function draw_dimension_angle(
   ctx: CanvasRenderingContext2D,
   start1: ScreenPoint,
@@ -1877,40 +2163,112 @@ export function draw_dimension_angle(
 ) {
   ctx.fillStyle = ctx.strokeStyle;
 
-  const origin = Point2.lines_intersection(start1, end1, start2, end2);
-  if (!origin) return;
-
-  let alpha = end1
-    .sub(start1)
-    .mul(flipStart ? -1 : 1)
-    .angle();
-  let beta = end2
-    .sub(start2)
-    .mul(flipEnd ? -1 : 1)
-    .angle();
-  if ((alpha - beta + TAU) % TAU < TAU / 2) {
-    [alpha, beta] = [beta, alpha];
-  }
-  const radius = origin.distance_to(position);
-  const start = origin.add(Point2.from_polar(radius, alpha + 3 / radius));
-  const end = origin.add(Point2.from_polar(radius, beta - 3 / radius));
-
-  draw_arrow_head(ctx, start, alpha + TAU / 4);
-  draw_arrow_head(ctx, end, beta - TAU / 4);
-
-  ctx.beginPath();
-  ctx.arc(
-    origin.x,
-    origin.y,
-    Math.sqrt(radius ** 2 + 20 ** 2),
-    alpha + DIM.ARROW_HEAD_LENGTH / radius,
-    beta - DIM.ARROW_HEAD_LENGTH / radius,
+  const layout = angle_cote_layout(
+    start1,
+    end1,
+    start2,
+    end2,
+    flipStart,
+    flipEnd,
+    position,
+    hideText ? undefined : value,
   );
-  ctx.stroke();
+  if (layout) {
+    const {
+      origin,
+      first,
+      second,
+      alpha,
+      sweep,
+      radius,
+      labelAngle,
+      labelInSector,
+      clearing,
+      pill,
+    } = layout;
+    const beta = alpha + sweep;
 
-  // TODO: add arc to position TODO: add straight lines
+    draw_angle_extension(ctx, origin, alpha, first.start, first.end, radius);
+    draw_angle_extension(ctx, origin, beta, second.start, second.end, radius);
 
-  if (!hideText) draw_dimension_text(ctx, position, value, " deg");
+    // Angular extents of what is drawn along the arc, measured at `radius`.
+    const tipGap = ANGLE_TIP_GAP / radius;
+    // The head's chord, so its base lands back on the arc however tight the curve.
+    const headSpan =
+      2 * Math.asin(Math.min(1, DIM.ARROW_HEAD_LENGTH / (2 * radius)));
+    // Arc length, in px, a head needs between its ray and whatever it must not run into.
+    const headRoom = DIM.ARROW_HEAD_LENGTH + ANGLE_TIP_GAP;
+    let inside: boolean;
+    if (pill && labelInSector && clearing < 1) {
+      // The value sits on the arc between the heads: each head needs room on its own side of the pill, not just room beside the other head.
+      // Measured along the arc's tangent there, so an upright pill on a steep arc only takes its height.
+      const halfPill = pill_extent(pill, labelAngle + TAU / 4) / 2;
+      const margin = ANGLE_MIN_INNER_ARC / 2;
+      inside =
+        (labelAngle - alpha) * radius - halfPill >= headRoom + margin &&
+        (beta - labelAngle) * radius - halfPill >= headRoom + margin;
+    } else inside = sweep * radius >= 2 * headRoom + ANGLE_MIN_INNER_ARC;
+
+    let arcStart: number;
+    let arcEnd: number;
+    if (inside) {
+      const tipStart = alpha + tipGap;
+      const tipEnd = beta - tipGap;
+      draw_arrow_head(
+        ctx,
+        origin.add(Point2.from_polar(radius, tipStart)),
+        tipStart + TAU / 4 + headSpan / 2,
+      );
+      draw_arrow_head(
+        ctx,
+        origin.add(Point2.from_polar(radius, tipEnd)),
+        tipEnd - TAU / 4 - headSpan / 2,
+      );
+      // The arc stops under each head's base, so its line never pokes out through the tip.
+      arcStart = tipStart + headSpan;
+      arcEnd = tipEnd - headSpan;
+    } else {
+      const tipStart = alpha - tipGap;
+      const tipEnd = beta + tipGap;
+      draw_arrow_head(
+        ctx,
+        origin.add(Point2.from_polar(radius, tipStart)),
+        tipStart - TAU / 4 - headSpan / 2,
+      );
+      draw_arrow_head(
+        ctx,
+        origin.add(Point2.from_polar(radius, tipEnd)),
+        tipEnd + TAU / 4 + headSpan / 2,
+      );
+      // One arc through both tips and on past each head into its tail; the heads cover it where they lie.
+      const tail = ANGLE_OUTER_TAIL / radius;
+      arcStart = tipStart - headSpan - tail;
+      arcEnd = tipEnd + headSpan + tail;
+    }
+
+    // A value dragged out of the sector is reached by carrying the arc on round to it.
+    arcStart = Math.min(arcStart, labelAngle);
+    arcEnd = Math.max(arcEnd, labelAngle);
+    // Never a full turn, whatever a tiny radius makes of the heads' extents.
+    arcEnd = Math.min(arcEnd, arcStart + TAU * 0.95);
+
+    if (arcEnd > arcStart) {
+      ctx.beginPath();
+      ctx.arc(origin.x, origin.y, radius, arcStart, arcEnd);
+      ctx.stroke();
+    }
+  }
+
+  if (!hideText)
+    // Through `ANGLE`, like every other cote through its own kind.
+    draw_dimension_text(
+      ctx,
+      layout?.label ?? position,
+      deg_to_rad(value),
+      "",
+      ANGLE,
+      ANGLE_PRECISION,
+    );
 }
 
 export function draw_dimension_radius(
@@ -1943,7 +2301,7 @@ export function draw_dimension_radius(
   ctx.lineTo(e.x, e.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH);
 }
 
 export function draw_dimension_belt(
@@ -1960,7 +2318,7 @@ export function draw_dimension_belt(
   ctx.lineTo(closest.x, closest.y);
   ctx.stroke();
 
-  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH, true);
+  if (!hideText) draw_dimension_text(ctx, position, value, "", LENGTH);
 }
 
 /** How a badge shows that it is on its way out: under the eraser, or as the tombstone of a constraint an undo/redo has just removed. */
@@ -1974,10 +2332,20 @@ function badge_fill(isSelected: boolean): string {
   );
 }
 
+/** The text `draw_dimension_text` writes — shared so a caller can measure the pill before it is drawn. */
+function dimension_text(
+  value: number,
+  extension: string = "",
+  kind?: QuantityKind,
+  precision?: number,
+): string {
+  return kind
+    ? format_quantity(value, kind, precision)
+    : (Math.round(value * 10) / 10).toString() + extension;
+}
+
 /**
- * `kind` formats `value` as a physical quantity (its own unit replaces `extension`) — every caller but the angle dimension, whose degrees are already the number `element.value` itself stores, with no SI scaling to apply.
- *
- * `hideUnit` drops the unit symbol a `kind` would otherwise append: for a length dimension, always mm, so printing it on every single badge is noise once the reader has seen it once — unlike a load's, which is worth repeating because it moves (N, kN, MN…) with the value.
+ * `kind` formats `value` (SI) as a physical quantity, unit included (it replaces `extension`), to `precision` decimal places at most (`format_quantity`'s default otherwise); without one, `value` is printed bare to a tenth, followed by `extension`.
  */
 export function draw_dimension_text(
   ctx: CanvasRenderingContext2D,
@@ -1985,16 +2353,12 @@ export function draw_dimension_text(
   value: number,
   extension: string = "",
   kind?: QuantityKind,
-  hideUnit: boolean = false,
+  precision?: number,
 ) {
   ctx.font = TEXT_SPECS.TEXT_FONT;
   ctx.textAlign = TEXT_SPECS.TEXT_ALIGN;
   ctx.textBaseline = TEXT_SPECS.TEXT_BASELINE;
-  const text = kind
-    ? hideUnit
-      ? format_mantissa(value, kind)
-      : format_quantity(value, kind)
-    : (Math.round(value * 10) / 10).toString() + extension;
+  const text = dimension_text(value, extension, kind, precision);
   const metrics = ctx.measureText(text);
 
   ctx.save();

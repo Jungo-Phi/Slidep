@@ -47,7 +47,7 @@ export const TRANSFORM_SCALE_PRECISION = 2;
 
 /** The steps a rotation and a scale land on while the grid snap is on. */
 export const TRANSFORM_SNAP = {
-  ANGLE: Math.PI / 12,
+  ANGLE: Math.PI / 36,
   /**
    * A scale's steps, from the factor each starts at: fine around ×1, where a few tenths matter, coarser as the factor grows and a tenth gets too small to see.
    * Out of the table, its two end rungs repeat a decade further each time: every 5 from ×25 and every 10 from ×100 upward, every 0.01 under ×0.1 and every 0.005 under ×0.025 downward.

@@ -203,7 +203,10 @@ function draw_overlay_readings(
     draw_overlay_moment_label(ctx, viewport, moment, names_focused(moment));
 }
 
-/** Whether the floor is being reached for, either by the cursor or by the drag already under way. */
+/**
+ * Whether the floor is being reached for, either by the cursor or by the drag already under way.
+ * Its angle's value is a target of its own: reaching for it lights the cote alone, not the line or its height tick.
+ */
 function floor_hover(
   hoveredPart: HoveredPart,
   state: CanvasState,
@@ -214,7 +217,6 @@ function floor_hover(
     floor:
       angle ||
       hoveredPart.type === "FloorHeight" ||
-      hoveredPart.type === "FloorAngleValue" ||
       state.type === "DraggingFloorHeight",
     angle,
     value: hoveredPart.type === "FloorAngleValue",

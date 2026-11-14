@@ -20,7 +20,6 @@ import {
   ANGLE,
   LENGTH,
   default_unit,
-  format_mantissa,
   format_quantity,
 } from "../../utils/quantity-format";
 
@@ -75,7 +74,7 @@ const row_label = (row: Row): string => {
 const BLANK = "—";
 const LENGTH_UNIT = default_unit(LENGTH);
 
-const degrees = (radians: number) => `${format_mantissa(radians, ANGLE, 1)}°`;
+const degrees = (radians: number) => format_quantity(radians, ANGLE, 1);
 
 /** The classic centre-of-mass symbol, matching `draw_center_of_mass` on the canvas: a circle quartered by a cross, two opposite quadrants filled. */
 const CenterOfMassIcon = () => (

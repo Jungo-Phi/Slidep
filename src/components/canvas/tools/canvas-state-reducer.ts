@@ -78,6 +78,7 @@ import {
   world2screen_vec,
 } from "../../../utils/viewport";
 import { grid_snap_step } from "../../../utils/grid";
+import { deg_to_rad, rad_to_deg } from "../../../utils/quantity-format";
 import { belt_body_grab_pin, elements_by_id } from "../../solver/kinematics/parsing";
 import { GRAB_BELT_KEY } from "../../solver/snapshot";
 import {
@@ -546,6 +547,7 @@ export function canvasStateReducer(
                     kind: hoveredPart.handle,
                     pivot,
                     from: worldMousePos,
+                    start: hoveredPart.handle === "rotate" ? 0 : 1,
                     value: hoveredPart.handle === "rotate" ? 0 : 1,
                   },
             );
@@ -1258,9 +1260,14 @@ export function canvasStateReducer(
             const direction = found
               ? screen2world_vec(found.ray, viewport)
               : toCursor;
+            const angle = Math.atan2(direction.y, direction.x);
             actions.push({
               type: "ChangeFloorAngle",
-              newValue: Math.atan2(direction.y, direction.x),
+              // Off the ladder, snapping still lands on a whole degree: a floor angle is a setting one reads and retypes, not a direction drawn to some other element.
+              newValue:
+                snapToGrid && !found
+                  ? deg_to_rad(Math.round(rad_to_deg(angle)))
+                  : angle,
               oldValue: floor.angle,
             });
           }
@@ -1318,12 +1325,19 @@ export function canvasStateReducer(
             ...state,
             value:
               state.kind === "rotate"
-                ? dragged_angle(state.pivot, state.from, worldMousePos, snapToGrid)
+                ? dragged_angle(
+                    state.pivot,
+                    state.from,
+                    worldMousePos,
+                    state.start,
+                    snapToGrid,
+                  )
                 : dragged_scale(
                     state.pivot,
                     state.from,
                     worldMousePos,
                     viewport,
+                    state.start,
                     snapToGrid,
                   ),
           });

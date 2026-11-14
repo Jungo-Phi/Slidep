@@ -25,6 +25,10 @@
 - 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
 - 🔨 Re-dessiner les icons en plus grand avec 2px de marge
+- 🤔 Fusionner statique et édition ?
+- 🔨 Ajouter des boutons pour changer "édition" / "simulation" dans le menu click-droit
+- 🔨 Attraper une cote
+- 🔨 Suivit caméra
 
 **Gogo**
 
@@ -44,13 +48,10 @@
 - 🤔 Outil "déconnecter" ? (ce qu'on ne peut faire actuellement que par le panneau contextuel)
 - 🤔 Outil "couper" pour les poutres ? (Le join pourrait faire ça)
 
-- 🔨 Hover sol en simulation
-- 🔨 Finir les traits de DimensionAngle
 - 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
 - 🤔 Mettre en place un versionning
 - 🤔 Ajouter un élément depuis les connexions du panneau latéral ?
 - 🤔 Masse sur plan incliné : difficile à placer et mauvais résultats
-- 🤔 Fusionner statique et édition ?
 - 🤔 Sur mobile, après avoir posé un élément mal placé, on veut souvent le redéplacer juste derrière, mais actuellement ça crée un nouvel élément. L'outil Sélection est lui même parfois difficile à comprendre.
 - 🤔 Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
 

@@ -37,6 +37,12 @@ export const GRID_ALPHA = {
   INVISIBLE: 1 / 100,
 } as const;
 
+/**
+ * Opacity of a handle shown only as an offer — the transform gizmo at rest, the floor's angle hint while it is flat.
+ * See-through, so what lies under it still shows: it is scaffolding over the drawing, not part of it.
+ */
+export const SCAFFOLD_ALPHA = 0.35;
+
 /** Dash pattern of a construction line (snap feedback): fine enough to read as an aid rather than as something drawn. */
 export const GUIDE_DASH = [12, 8] as const;
 
