@@ -19,16 +19,66 @@
 - 🔨 Terminer la physique
 - 🆕 Nouvelles fonctionnalités
 
+
+---
+
+
+## Fusion statique / édition
+
+### Modes et t=0
+
+- Remplacer le sélecteur par `[ Statique | Cinématique | Dynamique ]` ; le bouton "Édition" disparaît.
+- **Statique** = au repos : état par défaut, c'est là qu'on dessine.
+- **Cinématique / Dynamique** = en mouvement : cliquer dessus lance, sans arrêt intermédiaire à t=0.
+- À t=0, on édite toujours, qu'un historique existe ou non.
+- La pause à t>0 reste, pour lire et parcourir la timeline.
+- Une édition à t=0 coupe l'historique : c'est la règle existante "une édition à t coupe l'enregistrement après t".
+- Échap ramène au repos **sans** effacer l'historique ; un seul palier au lieu de deux.
+- On supprime le bouton Reset, qui n'a plus que seule distinction avec Statique d'effacer l'historique.
+- Filet de sécurité : garder la prise coupée en mémoire pour qu'un undo de l'édition la restaure.
+- Animation du rembobinage quand un geste de structure à t>0 ramène au repos.
+- "Attraper" au repos : tirer lance le dernier mode utilisé.
+- Espace maintenu (simulation tant qu'on appuie) : option secondaire, non prioritaire.
+- 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
+- 🔨 Ajouter des boutons pour changer "édition" / "simulation" dans le menu click-droit
+
+### Palette et outils
+
+- Ne plus griser les éléments mécaniques en simulation : en armer un ramène au repos.
+- Le retour au repos se fait dès que l'outil est armé, pas au premier clic.
+- Ajouter l'outil "Attraper" dans la palette.
+- L'outil sélectionné passe de "Sélectionner" à "Attraper" quand le temps coule.
+- Indice "attrape une pièce" au premier lancement, disparu pour de bon après la première saisie.
+- Indice "lancer la simulation" après 3 pièces placées et sans actions depuis 2s, disparu pour de bon après le premier lancement.
+
+### Disposition des panneaux
+
+- Palette en haut, sous la top-bar.
+- Nouveau panneau à gauche : l'analyse, toujours visible.
+- Panneau de droite : reste contextuel.
+- Supprimer le saut d'onglet à l'entrée et à la sortie de simulation.
+- Penser le panneau d'analyse sur petit écran comme gardant le verdict (mobilité, hyperstaticité, couleur), dépliable pour les détails.
+- 🤔 Faire apparaitre "un indice" qui pointe vers l'outil DDL quand il y a un blocage (ou au premier)
+
+
+---
+
+
 ### Retours utilisateurs
 
 - 🔨 Ajouter la pop-up "Vous avez créé un slidep !"
-- 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
 - 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
 - 🔨 Re-dessiner les icons en plus grand avec 2px de marge
-- 🤔 Fusionner statique et édition ?
-- 🔨 Ajouter des boutons pour changer "édition" / "simulation" dans le menu click-droit
+
 - 🔨 Attraper une cote
-- 🔨 Suivit caméra
+- 🆕 Suivit caméra
+
+- 🔨 Solveur géométrique : Quand on change l'angle d'une barre, on devrait essayer de maintenir sa longueur.
+- 🔨 Le dessin de ressort+ammortisseur ne fonctionne pas bien si les 2 éléments ne sont pas dans le même sens (start -> end / end -> start)
+- 🔨 Le point de contact bouge dans "Coup de pied.slidep"
+- 🔨 Ne pourrait-on pas éviter les doubles points de contact ?
+- 🚨 On devrait ignorer le hover sur les DDL (et de toute l'app finalement) quand on change t de la timeline
+
 
 **Gogo**
 
@@ -51,7 +101,7 @@
 - 🔨 Expliquer les différents "types" de contraintes, et mettre "Taux de travail" en évidence
 - 🤔 Mettre en place un versionning
 - 🤔 Ajouter un élément depuis les connexions du panneau latéral ?
-- 🤔 Masse sur plan incliné : difficile à placer et mauvais résultats
+- 🤔 Masse sur plan incliné : difficile à placer et mauvais résultats -> Aligner un élément avec les contacts ?
 - 🤔 Sur mobile, après avoir posé un élément mal placé, on veut souvent le redéplacer juste derrière, mais actuellement ça crée un nouvel élément. L'outil Sélection est lui même parfois difficile à comprendre.
 - 🤔 Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
 
@@ -61,9 +111,6 @@
 - 🆕 Ajouter des tutos dans un deuxième onglet de la gallerie
 - 🤔 Utiliser les exemples comme tuto ?
 - 🆕 Ajouter des tutos au hover long sur les élément de la palette et premières utilisations de fonctionnalités
-- 🤔 Mieux distinguer les modes édition / simulation / simulation reset
-- 🤔 Montrer qu'on peut interagir pendant la simulation
-- 🤔 Faire apparaitre "un indice" qui pointe vers l'outil DDL quand il y a un blocage (ou au premier)
 - 🤔 Les mécaniciens on tendance à penser avec des conditions aux limites. Comment leur faire comprendre que slidep fonctionne avec des liaisons ?
 - 🆕 Ajouter une section qui explique le type de simulation et ses limites (et paramètres ?)
 
@@ -332,12 +379,6 @@
   - 🤔 Formes pleines
   - 🤔 Placer des forces normales au plan 2D
   - 🤔 Déformée de plaques planes
-
-### [ Simulation STATIQUE ]
-
-- 🆕 Solver Statique algébrique (résolution d'inconnues)
-- 🆕 Déformée des poutres
-- 🤔 Modification topologie en simulation : pause auto + bascule temporaire Édition, ou alors : statique = édition -> feedback instantané ?
 
 ### [ Slidep 3D ]
 
