@@ -7,6 +7,18 @@ import React, {
   forwardRef,
 } from "react";
 import { useAmbient } from "../common/use-ambient";
+import { focus_zone, zone_props } from "../common/keyboard-zones";
+import { useHistorySeal } from "../mechanism/history-seal";
+import {
+  aims_with_cursor,
+  arrow_step,
+  element_anchor,
+  in_reading_order,
+  is_arrow,
+  next_stop,
+  on_grid,
+  snap_stops,
+} from "./tools/keyboard-canvas";
 import {
   Action,
   AppMode,
@@ -18,7 +30,6 @@ import {
   HoveredPart,
   HoveredReading,
   ID,
-  is_measured_reading,
   Mechanism,
   Point2,
   PropertiesPanelTab,
@@ -42,7 +53,7 @@ import {
 import { aims_until_lift } from "./tools/touch-press";
 import { names_element } from "../../types/hovered-part";
 import { COLORS } from "../../theme/canvas-theme";
-import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION } from "../../constants/interaction-specs";
+import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION, SPACE_HOLD_MS } from "../../constants/interaction-specs";
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
 import { CanvasHighlight, draw_mechanical_canvas } from "./drawing/draw-canvas";
@@ -51,6 +62,12 @@ import { RedundancySymbol } from "../solver/analysis/redundancy-symbols";
 import type { CohesionField } from "../solver/recording/cohesion-field";
 import { draw_cohesion_cut } from "./drawing/draw-cohesion-cut";
 import { cohesion_sample_at, cohesion_samples_at } from "../solver/recording/cohesion-field";
+import {
+  recording_end,
+  set_play_through,
+  seek_to,
+  step_through_recording,
+} from "../solver/recording/seek";
 import { beam_strength, max_fiber_stress } from "../../utils/section-properties";
 import type {
   HoveredBalanceTerm,
@@ -71,6 +88,7 @@ import { canvasStateReducer } from "./tools/canvas-state-reducer";
 import { measured_elements, ruler_is_out, shown_readout } from "./tools/measure";
 import { moment_balance_hover } from "./tools/moment-balance-picking";
 import { draw_center_of_mass } from "./drawing/draw-measure";
+import { draw_keyboard_cursor } from "./drawing/draw-keyboard-cursor";
 import MeasureWidget, {
   type MeasureReadoutHandle,
 } from "./MeasureWidget";
@@ -79,7 +97,6 @@ import {
   get_element_from_id,
 } from "../mechanism/connect-actions";
 import { load_value_anchor } from "../../utils/load-geom";
-import { is_node_element } from "../../utils/element-queries";
 import { is_zero_load } from "../../utils/load-scale";
 import { t } from "../../i18n";
 import { get_hovered_part } from "./picking/get-hover";
@@ -103,7 +120,11 @@ import {
 } from "../properties-panel/element-value-actions";
 import { OnCanvasProbeMetricSelector } from "./ProbeMetricSelector";
 import { dismiss_popups } from "../common/dismiss-popups";
-import { is_canvas_shortcut, TOOL_SHORTCUTS } from "../../constants/shortcuts";
+import {
+  is_canvas_shortcut,
+  TOOL_SHORTCUTS,
+  TOOL_STATE_BY_KEY,
+} from "../../constants/shortcuts";
 import { selected_ids } from "../../types/canvas-state";
 import { apply_actions } from "../mechanism/apply-actions";
 import { transform_actions } from "../mechanism/transform-actions";
@@ -121,11 +142,16 @@ import { grid_snap_step } from "../../utils/grid";
 import {
   CLIPBOARD_MIME,
   copied_selection,
-  forget_paste_spots,
+  last_copy,
+  link_actions,
+  PasteOptions,
+  PastePlan,
   plan_paste,
   remember_copy,
   serialize_clipboard,
+  WorldBox,
 } from "../mechanism/clipboard";
+import { PasteLinkButton } from "./PasteLinkButton";
 import { ContextMenu } from "./context-menu/ContextMenu";
 import {
   is_at_rest,
@@ -134,6 +160,7 @@ import {
   void_entries,
 } from "./context-menu/context-entries";
 import { is_probes_only_bundle } from "../mechanism/action-kind";
+import { sim_clock } from "../solver/dynamics/sim-clock";
 import {
   draw_axes,
   draw_graduations,
@@ -159,6 +186,11 @@ import {
   floor_acute_angle,
   floor_raw_angle_from_acute,
 } from "../../utils/floor-geometry";
+
+/** Whether `element` is a slider, which the arrows move rather than the recording. */
+const is_slider = (element: Element | null) =>
+  element?.getAttribute("role") === "slider" ||
+  (element instanceof HTMLInputElement && element.type === "range");
 
 function mergeRefs<T>(...refs: React.Ref<T>[]) {
   return (node: T | null) => {
@@ -189,6 +221,9 @@ export interface ConstraintChangeSignal {
   seq: number;
 }
 
+/** Set on the canvas while the keyboard drives it, for its focus frame. */
+const KEYBOARD_ATTRIBUTE = "data-keyboard";
+
 export interface MechanicalCanvasProps {
   setCanvasState: (state: CanvasState) => void;
   canvasState: CanvasState;
@@ -206,8 +241,6 @@ export interface MechanicalCanvasProps {
   onEscapeKey: () => void;
   onSimulationGrab: (key: string, target: Point2, bodyRatio?: number) => void;
   onSimulationGrabEnd: () => void;
-  /** May a grab be started at all? False while replaying behind the frontier. */
-  canSimulationGrab: boolean;
   snapToGrid: boolean;
   snapSettings: SnapSettings;
   showGrid: boolean;
@@ -270,6 +303,8 @@ export interface MechanicalCanvasProps {
   onRecenter: (target: ViewportState) => void;
   /** A press released without dragging — a tap or a click — with whether it landed on an element, and the state it left the canvas in. */
   onTap?: (onElement: boolean, state: CanvasState) => void;
+  /** Enter on a selection from the keyboard: its page is opened, and the focus goes there to edit it. */
+  onInspect?: () => void;
   /** The canvas took a new size (CSS px), for the view to follow it. */
   onResize?: (width: number, height: number) => void;
 }
@@ -330,7 +365,6 @@ const MechanicalCanvasView = forwardRef<
       onEscapeKey,
       onSimulationGrab,
       onSimulationGrabEnd,
-      canSimulationGrab,
       snapToGrid,
       snapSettings,
       showGrid,
@@ -355,6 +389,7 @@ const MechanicalCanvasView = forwardRef<
       recenterTarget,
       onRecenter,
       onTap,
+      onInspect,
       onResize,
     },
     ref,
@@ -380,8 +415,8 @@ const MechanicalCanvasView = forwardRef<
     // The fingers on the canvas, by pointer id, in insertion order: the first two are the ones a pinch follows.
     const touchesRef = useRef<Map<number, ScreenPoint>>(new Map());
     // Set from the second finger until the last one lifts: meanwhile the fingers only move the view.
-    /** Where a right press landed, while it may still turn out to be a click rather than a pan. */
-    const rightPressRef = useRef<ScreenPoint | null>(null);
+    /** Where a right press landed, while it may still turn out to be a click rather than a pan, and whether that click opens the menu (at rest) or steps the tool back. */
+    const rightPressRef = useRef<{ at: ScreenPoint; opensMenu: boolean } | null>(null);
     const transformPreviewRef = useRef<Mechanism | null>(null);
     const typedTransformRef = useRef<number | null>(null);
     const [contextMenu, setContextMenu] = useState<{
@@ -389,6 +424,8 @@ const MechanicalCanvasView = forwardRef<
       top: number;
       world: WorldPoint;
       onElement: boolean;
+      /** Opened from the keyboard, which gets the canvas back when the menu closes. */
+      keyboard?: boolean;
     } | null>(null);
     const pinchingRef = useRef(false);
     // A finger whose press is played when it lifts (see `aims_until_lift`).
@@ -407,6 +444,16 @@ const MechanicalCanvasView = forwardRef<
     // The hovered part is shared with the panels, which designate an element by hovering its card.
     // Only a hover pointed at on the canvas carries a cursor for a tool to preview under.
     const cursorOnCanvasRef = useRef(false);
+    // The keyboard's own cursor (see `keyboard-canvas`): on while the canvas holds the keyboard's focus and the pointer stays out of it.
+    // Kept in the world once off, so that the next tool takes up where the last one left.
+    const keyboardPointingRef = useRef(false);
+    const keyboardCursorRef = useRef<WorldPoint | null>(null);
+    // The grab tool's press, held from one Enter to the next: the arrows drag in between.
+    const keyboardHeldRef = useRef(false);
+    // Which of the points Tab walks the cursor is on, -1 when the arrows have moved it off them.
+    const keyboardStopRef = useRef(-1);
+    const pointerInsideRef = useRef(false);
+    const historySeal = useHistorySeal();
     // Set beside every `setHoveredPart`: the guide belongs to the snap that produced the hovered point, and would be a lie recomputed from it.
     const snapFeedbackRef = useRef<SnapFeedback>(NO_FEEDBACK);
     
@@ -464,12 +511,12 @@ const MechanicalCanvasView = forwardRef<
     onSpaceKeyRef.current = onSpaceKey;
     const onEscapeKeyRef = useRef(onEscapeKey);
     onEscapeKeyRef.current = onEscapeKey;
+    // A Space press that set the run going: held past `SPACE_HOLD_MS`, its release brings the mechanism back to rest.
+    const spaceHoldRef = useRef<number | null>(null);
     const onSimulationGrabRef = useRef(onSimulationGrab);
     onSimulationGrabRef.current = onSimulationGrab;
     const onSimulationGrabEndRef = useRef(onSimulationGrabEnd);
     onSimulationGrabEndRef.current = onSimulationGrabEnd;
-    const canSimulationGrabRef = useRef(canSimulationGrab);
-    canSimulationGrabRef.current = canSimulationGrab;
     const appModeRef = useRef(appMode);
     appModeRef.current = appMode;
     const activeTabRef = useRef(activeTab);
@@ -492,6 +539,28 @@ const MechanicalCanvasView = forwardRef<
     coilPitchRef.current = spring_coil_pitch(mechanism.mechanicalElements);
     // A rotation or a scale under way shows what it would do, the mechanism itself only being touched when its value box is left.
     const [typedTransform, setTypedTransform] = useState<number | null>(null);
+
+    // The paste just made, offered to be tied to its originals for as long as it stays the selection.
+    const [linkOffer, setLinkOffer] = useState<PastePlan | null>(null);
+    const linkOfferRef = useRef(linkOffer);
+    linkOfferRef.current = linkOffer;
+    useEffect(() => {
+      if (!linkOffer) return;
+      const selected = selected_ids(canvasState);
+      const same =
+        selected.length === linkOffer.pastedIDs.length &&
+        linkOffer.pastedIDs.every((id) => selected.includes(id));
+      if (!same) setLinkOffer(null);
+    }, [canvasState, linkOffer]);
+
+    /** Ties the offered paste to its originals, as one more undoable step. */
+    const linkOffered = useCallback(() => {
+      const offer = linkOfferRef.current;
+      setLinkOffer(null);
+      if (!offer) return;
+      const actions = link_actions(offer.sources, restingRef.current);
+      if (actions.length > 0) applyActions(actions);
+    }, [applyActions]);
     typedTransformRef.current = typedTransform;
     const transformPreview = useMemo(() => {
       if (
@@ -550,6 +619,19 @@ const MechanicalCanvasView = forwardRef<
       return measured;
     }, []);
 
+    /** The part of the world the canvas shows, for a paste to land in. */
+    const visibleWorld = useCallback((): WorldBox | undefined => {
+      const rect = canvasRectRef.current ?? measureCanvas();
+      if (!rect) return undefined;
+      const { viewport } = restingRef.current;
+      const a = screen2world(new Point2<"screen">(0, 0), viewport);
+      const b = screen2world(new Point2<"screen">(rect.width, rect.height), viewport);
+      return {
+        min: new Point2<"world">(Math.min(a.x, b.x), Math.min(a.y, b.y)),
+        max: new Point2<"world">(Math.max(a.x, b.x), Math.max(a.y, b.y)),
+      };
+    }, [measureCanvas]);
+
     useEffect(() => {
       const container = containerRef.current;
       if (!container) return;
@@ -566,7 +648,7 @@ const MechanicalCanvasView = forwardRef<
     // Called every frame → the badges stay up for as long as the hover lasts, even with the mouse still.
     // An element hovered from a panel card reveals nothing: only a constraint designated there is shown.
     const refreshRevealFromHover = useCallback((hovered: HoveredPart) => {
-      if (appModeRef.current !== "edition") return;
+      if (appModeRef.current !== "static") return;
       const now = performance.now();
       if (
         cursorOnCanvasRef.current &&
@@ -607,12 +689,13 @@ const MechanicalCanvasView = forwardRef<
       }
       return compute_visible_constraints(
         mechanismRef.current.constraintElements,
-        appModeRef.current,
+        // A live frame at rest is the swing back to it.
+        appModeRef.current !== "static" || liveFrameRef.current !== null,
         activeTabRef.current,
         revealedOpacities,
         canvasStateRef.current,
       );
-    }, [refreshRevealFromHover]);
+    }, [refreshRevealFromHover, liveFrameRef]);
 
     // Acts on any undo/redo signal: reveals the recreated constraints and adds the removed ones to the ghost list.
     // Acts once per `seq`.
@@ -786,7 +869,7 @@ const MechanicalCanvasView = forwardRef<
         hideLoads: appModeRef.current === "kinematic",
         // The per-element collision flags only act in a run, and only while collisions or the floor are on.
         collisionsInPlay:
-          appModeRef.current !== "edition" &&
+          appModeRef.current !== "static" &&
           (mechanismRef.current.simulation.collisions ||
             mechanismRef.current.simulation.floor.enabled),
         dimensionSnapped: snapFeedbackRef.current.distanceSnapped ?? false,
@@ -816,8 +899,9 @@ const MechanicalCanvasView = forwardRef<
 
       const transformState = canvasStateRef.current;
       if (
-        appModeRef.current === "edition" &&
+        appModeRef.current === "static" &&
         (transformState.type === "SelectedMultiple" ||
+          transformState.type === "MovingSelectionMultiple" ||
           transformState.type === "MovingTransformPivot" ||
           transformState.type === "TransformingSelection" ||
           transformState.type === "EditingSelectionTransform")
@@ -851,6 +935,14 @@ const MechanicalCanvasView = forwardRef<
                 : undefined,
           );
       }
+
+      // The keyboard's cursor, which no system pointer draws: where Enter will click.
+      if (
+        keyboardPointingRef.current &&
+        cursorOnCanvasRef.current &&
+        aims_with_cursor(canvasStateRef.current)
+      )
+        draw_keyboard_cursor(ctx, mousePositionRef.current);
 
       // The ruler reads the mechanism as it is drawn — under a simulation, the live pose, not the one it was laid on.
       // Pushed straight into the widget: these numbers change every frame, and React is not the way to move four of them.
@@ -1295,6 +1387,7 @@ const MechanicalCanvasView = forwardRef<
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       set_pointer_kind(event.pointerType);
+      if (keyboardPointingRef.current) stopKeyboardPointing();
       const pressed = new Point2<"screen">(event.clientX, event.clientY).sub(
         canvasOffsetRef.current,
       );
@@ -1346,13 +1439,12 @@ const MechanicalCanvasView = forwardRef<
             : hoveredPartRef.current;
         // A plain click landing on a physics-overlay arrow or moment names it, ahead of the ordinary reducer: a selection of its own, drawn on the reading itself rather than on `canvasState`, which this never touches — see `App`'s own `focusedOverlay`.
         const target = hovered.type === "Overlay" ? hovered.reading : null;
-        // The grab's arrow only answers a hover: there is nothing of it to select once the cursor has let go.
         if (
           target &&
-          is_measured_reading(target) &&
           onSelectOverlayRef.current &&
           appModeRef.current === "dynamic" &&
           (canvasStateRef.current.type === "Selecting" ||
+            canvasStateRef.current.type === "Grabbing" ||
             canvasStateRef.current.type === "SelectedElement")
         ) {
           onSelectOverlayRef.current(target);
@@ -1365,14 +1457,12 @@ const MechanicalCanvasView = forwardRef<
         });
       } else if (event.button === 2) {
         mouseButtonDownRef.current = "right";
-        // At rest, the release decides between a menu and the end of a pan, and neither may lose the selection.
-        // A tool or a placement steps back at once, as Escape does.
-        if (is_at_rest(canvasStateRef.current))
-          rightPressRef.current = mousePositionRef.current;
-        else
-          handleEvent({
-            type: "MouseRightButtonDown",
-          });
+        // The release decides between a click and the end of a pan, so that panning keeps the tool and the selection.
+        // A click opens the menu at rest, and otherwise steps the tool or placement back, as Escape does.
+        rightPressRef.current = {
+          at: mousePositionRef.current,
+          opensMenu: is_at_rest(canvasStateRef.current),
+        };
       }
     };
 
@@ -1380,6 +1470,13 @@ const MechanicalCanvasView = forwardRef<
       event: React.PointerEvent<HTMLCanvasElement>,
     ) => {
       set_pointer_kind(event.pointerType);
+      pointerInsideRef.current = true;
+      // A pointer that moves takes the canvas back from the keyboard's cursor; a page scrolling under a still one fires moves of zero.
+      if (
+        keyboardPointingRef.current &&
+        (event.movementX !== 0 || event.movementY !== 0)
+      )
+        stopKeyboardPointing();
       const point = canvasPointOf(event);
       if (!point) return;
       let mouseDelta: ScreenPoint = new Point2(event.movementX, event.movementY);
@@ -1403,7 +1500,7 @@ const MechanicalCanvasView = forwardRef<
         pressDraggedRef.current = true;
       if (
         rightPressRef.current &&
-        point.distance_to(rightPressRef.current) >= hit_tolerance().DRAG_START
+        point.distance_to(rightPressRef.current.at) >= hit_tolerance().DRAG_START
       )
         rightPressRef.current = null;
 
@@ -1420,10 +1517,10 @@ const MechanicalCanvasView = forwardRef<
         event.currentTarget.releasePointerCapture(event.pointerId);
       if (event.pointerType === "touch") onTouchUp(event.pointerId, true);
       else onMouseUpHandler();
-      if (rightPressRef.current) {
-        rightPressRef.current = null;
-        openContextMenu(event.clientX, event.clientY);
-      }
+      const rightClick = rightPressRef.current;
+      rightPressRef.current = null;
+      if (rightClick?.opensMenu) openContextMenu(event.clientX, event.clientY);
+      else if (rightClick) handleEvent({ type: "MouseRightButtonDown" });
     };
 
     // A right click on something outside the selection selects it first, so that the menu is about what it was opened on.
@@ -1435,6 +1532,236 @@ const MechanicalCanvasView = forwardRef<
       if (onElement && !selected_ids(state).includes(hovered.id))
         setCanvasStateNow({ type: "SelectedElement", elementID: hovered.id });
       setContextMenu({ left, top, world: worldMousePos, onElement });
+    };
+
+    /** `world` on the page, for a menu opened at it. */
+    const clientPointOf = (world: WorldPoint) => {
+      const canvas = canvasRef.current;
+      const rect = canvasRectRef.current ?? measureCanvas();
+      const screen = world2screen(world, mechanismRef.current.viewport);
+      if (!canvas || !rect) return { left: 0, top: 0 };
+      return {
+        left: rect.left + screen.x * (rect.width / canvas.width),
+        top: rect.top + screen.y * (rect.height / canvas.height),
+      };
+    };
+
+    /** The middle of the view, where the keyboard's cursor first appears. */
+    const viewCenter = (): WorldPoint => {
+      const canvas = canvasRef.current;
+      const viewport = mechanismRef.current.viewport;
+      const center = screen2world(
+        new Point2<"screen">((canvas?.width ?? 0) / 2, (canvas?.height ?? 0) / 2),
+        viewport,
+      );
+      return snapToGrid ? on_grid(center, viewport) : center;
+    };
+
+    /** Whether `world` shows on the canvas, clear of its edges by `margin` px. */
+    const inView = (world: WorldPoint, margin = 0) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return false;
+      const screen = world2screen(world, mechanismRef.current.viewport);
+      return (
+        screen.x >= margin &&
+        screen.y >= margin &&
+        screen.x <= canvas.width - margin &&
+        screen.y <= canvas.height - margin
+      );
+    };
+
+    /** Puts the keyboard's cursor at `world` and moves the pointer's gesture with it, as a mouse moving there would. */
+    const pointKeyboardAt = (world: WorldPoint) => {
+      const previous = mousePositionRef.current;
+      const screen = world2screen(world, mechanismRef.current.viewport);
+      keyboardCursorRef.current = world;
+      cursorOnCanvasRef.current = true;
+      mousePositionRef.current = screen;
+      if (
+        mouseButtonDownRef.current === "left" &&
+        screen.distance_to(pressOriginRef.current) >= hit_tolerance().DRAG_START
+      )
+        pressDraggedRef.current = true;
+      handleEvent({ type: "MouseMove", mouseDelta: screen.sub(previous) });
+    };
+
+    /** Shows the keyboard's cursor where it was last, or in the middle of the view when that has gone out of it. */
+    const showKeyboardCursor = () => {
+      const kept = keyboardCursorRef.current;
+      keyboardStopRef.current = -1;
+      pointKeyboardAt(kept && inView(kept) ? kept : viewCenter());
+    };
+
+    // For the effect that follows a change of tool, which would otherwise hold the first render's.
+    const showKeyboardCursorRef = useRef(showKeyboardCursor);
+    showKeyboardCursorRef.current = showKeyboardCursor;
+
+    // The attribute draws the canvas's focus frame: shown while the keyboard drives it, gone as soon as the mouse takes over.
+    const startKeyboardPointing = () => {
+      keyboardPointingRef.current = true;
+      canvasRef.current?.setAttribute(KEYBOARD_ATTRIBUTE, "");
+      if (aims_with_cursor(canvasStateRef.current)) showKeyboardCursor();
+    };
+
+    // The cursor leaves nothing behind: no preview, no lit element where it stood.
+    const stopKeyboardPointing = () => {
+      if (!keyboardPointingRef.current) return;
+      keyboardPointingRef.current = false;
+      canvasRef.current?.removeAttribute(KEYBOARD_ATTRIBUTE);
+      if (keyboardHeldRef.current) {
+        keyboardHeldRef.current = false;
+        onMouseUpHandler();
+      }
+      if (pointerInsideRef.current) return;
+      cursorOnCanvasRef.current = false;
+      snapFeedbackRef.current = NO_FEEDBACK;
+      setHoveredPart({
+        type: "Void",
+        position: keyboardCursorRef.current ?? hoveredPartRef.current.position,
+      });
+    };
+
+    /** Enter: a click where the cursor stands, or for the grab tool, a press held until the next Enter. */
+    const clickWithKeyboard = () => {
+      if (canvasStateRef.current.type === "Grabbing" || keyboardHeldRef.current) {
+        if (keyboardHeldRef.current) {
+          keyboardHeldRef.current = false;
+          onMouseUpHandler();
+        } else {
+          keyboardHeldRef.current = true;
+          startPress();
+          handleEvent({ type: "MouseLeftButtonDown", shiftKey: false });
+        }
+        return;
+      }
+      startPress();
+      handleEvent({ type: "MouseLeftButtonDown", shiftKey: false });
+      onMouseUpHandler();
+    };
+
+    /** The selection carried by one arrow press, as one undo for a run of presses. */
+    const nudgeSelection = (step: WorldPoint): boolean => {
+      const { mechanicalElements } = mechanismRef.current;
+      const ids = selected_ids(canvasStateRef.current).filter((id) =>
+        mechanicalElements.some((element) => element.id === id),
+      );
+      if (ids.length === 0) return false;
+      historySeal.arm(`nudge:${ids.join(",")}`);
+      applyActions([
+        {
+          type: "MoveElements",
+          elementIDs: ids,
+          newPos: step,
+          delta: step,
+        },
+      ]);
+      return true;
+    };
+
+    /** Tab through the selection: the next element in reading order is selected, or `false` past the last, where the focus moves on. */
+    const selectNextElement = (backwards: boolean): boolean => {
+      const { mechanicalElements, viewport } = mechanismRef.current;
+      const ordered = in_reading_order(mechanicalElements, element_anchor, viewport);
+      const selected = selected_ids(canvasStateRef.current);
+      const current =
+        selected.length === 1
+          ? ordered.findIndex((element) => element.id === selected[0])
+          : -1;
+      const next = next_stop(ordered.length, current, backwards);
+      if (next === undefined) return false;
+      setCanvasStateNow({ type: "SelectedElement", elementID: ordered[next].id });
+      return true;
+    };
+
+    /** Tab while aiming: the cursor jumps to the next point of the mechanism, where a placement most often starts or ends. */
+    const jumpToNextPoint = (backwards: boolean): boolean => {
+      const { mechanicalElements, viewport } = mechanismRef.current;
+      const stops = snap_stops(mechanicalElements, viewport);
+      const next = next_stop(stops.length, keyboardStopRef.current, backwards);
+      if (next === undefined) return false;
+      pointKeyboardAt(stops[next]);
+      keyboardStopRef.current = next;
+      return true;
+    };
+
+    /** The menu a right click opens, opened from the keyboard on the selection, or else at the cursor. */
+    const openKeyboardContextMenu = () => {
+      const state = canvasStateRef.current;
+      if (!is_at_rest(state)) return;
+      const { mechanicalElements } = mechanismRef.current;
+      const ids = selected_ids(state);
+      const world =
+        default_pivot(ids, mechanicalElements) ??
+        keyboardCursorRef.current ??
+        viewCenter();
+      setContextMenu({
+        ...clientPointOf(world),
+        world,
+        onElement: ids.length > 0,
+        keyboard: true,
+      });
+    };
+
+    const onCanvasKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+        event.preventDefault();
+        openKeyboardContextMenu();
+        return;
+      }
+      if (!keyboardPointingRef.current) {
+        // The mouse that clicked the canvas has gone elsewhere: the keyboard takes it back, without leaving it first.
+        const ours =
+          is_arrow(event.key) || event.key === "Enter" || event.key === "Tab";
+        if (pointerInsideRef.current || !ours) return;
+        startKeyboardPointing();
+      }
+      const state = canvasStateRef.current;
+      const viewport = mechanismRef.current.viewport;
+      // Taken here, ahead of the page's own keys: the arrows would step through the recording.
+      const own = () => {
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      if (aims_with_cursor(state)) {
+        if (is_arrow(event.key)) {
+          own();
+          const from = keyboardCursorRef.current ?? viewCenter();
+          const to = from.add(arrow_step(event.key, viewport, event.shiftKey));
+          // The cursor stays in sight: the arrows stop at the edges of the view.
+          if (inView(to, 4)) pointKeyboardAt(to);
+          keyboardStopRef.current = -1;
+        } else if (event.key === "Enter") {
+          own();
+          clickWithKeyboard();
+        } else if (event.key === "Tab") {
+          if (jumpToNextPoint(event.shiftKey)) own();
+        }
+        return;
+      }
+      if (!is_at_rest(state)) return;
+      if (event.key === "Tab") {
+        if (selectNextElement(event.shiftKey)) own();
+      } else if (event.key === "Enter") {
+        if (selected_ids(state).length > 0 && onInspect) {
+          own();
+          onInspect();
+        }
+      } else if (is_arrow(event.key)) {
+        if (
+          appModeRef.current === "static" &&
+          nudgeSelection(arrow_step(event.key, viewport, event.shiftKey))
+        )
+          own();
+        // With nothing to move, the up arrow goes back to the palette, as the down arrow came from it.
+        else if (event.key === "ArrowUp" && focus_zone("palette")) own();
+      }
+    };
+
+    // Reached by the keyboard, and only then: a click focuses the canvas too, and the cursor is the mouse's.
+    const onCanvasFocus = (event: React.FocusEvent<HTMLCanvasElement>) => {
+      if (pointerInsideRef.current || !event.currentTarget.matches(":focus-visible")) return;
+      startKeyboardPointing();
     };
 
     // A finger taken away by the browser never aimed anything: its held press is dropped, not played.
@@ -1451,6 +1778,7 @@ const MechanicalCanvasView = forwardRef<
     // A gesture in progress keeps the canvas: the pointer is captured, and what it draws (a selection rectangle, an element being placed) must survive the cursor straying outside.
     // Same for the probe metric popover: it sits outside the canvas element, so reaching it would otherwise trigger this.
     const onPointerLeaveHandler = () => {
+      pointerInsideRef.current = false;
       if (
         mouseButtonDownRef.current === "none" &&
         canvasStateRef.current.type !== "PlacingProbeMetrics"
@@ -1497,7 +1825,13 @@ const MechanicalCanvasView = forwardRef<
           : live.overlayArrows.find(
               (candidate) =>
                 candidate.elementID &&
-                overlay_arrow_hit(mouseScreen, viewport, candidate),
+                overlay_arrow_hit(
+                  mouseScreen,
+                  viewport,
+                  candidate,
+                  candidate.kind === "grab" &&
+                    focusedOverlayRef.current?.kind === "grab",
+                ),
             );
         const hit = moment ?? arrow;
         if (!hit?.elementID) return undefined;
@@ -1544,7 +1878,7 @@ const MechanicalCanvasView = forwardRef<
       if (
         (resting.type === "SelectedMultiple" ||
           resting.type === "EditingSelectionTransform") &&
-        appModeRef.current === "edition"
+        appModeRef.current === "static"
       ) {
         const pivot =
           resting.pivot ??
@@ -1584,7 +1918,7 @@ const MechanicalCanvasView = forwardRef<
         currMech.simulation.floor,
         // What the previous frame asked of the drag: the mechanism read here has answered that, not the cursor, which has since moved on.
         oldPositionRef.current,
-        appModeRef.current !== "edition",
+        appModeRef.current !== "static",
         overlayReadingUnder(mousePositionRef.current, currMech.viewport),
       );
       let snapFeedback: SnapFeedback = NO_FEEDBACK;
@@ -1605,7 +1939,7 @@ const MechanicalCanvasView = forwardRef<
       if (
         snapToGrid &&
         !holdsOwnTarget &&
-        (appModeRef.current === "edition" || pickingReference)
+        (appModeRef.current === "static" || pickingReference)
       ) {
         const { position, ...feedback } = snap_hover(
           newHoveredPart,
@@ -1620,7 +1954,7 @@ const MechanicalCanvasView = forwardRef<
       if (
         snapToGrid &&
         newHoveredPart.type === "Void" &&
-        appModeRef.current === "edition"
+        appModeRef.current === "static"
       ) {
         const { position, ...feedback } = snap_dimension_position(
           newHoveredPart.position,
@@ -1684,14 +2018,15 @@ const MechanicalCanvasView = forwardRef<
           onSpaceKeyRef.current();
           return;
         }
-        // Reset the running simulation, or exit to edition — decided in App.
+        // Back to rest, the recording kept to be replayed.
         // A selection under a simulation survives it: Escape leaves the run, not the element being read.
         if (
           event.type === "KeyDown" &&
           event.key === "Escape" &&
           (canvasStateRef.current.type === "Selecting" ||
-            (appModeRef.current !== "edition" &&
-              canvasStateRef.current.type === "SelectedElement"))
+            (appModeRef.current !== "static" &&
+              (canvasStateRef.current.type === "SelectedElement" ||
+                canvasStateRef.current.type === "Grabbing")))
         ) {
           onEscapeKeyRef.current();
           if (canvasStateRef.current.type === "Selecting")
@@ -1729,8 +2064,7 @@ const MechanicalCanvasView = forwardRef<
           undoMechanism,
           redoMechanism,
           onMouseUpHandler,
-          appModeRef.current !== "edition",
-          canSimulationGrabRef.current,
+          appModeRef.current !== "static",
           onSimulationGrabRef.current,
           onSimulationGrabEndRef.current,
           worldMousePos,
@@ -1761,6 +2095,19 @@ const MechanicalCanvasView = forwardRef<
     useEffect(() => {
       // A lifted finger leaves no cursor to aim from.
       if (pointer_kind() === "touch" && touchesRef.current.size === 0) return;
+      // The keyboard's cursor shows for a tool and steps aside for the selection, which Tab walks instead.
+      if (keyboardPointingRef.current && !pointerInsideRef.current) {
+        if (aims_with_cursor(canvasStateRef.current)) {
+          if (!cursorOnCanvasRef.current) showKeyboardCursorRef.current();
+        } else {
+          if (keyboardHeldRef.current) {
+            keyboardHeldRef.current = false;
+            onMouseUpHandler();
+          }
+          cursorOnCanvasRef.current = false;
+          snapFeedbackRef.current = NO_FEEDBACK;
+        }
+      }
       const { hoveredPart: refreshed, snapFeedback } = computeHover();
       refreshRevealFromHover(refreshed);
       snapFeedbackRef.current = snapFeedback;
@@ -1771,6 +2118,7 @@ const MechanicalCanvasView = forwardRef<
       computeHover,
       refreshRevealFromHover,
       setHoveredPart,
+      onMouseUpHandler,
     ]);
 
     // A running mechanism moves under a still cursor, so the hover follows each new simulated frame, not only the mouse.
@@ -1834,8 +2182,33 @@ const MechanicalCanvasView = forwardRef<
       const handleGlobalKeyDown = (event: KeyboardEvent) => {
         if (isTypingInInput()) return;
         if (galleryOpen && event.key !== "Escape") return;
+        // Space held is one press: its repeats would play and pause in turn.
+        if (event.key === " " && event.repeat) {
+          event.preventDefault();
+          return;
+        }
+        if (event.key === " ") {
+          spaceHoldRef.current =
+            appModeRef.current !== "static" && sim_clock().isPlaying
+              ? null
+              : performance.now();
+          set_play_through(spaceHoldRef.current !== null);
+        }
         // Cmd on a Mac: left out, Cmd+C would arm the damper as it copies.
         const ctrlKey = event.ctrlKey || event.metaKey;
+        // The arrows move through the recording: one recorded instant, a second with Shift, to an end with Ctrl.
+        // At rest they do nothing, and a focused slider keeps them.
+        if (
+          (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+          appModeRef.current !== "static" &&
+          !is_slider(document.activeElement)
+        ) {
+          event.preventDefault();
+          const direction = event.key === "ArrowRight" ? 1 : -1;
+          if (ctrlKey) seek_to(direction > 0 ? recording_end() : 0, true);
+          else step_through_recording(direction, event.shiftKey);
+          return;
+        }
         const shortcut = is_canvas_shortcut(event.key, ctrlKey);
         // The entry an undo or redo is about to replay: popups showing only what it edits stay open to show the result.
         const { history, future } = restingRef.current;
@@ -1859,9 +2232,11 @@ const MechanicalCanvasView = forwardRef<
             closeProbeMetricsPopover();
         }
         if (shortcut) dismiss_popups(replayed);
+        // The canvas keeps the focus, having nothing Space would press: the keyboard goes on from where it was once the run is watched.
         if (event.key === " ") {
           event.preventDefault();
-          (document.activeElement as HTMLElement | null)?.blur?.();
+          if (document.activeElement !== canvasRef.current)
+            (document.activeElement as HTMLElement | null)?.blur?.();
         }
         // Ctrl+A selects the mechanism, not the text of the page around it.
         if (ctrlKey && key === "a") event.preventDefault();
@@ -1870,9 +2245,46 @@ const MechanicalCanvasView = forwardRef<
           key: event.key,
           ctrlKey,
         });
+        // A tool armed by its key while the keyboard is finding its way around the window is used from the keyboard: the canvas takes the focus, and its cursor shows.
+        const canvas = canvasRef.current;
+        const active = document.activeElement;
+        if (
+          !ctrlKey &&
+          canvas &&
+          active !== canvas &&
+          active instanceof HTMLElement &&
+          active.matches(":focus-visible") &&
+          TOOL_STATE_BY_KEY[key] !== undefined &&
+          aims_with_cursor(canvasStateRef.current)
+        )
+          canvas.focus();
+      };
+      // Space held runs the mechanism for as long as it is down, the way one would hold it to watch it move and let go to draw again.
+      const handleGlobalKeyUp = (event: KeyboardEvent) => {
+        if (event.key !== " ") return;
+        const pressedAt = spaceHoldRef.current;
+        spaceHoldRef.current = null;
+        set_play_through(false);
+        if (
+          pressedAt !== null &&
+          performance.now() - pressedAt >= SPACE_HOLD_MS &&
+          appModeRef.current !== "static"
+        )
+          onEscapeKeyRef.current();
+      };
+      // A release the page never sees, the window having lost focus meanwhile, must not land on a later one.
+      const forgetHold = () => {
+        spaceHoldRef.current = null;
+        set_play_through(false);
       };
       document.addEventListener("keydown", handleGlobalKeyDown);
-      return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+      document.addEventListener("keyup", handleGlobalKeyUp);
+      window.addEventListener("blur", forgetHold);
+      return () => {
+        document.removeEventListener("keydown", handleGlobalKeyDown);
+        document.removeEventListener("keyup", handleGlobalKeyUp);
+        window.removeEventListener("blur", forgetHold);
+      };
     }, [handleEvent, closeProbeMetricsPopover, galleryOpen]);
 
     // The clipboard events rather than the keys: they alone may write to the system clipboard without a permission prompt, and they also answer the browser's Edit menu.
@@ -1880,7 +2292,7 @@ const MechanicalCanvasView = forwardRef<
       const clipboardAvailable = () =>
         !isTypingInInput() &&
         !galleryOpen &&
-        appModeRef.current === "edition" &&
+        appModeRef.current === "static" &&
         mouseButtonDownRef.current === "none";
 
       const handleCopyOrCut = (event: ClipboardEvent) => {
@@ -1904,7 +2316,6 @@ const MechanicalCanvasView = forwardRef<
         event.clipboardData.setData(CLIPBOARD_MIME, text);
         remember_copy(text);
         if (event.type !== "cut") return;
-        forget_paste_spots(text);
         dismiss_popups();
         applyActions(
           delete_elements(
@@ -1915,6 +2326,18 @@ const MechanicalCanvasView = forwardRef<
           ),
         );
         setCanvasStateNow({ type: "Selecting" });
+      };
+
+      const paste_options = (linked: boolean): PasteOptions => {
+        const { scale } = restingRef.current.viewport;
+        return {
+          wanted: cursorOnCanvasRef.current
+            ? computeHover().worldMousePos
+            : undefined,
+          grid: snapToGrid ? grid_snap_step(scale) : undefined,
+          view: visibleWorld(),
+          linked,
+        };
       };
 
       const handlePaste = (event: ClipboardEvent) => {
@@ -1929,13 +2352,36 @@ const MechanicalCanvasView = forwardRef<
           return;
         const text = event.clipboardData?.getData(CLIPBOARD_MIME);
         if (!text) return;
-        const mechanism = restingRef.current;
-        const plan = plan_paste(
-          text,
-          cursorOnCanvasRef.current ? computeHover().worldMousePos : undefined,
-          mechanism,
-          snapToGrid ? grid_snap_step(mechanism.viewport.scale) : undefined,
-        );
+        const plan = plan_paste(text, restingRef.current, paste_options(false));
+        if (!plan) return;
+
+        event.preventDefault();
+        dismiss_popups();
+        applyActions(plan.actions);
+        setCanvasStateNow(selecting(plan.pastedIDs));
+        setLinkOffer(plan);
+      };
+
+      // Not a `paste` event: the browser takes Ctrl+Shift+V for a paste as plain text, which leaves out the clipboard's own type.
+      const handlePasteLinked = (event: KeyboardEvent) => {
+        const ctrlKey = event.ctrlKey || event.metaKey;
+        if (!ctrlKey || !event.shiftKey || event.key.toLowerCase() !== "v") return;
+        if (!clipboardAvailable()) return;
+        if (linkOfferRef.current) {
+          event.preventDefault();
+          linkOffered();
+          return;
+        }
+        const stateType = canvasStateRef.current.type;
+        if (
+          stateType !== "SelectedElement" &&
+          stateType !== "SelectedMultiple" &&
+          !(stateType in TOOL_SHORTCUTS)
+        )
+          return;
+        const text = last_copy();
+        if (!text) return;
+        const plan = plan_paste(text, restingRef.current, paste_options(true));
         if (!plan) return;
 
         event.preventDefault();
@@ -1947,12 +2393,22 @@ const MechanicalCanvasView = forwardRef<
       document.addEventListener("copy", handleCopyOrCut);
       document.addEventListener("cut", handleCopyOrCut);
       document.addEventListener("paste", handlePaste);
+      document.addEventListener("keydown", handlePasteLinked);
       return () => {
         document.removeEventListener("copy", handleCopyOrCut);
         document.removeEventListener("cut", handleCopyOrCut);
         document.removeEventListener("paste", handlePaste);
+        document.removeEventListener("keydown", handlePasteLinked);
       };
-    }, [applyActions, computeHover, galleryOpen, setCanvasStateNow, snapToGrid]);
+    }, [
+      applyActions,
+      computeHover,
+      galleryOpen,
+      linkOffered,
+      setCanvasStateNow,
+      snapToGrid,
+      visibleWorld,
+    ]);
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -2014,23 +2470,19 @@ const MechanicalCanvasView = forwardRef<
 
     // The metric box is an overlay, not a mode: the cursor answers for the state under it.
     const cursorState = state_under_probe_metrics(canvasState);
-    // A grounded node never moves, so it offers no grab.
-    const hoversGroundedNode =
-      hoveredPart.type === "Node" &&
-      mechanism.mechanicalElements.some(
-        (el) =>
-          el.id === hoveredPart.id && is_node_element(el) && el.isGrounded,
-      );
+    // In simulation the selection tool pulls on a part as the grab tool does at rest, and says so the same way.
     // A refusal outranks every tool: whatever is armed, this spot takes nothing.
     const cursor =
       hoveredPart.type === "Void" && hoveredPart.rejected
         ? "not-allowed"
         : cursorState.type === "SimulationDragging"
           ? "grabbing"
-          : canSimulationGrab &&
-              ["Selecting", "SelectedElement"].includes(cursorState.type) &&
+          : (cursorState.type === "Grabbing" ||
+                (appMode !== "static" &&
+                  (cursorState.type === "Selecting" ||
+                    cursorState.type === "SelectedElement" ||
+                    cursorState.type === "SelectedMultiple"))) &&
               hoveredPart.type !== "Void" &&
-              !hoversGroundedNode &&
               hoveredPart.type !== "Probe" &&
               hoveredPart.type !== "MotorArrow" &&
               hoveredPart.type !== "Force" &&
@@ -2174,6 +2626,13 @@ const MechanicalCanvasView = forwardRef<
           // The ground the drawing sits on.
           // It belongs to the container, not to the (transparent, cleared every frame) canvas: as a theme role it cross-fades with the rest of the interface on a theme change, where a `COLORS` read baked into an inline style would freeze on whichever palette was current when React last rendered.
           backgroundColor: "background.default",
+          // The page's focus ring, drawn inside: the container clips anything drawn around the canvas.
+          // Only for the keyboard, since a click focuses the canvas too.
+          "& > canvas": { outline: "none" },
+          [`& > canvas[${KEYBOARD_ATTRIBUTE}]:focus`]: {
+            outline: (theme) => `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: -2,
+          },
         }}
       >
         <canvas
@@ -2190,6 +2649,10 @@ const MechanicalCanvasView = forwardRef<
           onPointerCancel={onPointerCancelHandler}
           onPointerLeave={onPointerLeaveHandler}
           onContextMenu={onContextMenuHandler}
+          onKeyDown={onCanvasKeyDown}
+          onFocus={onCanvasFocus}
+          onBlur={stopKeyboardPointing}
+          {...zone_props("canvas")}
           tabIndex={0}
           aria-label={t("canvas_label")}
           role="img"
@@ -2206,9 +2669,9 @@ const MechanicalCanvasView = forwardRef<
                 ? selection_entries(
                     selected_ids(canvasState),
                     mechanism,
-                    appMode !== "edition",
+                    appMode !== "static",
                   )
-                : void_entries(mechanism, appMode !== "edition")
+                : void_entries(mechanism, appMode !== "static")
             }
             host={{
               mechanism,
@@ -2218,11 +2681,19 @@ const MechanicalCanvasView = forwardRef<
               grid: snapToGrid
                 ? grid_snap_step(mechanism.viewport.scale)
                 : undefined,
+              view: visibleWorld(),
               recenterTarget,
               onRecenter,
               setHoveredPart,
+              runSimulation: () => onSpaceKeyRef.current(),
+              leaveSimulation: () => onEscapeKeyRef.current(),
+              offerLink: setLinkOffer,
             }}
-            onClose={() => setContextMenu(null)}
+            onClose={() => {
+              // A menu opened from the keyboard hands it back the canvas, where it was.
+              if (contextMenu.keyboard) focus_zone("canvas");
+              setContextMenu(null);
+            }}
           />
         )}
         {rejection && (
@@ -2443,6 +2914,16 @@ const MechanicalCanvasView = forwardRef<
               />
             );
           })()}
+        {linkOffer && appMode === "static" && (
+          <PasteLinkButton
+            mechanism={mechanism}
+            plan={linkOffer}
+            onLink={() => {
+              linkOffered();
+              focus_zone("canvas");
+            }}
+          />
+        )}
         <MeasureWidget
           ref={measureReadoutRef}
           canvasState={canvasState}

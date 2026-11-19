@@ -9,6 +9,7 @@ import {
   DEFAULT_RUNTIME_STATE,
   SimulationConfig,
   Point2,
+  SimulationMode,
   is_simulating,
 } from "../../../types";
 import {
@@ -16,6 +17,7 @@ import {
   EMPTY_NEGLIGIBILITY_POOL,
   EMPTY_STRESS_SCALE_CACHE,
   KinematicSnapshot,
+  ParameterSnapshot,
   RuntimeState,
   SimulationSnapshot,
 } from "../../../types/runtime-state";
@@ -86,6 +88,7 @@ import {
   pool_floors,
 } from "./negligibility-pool";
 import { beam_strength } from "../../../utils/section-properties";
+import { play_through } from "./seek";
 
 /**
  * How often the simulation clock reaches React. Text and controls, not motion.
@@ -163,7 +166,7 @@ export function simulationResetPatch(
     time: 0,
     simulationSnapshots: [],
     parameterSnapshots:
-      mode !== "edition" ? [parameter_snapshot(0, mechanism)] : [],
+      is_simulating(mode) ? [parameter_snapshot(0, mechanism)] : [],
     scrubbed: false,
     // Dynamic mode is the only one that ever grows this pool (see the recording loop below) — every other mode leaves it untouched, so without this it keeps whatever a previous dynamic run left behind for the entire lifetime of the new mode, judging unrelated readings negligible against a scale that has nothing to do with them.
     negligibilityPool: EMPTY_NEGLIGIBILITY_POOL,
@@ -335,11 +338,71 @@ export function timeline_state(appMode: AppMode, clock: RuntimeState): TimelineS
   };
 }
 
+const recorder_mode = (mode: SimulationMode): RecorderMode => mode;
+
+/** The part of the clock a recording is made of — what is kept of it while the mechanism is at rest. */
+type RecordingClock = Pick<
+  RuntimeState,
+  "simulationSnapshots" | "parameterSnapshots" | "negligibilityPool" | "stressScale"
+>;
+
 /**
- * `Recorder`/the worker only know two `RecorderMode`s. `"static"` is still `disabled` in `PlaybackControls` — it has no recording loop of its own yet — so it is not distinguished here; falling back to `"kinematic"` is a harmless default for a mode nobody can reach.
+ * A recording set aside while the mechanism is at rest, to be replayed when its mode is run again.
+ *
+ * Only one is kept, the last mode run's: running the other mode starts over.
  */
-const recorder_mode = (mode: AppMode): RecorderMode =>
-  mode === "dynamic" ? "dynamic" : "kinematic";
+type KeptRecording = {
+  mode: SimulationMode;
+  clock: RecordingClock;
+  /** The worker load it was recorded on (see `loadCountRef`): the worker still holds its model, and resumes from its end by a rewind rather than a recompile, as long as nothing has loaded another since. */
+  load: number;
+};
+
+/**
+ * A kept recording an edit at rest has cut off, held so that undoing that edit brings it back.
+ * `history` is the mechanism's history the recording is valid for — an undo landing back on it restores the recording.
+ */
+type CutRecording = KeptRecording & { history: Mechanism["history"] };
+
+/** How long the mechanism takes to swing back to its rest pose when a simulation is left past t=0, in ms. */
+const REWIND_MS = 250;
+
+/** The swing back to rest under way: the recording it plays backwards, and when it started. */
+type Rewind = {
+  mode: SimulationMode;
+  clock: RecordingClock;
+  from: number;
+  start: number | null;
+};
+
+const pick_recording = (clock: RuntimeState): RecordingClock => ({
+  simulationSnapshots: clock.simulationSnapshots,
+  parameterSnapshots: clock.parameterSnapshots,
+  negligibilityPool: clock.negligibilityPool,
+  stressScale: clock.stressScale,
+});
+
+/** The mechanism posed at `snapshot`, the way the worker resumes from it. */
+const posed_at = (
+  mechanism: Mechanism,
+  mode: SimulationMode,
+  snapshot: SimulationSnapshot,
+): Mechanism =>
+  mode === "kinematic"
+    ? apply_snapshot_to_mechanism(mechanism, snapshot as KinematicSnapshot)
+    : apply_dynamic_snapshot_to_mechanism(mechanism, snapshot as DynamicSnapshot);
+
+/** The mechanism as it stood at the end of `clock`'s recording: posed there, with the parameters in effect then. */
+const mechanism_at_end = (
+  mechanism: Mechanism,
+  mode: SimulationMode,
+  clock: RecordingClock,
+  end: SimulationSnapshot,
+): Mechanism => {
+  const params = parameter_snapshot_at(clock.parameterSnapshots, end.t);
+  const posed = posed_at(mechanism, mode, end);
+  return params ? apply_parameter_snapshot_to_mechanism(posed, params) : posed;
+};
 
 export type UseSimulationPlaybackArgs = {
   mechanism: Mechanism;
@@ -374,10 +437,17 @@ export type UseSimulationPlaybackArgs = {
   inertiaNamed: boolean;
   /** Called when the recording hits `MAX_RECORDING_TIME` or the snapshot memory cap. */
   onRecordingLimitReached: (reason: SimulationLimitReason, maxTime: number) => void;
+  /**
+   * Called with the parameters in effect at a recorded instant, for the mechanism to take them — an edit at that instant, cutting off the values the recording set after it.
+   * On the way back to rest, those the recording started from: at rest the mechanism stands at t=0, so an edit made during the run is lost there, and seen again when the recording is replayed.
+   * On a grab behind the end of the recording, those of the instant it cuts the recording at.
+   */
+  adoptValues: (shown: ParameterSnapshot) => void;
 };
 
 /**
- * Everything needed to drive and observe a simulation — kinematic or dynamic — the recording worker, the RAF loop that steps it, and the handlers Space/Escape/grab feed into it.
+ * Everything needed to drive and observe a simulation — kinematic or dynamic — the recording worker, the RAF loop that steps it, the handlers Space and grab feed into it, and the mode changes, which keep a recording aside at rest (`changeMode`).
+ * `setAppMode` is the bare state setter: everything else goes through `changeMode`.
  *
  * `mechanism`/`appMode` are read through a ref (`simulationRef`) rather than closed over, so the RAF effect can stay mounted once for the app's lifetime instead of re-subscribing on every render.
  */
@@ -394,6 +464,7 @@ export function useSimulationPlayback({
   hoveredOverlay,
   inertiaNamed,
   onRecordingLimitReached,
+  adoptValues,
 }: UseSimulationPlaybackArgs) {
   const mechanismRef = useRef(mechanism);
   mechanismRef.current = mechanism;
@@ -431,8 +502,17 @@ export function useSimulationPlayback({
    * Waiting instead of concluding is what breaks that loop.
    */
   const waitedForReachedRef = useRef<number>(0);
-  const autoPlayOnEnterRef = useRef<boolean>(false);
   const simStartHistoryLengthRef = useRef<number>(0);
+  /** The recording set aside at rest, replayed when its mode is run again — see `KeptRecording`. */
+  const keptRef = useRef<KeptRecording | null>(null);
+  /** The kept recording the last edit at rest cut off, for an undo of that edit to bring back — see `CutRecording`. */
+  const cutRef = useRef<CutRecording | null>(null);
+  /** The kept recording a mode change is resuming, handed from `changeMode` to the `[appMode]` effect, which puts the worker back at its end. */
+  const resumingRef = useRef<KeptRecording | null>(null);
+  /** How many times the worker has been given a mechanism to compile: a kept recording whose load is still the current one can be resumed by a rewind. */
+  const loadCountRef = useRef<number>(0);
+  /** The swing back to rest under way, if any — see `REWIND_MS`. */
+  const rewindRef = useRef<Rewind | null>(null);
   /** Set by a caller right before the mechanism updates when the edit changes neither the model nor the recorded instants (a probe's config, an element's name), so the recompile effect below can skip a recompile that would otherwise discard snapshots. */
   const observationOnlyEditRef = useRef<boolean>(false);
   /** Set by a caller right before the mechanism updates when the edit only changed load values (magnitude, direction…), never their target or count — the recompile effect below then swaps `compiledLoads` in place (`Recorder.setLoads`) instead of recompiling the whole model, which a continuous drag would otherwise do dozens of times a second. */
@@ -463,11 +543,118 @@ export function useSimulationPlayback({
 
   const onRecordingLimitReachedRef = useRef(onRecordingLimitReached);
   onRecordingLimitReachedRef.current = onRecordingLimitReached;
+  const adoptValuesRef = useRef(adoptValues);
+  adoptValuesRef.current = adoptValues;
 
-  const exitToEdition = useCallback(() => {
-    setAppMode("edition");
-    setRuntimeState((prev) => ({ ...prev, isPlaying: false }));
-  }, [setAppMode]);
+  /** Hands the worker a mechanism to compile, counted so a kept recording knows whether the worker still holds its model. */
+  const loadRecorder = (
+    mode: SimulationMode,
+    mech: Mechanism,
+    resumeFrom: SimulationSnapshot | null,
+  ) => {
+    recorder().load(recorder_mode(mode), mech, resumeFrom);
+    loadCountRef.current++;
+  };
+
+  /**
+   * Switches the app to `next`, and the clock with it, in the same tick — see `simulationResetPatch` for why it cannot wait for the `[appMode]` effect.
+   *
+   * Leaving a simulation for rest keeps its recording aside (`keptRef`), and takes the mechanism back to the values it started from.
+   * Running that mode again replays the recording from t=0, up to its end.
+   * Running the other mode starts over.
+   * Entering a simulation plays it at once: there is no stop at t=0 between rest and motion.
+   *
+   * `keepValues` is for an undo leaving the simulation: everything edited during the run is undone by then, and the undo has just set the values itself.
+   * `fresh` starts the mode over even when its recording is kept.
+   */
+  const changeMode = useCallback(
+    (
+      next: AppMode,
+      {
+        keepValues = false,
+        fresh = false,
+      }: { keepValues?: boolean; fresh?: boolean } = {},
+    ) => {
+      const current = simulationRef.current.appMode;
+      if (next === current) return;
+      const clock = sim_clock();
+      if (is_simulating(current) && next === "static") {
+        if (clock.simulationSnapshots.length > 0) {
+          const kept: KeptRecording = {
+            mode: current,
+            clock: pick_recording(clock),
+            load: loadCountRef.current,
+          };
+          keptRef.current = kept;
+          // The way back to rest is shown, not jumped: the mechanism swings back through what it just did.
+          if (clock.time > 0)
+            rewindRef.current = {
+              mode: current,
+              clock: kept.clock,
+              from: clock.time,
+              start: null,
+            };
+        }
+        const start = clock.parameterSnapshots[0];
+        if (start && !keepValues) adoptValuesRef.current(start);
+      }
+      let resumed: KeptRecording | null = null;
+      if (is_simulating(next)) {
+        // Either resumed or given up: the other mode's recording is not kept alongside this one.
+        const kept = keptRef.current;
+        keptRef.current = null;
+        if (kept?.mode === next && !fresh) resumed = kept;
+        rewindRef.current = null;
+      }
+      resumingRef.current = resumed;
+      setAppMode(next);
+      setRuntimeState((prev) => ({
+        ...prev,
+        ...simulationResetPatch(next, mechanismRef.current),
+        // From t=0, as a replay: the cursor sits behind recorded time, and playing walks it before extending it.
+        ...(resumed ? { ...resumed.clock, scrubbed: true } : {}),
+        isPlaying: is_simulating(next),
+      }));
+    },
+    [setAppMode],
+  );
+
+  /** Back to the mechanism at rest, keeping the recording to replay (see `changeMode`). */
+  const goToRest = useCallback(() => changeMode("static"), [changeMode]);
+
+  /**
+   * Called on an edit at rest, which the kept recording does not account for: it is set aside under `history` — read before the edit lands — so that undoing the edit brings it back.
+   */
+  const cutKeptRecording = useCallback((history: Mechanism["history"]) => {
+    rewindRef.current = null;
+    const kept = keptRef.current;
+    if (!kept) return;
+    keptRef.current = null;
+    cutRef.current = { ...kept, history };
+  }, []);
+
+  /**
+   * Brings back the recording an edit at rest cut off, when an undo lands on the history it was valid for, and says whether it did.
+   * `history` is the one the undo leads to; whatever recording was kept meanwhile is dropped, having been made with the edit being undone.
+   * The entries below the cut keep their identity through undos, so comparing the last one tells a return to that very state from a history that merely grew back to the same length.
+   */
+  const restoreCutRecording = useCallback(
+    (history: Mechanism["history"]): boolean => {
+      const cut = cutRef.current;
+      if (
+        !cut ||
+        cut.history.length !== history.length ||
+        cut.history[cut.history.length - 1] !== history[history.length - 1]
+      )
+        return false;
+      cutRef.current = null;
+      rewindRef.current = null;
+      const { history: _validFor, ...kept } = cut;
+      keptRef.current = kept;
+      return true;
+    },
+    [],
+  );
 
   const pauseSimulation = useCallback(() => {
     setRuntimeState((prev) => ({ ...prev, isPlaying: false }));
@@ -476,46 +663,75 @@ export function useSimulationPlayback({
   /** Starts over on fresh simulation settings — speed, gravity, collisions, playback, snapshots — as a change of mechanism calls for. */
   const resetSimulationState = useCallback(
     (setSimulationConfig: (config: SimulationConfig) => void) => {
-      setAppMode("edition");
+      keptRef.current = null;
+      cutRef.current = null;
+      resumingRef.current = null;
+      rewindRef.current = null;
+      setAppMode("static");
       setRuntimeState(DEFAULT_RUNTIME_STATE);
       setSimulationConfig(DEFAULT_SIMULATION_CONFIG);
     },
     [setAppMode],
   );
 
-  // Reset simulation state on every mode change (fresh start each time)
+  // Puts the worker where the mode just entered starts: from scratch, or at the end of the kept recording it resumes.
+  // The clock itself was set by `changeMode`, in the same tick as the mode.
   useEffect(() => {
     lastWallTimeRef.current = null;
-    if (appMode !== "edition") {
+    if (is_simulating(appMode)) {
       simStartHistoryLengthRef.current = mechanismRef.current.history.length;
-      // Compile the frozen simulation model from the current mechanism.
-      recorder().load(recorder_mode(appMode), mechanismRef.current, null);
+      const resumed = resumingRef.current;
+      resumingRef.current = null;
+      const snapshots = resumed?.clock.simulationSnapshots ?? [];
+      const end = snapshots[snapshots.length - 1];
+      if (resumed && end) {
+        // Still the model it was recorded on: a rewind keeps what the run accumulated on it, belt contact above all.
+        if (resumed.load === loadCountRef.current) recorder().rewind(end);
+        else
+          loadRecorder(
+            appMode,
+            mechanism_at_end(mechanismRef.current, appMode, resumed.clock, end),
+            end,
+          );
+      } else {
+        // Compile the frozen simulation model from the current mechanism.
+        loadRecorder(appMode, mechanismRef.current, null);
+        // Ask for frame 0 right away, without waiting for play: `advance` below picks it up as soon as the worker answers, so the first frame's reactions are there to read (elements panel, measures) even while the simulation sits paused.
+        recorder().target(0);
+      }
       recorder().setGravity(gravityRef.current);
       recorder().setCollisions(collisionsRef.current);
       recorder().setFloor(floorRef.current);
-      // Ask for frame 0 right away, without waiting for play: `advance` below picks it up as soon as the worker answers, so the first frame's reactions are there to read (elements panel, measures) even while the simulation sits paused.
-      recorder().target(0);
-      // Entering simulation abandons any in-progress tool or gesture, whichever control started it — most tools cannot be armed mid-run at all.
+      // Entering simulation abandons any in-progress gesture, whichever control started it.
       // A settled selection carries over, it isn't a gesture to abandon.
       // Nor does the ruler: it reads the mechanism without touching it, and watching a reading run is the whole point of having laid it down before pressing play.
+      // Nor does a pull, which may be what set the mechanism moving.
+      // The grab tool exists only at rest: in motion the selection tool pulls on a part itself, so an armed grab gives way to it.
       setCanvasState((prev) =>
         prev.type === "SelectedElement" ||
         prev.type === "SelectedMultiple" ||
         prev.type === "Measuring" ||
         prev.type === "MeasuringFrom" ||
-        prev.type === "Measured"
+        prev.type === "Measured" ||
+        prev.type === "SimulationDragging"
           ? prev
           : { type: "Selecting" },
       );
+    } else {
+      // Back at rest, a pull under way lets go, leaving selected what the selection tool held.
+      if (grabbingRef.current) {
+        grabbingRef.current = false;
+        recorder().setGrab(null);
+      }
+      setCanvasState((prev) =>
+        prev.type !== "SimulationDragging"
+          ? prev
+          : prev.selectedID
+            ? { type: "SelectedElement", elementID: prev.selectedID }
+            : { type: "Selecting" },
+      );
     }
-    // Capture the flag synchronously: the setRuntimeState updater below runs later, after this line has already reset the ref to false.
-    const shouldAutoPlay = appMode !== "edition" && autoPlayOnEnterRef.current;
-    autoPlayOnEnterRef.current = false;
-    setRuntimeState((prev) => ({
-      ...prev,
-      ...simulationResetPatch(appMode, mechanismRef.current),
-      isPlaying: shouldAutoPlay,
-    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `loadRecorder` only touches refs.
   }, [appMode, setCanvasState]);
 
   // Dynamic mode only: toggling the gravity Chip mid-run changes what the NEXT steps integrate, without recompiling — a reload would lose belt/motor state for nothing, and gravity is not part of what makes a frame's positions valid or not the way geometry is.
@@ -541,7 +757,7 @@ export function useSimulationPlayback({
     const loadValueOnly = loadValueOnlyEditRef.current;
     loadValueOnlyEditRef.current = false;
     const mode = simulationRef.current.appMode;
-    if (mode === "edition") return;
+    if (!is_simulating(mode)) return;
     // Observation edits don't affect the simulated motion: keep the model and the already-recorded snapshots.
     if (observationOnly) return;
     const rs = sim_clock();
@@ -566,17 +782,19 @@ export function useSimulationPlayback({
     const baseSnap =
       snaps.length > 0 ? snaps[snapshot_index_at(snaps, rs.time)] : null;
     // Cast: `baseSnap`'s concrete shape follows `mode`, same invariant `Recorder` relies on.
-    const baseMech =
-      baseSnap == null
-        ? mechanism
-        : mode === "kinematic"
-          ? apply_snapshot_to_mechanism(mechanism, baseSnap as KinematicSnapshot)
-          : apply_dynamic_snapshot_to_mechanism(mechanism, baseSnap as DynamicSnapshot);
-    recorder().load(recorder_mode(mode), baseMech, baseSnap);
+    const baseMech = baseSnap == null ? mechanism : posed_at(mechanism, mode, baseSnap);
+    loadRecorder(mode, baseMech, baseSnap);
     truncate();
     // Depend on geometry/topology only, not the whole mechanism: a viewport (pan/zoom) change keeps these array refs identical, so it neither recompiles the simulation model nor truncates the snapshots.
+    // The floor's line is part of that geometry: the model bakes it in at compile time, and an undo mid-run can still move it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mechanism.mechanicalElements, mechanism.constraintElements, mechanism.loads]);
+  }, [
+    mechanism.mechanicalElements,
+    mechanism.constraintElements,
+    mechanism.loads,
+    mechanism.simulation.floor.height,
+    mechanism.simulation.floor.angle,
+  ]);
 
   // RAF loop: records simulation snapshots while playing in kinematic or dynamic mode
   useEffect(() => {
@@ -813,8 +1031,11 @@ export function useSimulationPlayback({
               const isSupport = r.atAnchor && isNode;
               const kind = isSupport ? "reaction-support" : "reaction-internal";
               // Naming THIS reaction draws it whole: its resultant and its couple are one reading, so neither is ever shown without the other.
+              // No end named is the member's whole internal effort, which both its ends carry (see `merged_internal`).
               const named = namedReactions.some(
-                (reading) => reading.kind === kind && reading.which === r.which,
+                (reading) =>
+                  reading.kind === kind &&
+                  (reading.which === undefined || reading.which === r.which),
               );
               // Support reactions and nothing else: a free node's reading is zero wherever beams carry it, and means little where they do not.
               const drawsVector =
@@ -945,9 +1166,50 @@ export function useSimulationPlayback({
       };
     };
 
+    /**
+     * The swing back to rest: the recording just left, played backwards to t=0 in `REWIND_MS`, pose alone.
+     * Returns whether it drew, the mechanism at rest taking over once it is done.
+     */
+    const publishRewind = (wallTime: number): boolean => {
+      const rewind = rewindRef.current;
+      if (!rewind || is_simulating(simulationRef.current.appMode)) return false;
+      rewind.start ??= wallTime;
+      const progress = Math.min(1, (wallTime - rewind.start) / REWIND_MS);
+      if (progress >= 1) {
+        rewindRef.current = null;
+        return false;
+      }
+      const t = rewind.from * (1 - progress) ** 3;
+      const { simulationSnapshots: snaps, parameterSnapshots } = rewind.clock;
+      const snapshot =
+        rewind.mode === "kinematic"
+          ? snapshot_at(snaps as KinematicSnapshot[], t)
+          : dynamic_snapshot_at(snaps as DynamicSnapshot[], t);
+      if (!snapshot) return false;
+      const posed = posed_at(simulationRef.current.mechanism, rewind.mode, snapshot);
+      const paramSnapshot = parameter_snapshot_at(parameterSnapshots, t);
+      liveFrameRef.current = {
+        time: t,
+        mechanism: paramSnapshot
+          ? apply_parameter_snapshot_to_mechanism(posed, paramSnapshot)
+          : posed,
+        trajectories: [],
+        overlayArrows: [],
+        overlayMoments: [],
+        contactPoints: [],
+        stressScale: 0,
+        normalStressScale: 0,
+        bendingStressScale: 0,
+        shearStressScale: 0,
+      };
+      // Whatever `publish` showed last is stale once this has drawn over it.
+      shownSnaps = null;
+      return true;
+    };
+
     const step = (wallTime: number) => {
       advance(wallTime);
-      publish(simulationRef.current.appMode);
+      if (!publishRewind(wallTime)) publish(simulationRef.current.appMode);
       paintPlayhead();
       rafId = requestAnimationFrame(step);
     };
@@ -1022,7 +1284,7 @@ export function useSimulationPlayback({
         if (recordingRef.current) {
           recordingRef.current = false;
           recorder().stop();
-          // Three conditions, and each one guards a different way of losing frames on purpose: pausing a REPLAY must not delete what is being replayed; a SCRUB also clears `isPlaying`, and truncating there would delete everything past the point just jumped to; and LEAVING simulation is about to reset the recording anyway, so reloading the worker first is pure waste.
+          // Three conditions, and each one guards a different way of losing frames on purpose: pausing a REPLAY must not delete what is being replayed; a SCRUB also clears `isPlaying`, and truncating there would delete everything past the point just jumped to; and LEAVING simulation keeps the recording whole, to be replayed — the worker is put back at its end when the mode is run again.
           if (!replayingRef.current && !rs.scrubbed && is_simulating(mode))
             discardUnshown();
         }
@@ -1080,8 +1342,20 @@ export function useSimulationPlayback({
       const realDt = Math.min((wallTime - lastWallTime) / 1000, 0.1);
       const simDt = realDt * rs.speed;
 
-      // Replay: history exists ahead of the cursor → just walk it, solving nothing.
-      if (replayingRef.current) {
+      const frontier =
+        rs.simulationSnapshots.length > 0
+          ? rs.simulationSnapshots[rs.simulationSnapshots.length - 1].t
+          : 0;
+      // Held on past the end of the recording: it is extended from there, as a play pressed at the end would.
+      // The worker was left at that end, a replay never moving it.
+      if (replayingRef.current && play_through() && rs.time + simDt >= frontier) {
+        replayingRef.current = false;
+        cursorRateRef.current = rs.speed;
+        prevReachedRef.current = null;
+        waitedForReachedRef.current = 0;
+        setRuntimeState((prev) => ({ ...prev, time: frontier, scrubbed: false }));
+      } else if (replayingRef.current) {
+        // Replay: history exists ahead of the cursor → just walk it, solving nothing.
         setRuntimeState((prev) => {
           const prevFrontier =
             prev.simulationSnapshots.length > 0
@@ -1202,40 +1476,38 @@ export function useSimulationPlayback({
     };
   }, []); // intentionally runs once; all state accessed via simulationRef
 
+  /** At rest, runs the mode last used; in a simulation, plays or pauses it. */
   const handleSpaceKey = useCallback(
-    (lastSimulationMode: AppMode) => {
-      if (appMode === "edition") {
-        // Arm auto-play so the mode-change effect starts the simulation instead of resetting isPlaying to false right after we set it.
-        autoPlayOnEnterRef.current = true;
-        setAppMode(lastSimulationMode);
-      } else {
+    (lastSimulationMode: SimulationMode) => {
+      if (is_simulating(simulationRef.current.appMode))
         setRuntimeState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
-      }
+      else changeMode(lastSimulationMode);
     },
-    [appMode, setAppMode],
+    [changeMode],
   );
 
-  // Escape while the simulation is running behaves like the "Réinitialiser" button (reset to t=0 and stop); otherwise it exits to edition mode.
-  const handleEscapeKey = useCallback(() => {
-    if (appMode !== "edition" && sim_clock().isPlaying) {
-      recorder().load(recorder_mode(appMode), mechanismRef.current, null);
-      recorder().setGravity(gravityRef.current);
-      recorder().setCollisions(collisionsRef.current);
-      recorder().setFloor(floorRef.current);
-      setRuntimeState((prev) => ({
-        ...prev,
-        time: 0,
-        isPlaying: false,
-        current: null,
-        history: [],
-        simulationSnapshots: [],
-        parameterSnapshots: [parameter_snapshot(0, mechanismRef.current)],
-        scrubbed: false,
-      }));
-    } else {
-      exitToEdition();
-    }
-  }, [appMode, exitToEdition]);
+  /**
+   * Drops the recording past the cursor, values included, and puts the worker back at the instant kept — for the recording to go on from there.
+   * The parameters go back to that instant's through `adoptValues`, whose edit reloads the worker with them when they differ.
+   */
+  const cutRecordingAtCursor = useCallback(() => {
+    const rs = sim_clock();
+    const snapshots = rs.simulationSnapshots;
+    if (snapshots.length === 0) return;
+    const base = snapshots[snapshot_index_at(snapshots, rs.time)];
+    const shown = parameter_snapshot_at(rs.parameterSnapshots, base.t);
+    // Extended from here, not replayed: the replay decided at play start is called off.
+    replayingRef.current = false;
+    setRuntimeState((prev) => ({
+      ...prev,
+      time: base.t,
+      simulationSnapshots: snapshots.filter((s) => s.t <= base.t),
+      parameterSnapshots: prev.parameterSnapshots.filter((s) => s.t <= base.t),
+      scrubbed: false,
+    }));
+    recorder().rewind(base);
+    if (shown) adoptValuesRef.current(shown);
+  }, []);
 
   const handleSimulationGrab = useCallback(
     (
@@ -1258,7 +1530,9 @@ export function useSimulationPlayback({
           : bodyRatio !== undefined
             ? { edgeID: key, t: bodyRatio, target }
             : { key, target };
-      if (simulationRef.current.appMode === "edition") return;
+      if (!is_simulating(simulationRef.current.appMode)) return;
+      // A grab behind the end of the recording is an intervention at that instant, like an edit there: what was recorded after it goes.
+      if (sim_clock().scrubbed) cutRecordingAtCursor();
       grabbingRef.current = true;
       recorder().setGrab(grab);
       // Start playback if paused: the grab only reaches the solver through the recording loop, which needs to be running.
@@ -1266,7 +1540,7 @@ export function useSimulationPlayback({
         setRuntimeState((prev) => ({ ...prev, isPlaying: true }));
       }
     },
-    [],
+    [cutRecordingAtCursor],
   );
 
   const handleSimulationGrabEnd = useCallback(() => {
@@ -1274,43 +1548,20 @@ export function useSimulationPlayback({
     recorder().setGrab(null);
   }, []);
 
-  const resetToStart = useCallback(() => {
-    // Recompile from the initial geometry
-    if (simulationRef.current.appMode !== "edition") {
-      recorder().load(
-        recorder_mode(simulationRef.current.appMode),
-        mechanismRef.current,
-        null,
-      );
-      recorder().setGravity(gravityRef.current);
-      recorder().setCollisions(collisionsRef.current);
-      recorder().setFloor(floorRef.current);
-    }
-    setRuntimeState((prev) => ({
-      ...prev,
-      time: 0,
-      isPlaying: false,
-      current: null,
-      history: [],
-      simulationSnapshots: [],
-      parameterSnapshots: [parameter_snapshot(0, mechanismRef.current)],
-    }));
-  }, []);
-
   return {
     liveFrameRef,
     timelineTrackRef,
     handleSpaceKey,
-    handleEscapeKey,
     handleSimulationGrab,
     handleSimulationGrabEnd,
-    resetToStart,
-    exitToEdition,
+    changeMode,
+    goToRest,
+    cutKeptRecording,
+    restoreCutRecording,
     pauseSimulation,
     resetSimulationState,
     /** For callers (undo/redo, applyActions) that need to reason about whether an edit reaches back before the simulation started, or should be treated as observation-only. */
     simulationRef,
-    autoPlayOnEnterRef,
     simStartHistoryLengthRef,
     observationOnlyEditRef,
     loadValueOnlyEditRef,

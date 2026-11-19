@@ -100,7 +100,7 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
         <Box sx={{ position: "absolute", inset: 0, zIndex: 0 }}>
           {renderCanvas(onCanvasTap)}
         </Box>
-        {appMode === "edition" && <PlayFab onPlay={onPlayPause} />}
+        {appMode === "static" && <PlayFab onPlay={onPlayPause} />}
         <PhoneSheet
           open={!!sheet}
           height={sheet?.height ?? "half"}
@@ -123,7 +123,7 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
         </PhoneSheet>
       </Box>
       {/* One row over the bottom bar: the transport while a simulation runs, the quick-access bar the rest of the time. */}
-      {appMode !== "edition" ? (
+      {appMode !== "static" ? (
         <PhoneTransport
           appMode={appMode}
           onPlayPause={onPlayPause}
@@ -149,7 +149,7 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
         onTab={onTab}
         onStop={() =>
           change_app_mode(
-            "edition",
+            "static",
             topBar.setAppMode,
             mechanism,
             topBar.updateMetadata,

@@ -33,8 +33,10 @@ import { get_element_icon } from "../../element-palette/elementIcon";
 import { icon } from "../../element-palette/iconDataUris";
 import {
   copied_selection,
-  forget_paste_spots,
   last_copy,
+  PastePlan,
+  pastes_linked,
+  WorldBox,
   plan_paste,
   remember_copy,
   serialize_clipboard,
@@ -67,10 +69,18 @@ export interface ContextHost {
   position?: WorldPoint;
   /** The snap step, when the grid snap is on. */
   grid?: number;
+  /** What the canvas shows, which a paste is kept in. */
+  view?: WorldBox;
   recenterTarget?: ViewportState | null;
   onRecenter?: (target: ViewportState) => void;
   /** Lights up on the canvas what a row names; a touch has no hover to do it with. */
   setHoveredPart?: (hoveredPart: HoveredPart) => void;
+  /** Runs the mode last used, from rest: what Space does there. */
+  runSimulation?: () => void;
+  /** Ends the simulation, back to rest: what Escape does. */
+  leaveSimulation?: () => void;
+  /** Offers to tie what `plan` pasted to its originals, see `link_actions`. */
+  offerLink?: (plan: PastePlan) => void;
 }
 
 export interface ContextEntry {
@@ -112,11 +122,18 @@ export function selecting(ids: ID[]): CanvasState {
     : { type: "SelectedMultiple", elementIDs: ids };
 }
 
-function paste_text(text: string, host: ContextHost): void {
-  const plan = plan_paste(text, host.position, host.mechanism, host.grid);
+/** Pastes `text`, tied to the originals when `linked`; otherwise offers to tie it afterwards. */
+function paste_text(text: string, host: ContextHost, linked = false): void {
+  const plan = plan_paste(text, host.mechanism, {
+    wanted: host.position,
+    grid: host.grid,
+    view: host.view,
+    linked,
+  });
   if (!plan) return;
   host.applyActions(plan.actions);
   host.setCanvasState(selecting(plan.pastedIDs));
+  if (!linked) host.offerLink?.(plan);
 }
 
 /**
@@ -149,7 +166,7 @@ function element_point(element: MechanicalElement): WorldPoint {
   );
 }
 
-function clipboard_entries(ids: ID[]): ContextEntry[] {
+function clipboard_entries(ids: ID[], mechanism: Mechanism): ContextEntry[] {
   return [
     {
       id: "copy",
@@ -162,8 +179,7 @@ function clipboard_entries(ids: ID[]): ContextEntry[] {
       label: t("cut"),
       shortcut: "Ctrl+X",
       run: (host) => {
-        const text = copy_ids(ids, host.mechanism);
-        if (text) forget_paste_spots(text);
+        copy_ids(ids, host.mechanism);
         delete_ids(ids, host);
       },
     },
@@ -180,21 +196,32 @@ function clipboard_entries(ids: ID[]): ContextEntry[] {
           });
       },
     },
-    paste_entry(),
+    ...paste_entries(mechanism),
   ];
 }
 
-function paste_entry(): ContextEntry {
+function paste_entries(mechanism: Mechanism): ContextEntry[] {
   const text = last_copy();
-  return {
-    id: "paste",
-    label: t("paste_here"),
-    shortcut: "Ctrl+V",
-    disabled: !text,
-    run: (host) => {
-      if (text) paste_text(text, host);
+  return [
+    {
+      id: "paste",
+      label: t("paste_here"),
+      shortcut: "Ctrl+V",
+      disabled: !text,
+      run: (host) => {
+        if (text) paste_text(text, host);
+      },
     },
-  };
+    {
+      id: "paste-linked",
+      label: t("paste_linked"),
+      shortcut: "Ctrl+Shift+V",
+      disabled: !text || !pastes_linked(text, mechanism),
+      run: (host) => {
+        if (text) paste_text(text, host, true);
+      },
+    },
+  ];
 }
 
 function collisions_entry(elements: MechanicalElement[]): ContextEntry[] {
@@ -394,12 +421,12 @@ export function selection_entries(
   );
 
   // An overlay: a constraint or a load, copied with what it applies to and never alone.
+  // Mid-run only a load can go, as it can from its panel: a constraint is structure.
   if (mechanical.length === 0) {
-    if (isSimulating) return [];
-    const exists = [...mechanism.constraintElements, ...mechanism.loads].some(
-      (el) => el.id === ids[0],
-    );
-    return exists ? [[delete_entry(ids)]] : [];
+    const deletable = isSimulating
+      ? mechanism.loads
+      : [...mechanism.constraintElements, ...mechanism.loads];
+    return deletable.some((el) => el.id === ids[0]) ? [[delete_entry(ids)]] : [];
   }
 
   if (mechanical.length > 1)
@@ -407,7 +434,7 @@ export function selection_entries(
       isSimulating
         ? [collisions_entry(mechanical)]
         : [
-            clipboard_entries(ids),
+            clipboard_entries(ids, mechanism),
             mirror_entries(ids),
             collisions_entry(mechanical),
             [delete_entry(ids)],
@@ -429,7 +456,7 @@ export function selection_entries(
   const reading = [measure, ...overlays_entry(element), ...collisions_entry([element])];
   if (isSimulating) return [reading];
   return non_empty([
-    clipboard_entries(ids),
+    clipboard_entries(ids, mechanism),
     reading,
     type_entries(element, mechanism),
     [delete_entry(ids)],
@@ -448,19 +475,28 @@ export function void_entries(
       if (recenterTarget) onRecenter?.(recenterTarget);
     },
   };
-  if (isSimulating) return [[recenter]];
+  // First: the void is the mechanism as a whole, and whether it is at rest or in motion is the first thing to say about it.
+  const motion: ContextEntry = isSimulating
+    ? {
+        id: "leave-simulation",
+        label: t("leave_simulation"),
+        shortcut: "Escape",
+        run: ({ leaveSimulation }) => leaveSimulation?.(),
+      }
+    : {
+        id: "run-simulation",
+        label: t("run_simulation"),
+        shortcut: "Space",
+        run: ({ runSimulation }) => runSimulation?.(),
+      };
   const ids = mechanism.mechanicalElements.map((el) => el.id);
-  return [
-    [
-      paste_entry(),
-      {
-        id: "select-all",
-        label: t("select_all"),
-        shortcut: "Ctrl+A",
-        disabled: ids.length === 0,
-        run: ({ setCanvasState }) => setCanvasState(selecting(ids)),
-      },
-    ],
-    [recenter],
-  ];
+  const selectAll: ContextEntry = {
+    id: "select-all",
+    label: t("select_all"),
+    shortcut: "Ctrl+A",
+    disabled: ids.length === 0,
+    run: ({ setCanvasState }) => setCanvasState(selecting(ids)),
+  };
+  if (isSimulating) return [[motion], [selectAll], [recenter]];
+  return [[motion], [...paste_entries(mechanism), selectAll], [recenter]];
 }

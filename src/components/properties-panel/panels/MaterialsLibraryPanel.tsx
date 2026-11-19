@@ -2,6 +2,7 @@ import React from "react";
 import {
   Box,
   Button,
+  ButtonBase,
   IconButton,
   MenuItem,
   Select,
@@ -37,6 +38,7 @@ import { unique_copy_name } from "../../../utils/unique-name";
 import NumberInput from "../components/NumberInput";
 import SectionSchema from "../components/SectionSchema";
 import ElementDisplay from "../components/ElementDisplay";
+import { useElementNavigation } from "../element-navigation";
 import { PROBE_ELEMENT_COLORS } from "../probe-colors";
 import { icon } from "../../element-palette/iconDataUris";
 import { multiple_selection_state } from "../../canvas/tools/canvas-state-reducer";
@@ -88,6 +90,14 @@ export const InlineName: React.FC<InlineNameProps> = ({ name, onCommit }) => {
   }, [name, editing]);
   const discardRef = React.useRef(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  // An edit closed from the keyboard hands the focus back to the name it came from.
+  const refocusRef = React.useRef(false);
+  const setNameElement = (element: HTMLElement | null) => {
+    if (element && refocusRef.current) {
+      refocusRef.current = false;
+      element.focus();
+    }
+  };
 
   // Measured against the actual rendered input's own font (never a guessed one, which drifted from the real metrics and clipped the text's tail) — a hidden span sharing that exact font is the only reliable way to size a text input to its content.
   React.useEffect(() => {
@@ -106,9 +116,18 @@ export const InlineName: React.FC<InlineNameProps> = ({ name, onCommit }) => {
   if (!editing)
     return (
       <Typography
+        ref={setNameElement}
         variant="body2"
         noWrap
+        role="button"
+        tabIndex={0}
         onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
           e.stopPropagation();
           setEditing(true);
         }}
@@ -116,6 +135,10 @@ export const InlineName: React.FC<InlineNameProps> = ({ name, onCommit }) => {
           ...INLINE_INPUT_SX,
           minWidth: 0,
           cursor: "text",
+          "&:focus-visible": {
+            outline: "none",
+            backgroundColor: "action.hover",
+          },
         }}
       >
         {name}
@@ -146,8 +169,10 @@ export const InlineName: React.FC<InlineNameProps> = ({ name, onCommit }) => {
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           discardRef.current = true;
+          refocusRef.current = true;
           (e.target as HTMLElement).blur();
         } else if (e.key === "Enter") {
+          refocusRef.current = true;
           (e.target as HTMLElement).blur();
         }
       }}
@@ -344,6 +369,12 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
         onClick={onToggleExpand}
         onMouseEnter={onHoverStart}
         onMouseLeave={onHoverEnd}
+        // The keyboard lights the group's beams on the canvas as the pointer does.
+        onFocus={onHoverStart}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+            onHoverEnd();
+        }}
         sx={{
           display: "flex",
           alignItems: "center",
@@ -354,7 +385,16 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
             isCanvasHighlighted && !dragOver ? "action.hover" : "transparent",
         }}
       >
-        <IconButton size="small" sx={{ p: 0.25 }} disableRipple>
+        <IconButton
+          size="small"
+          aria-expanded={expanded}
+          aria-label={name}
+          sx={{
+            p: 0.25,
+            "&.Mui-focusVisible": { backgroundColor: "action.hover" },
+          }}
+          disableRipple
+        >
           {expanded ? (
             <KeyboardArrowDown fontSize="inherit" />
           ) : (
@@ -373,7 +413,9 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
           <Tooltip
             title={`${tn("used_by_beams", usageCount)} — ${t("select_these_beams")}`}
           >
-            <Box
+            <ButtonBase
+              disableRipple
+              aria-label={`${tn("used_by_beams", usageCount)} — ${t("select_these_beams")}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onSelectBeams();
@@ -385,7 +427,9 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
                 borderRadius: 3,
                 px: 0.5,
                 cursor: "pointer",
-                "&:hover": { backgroundColor: "action.selected" },
+                "&:hover, &.Mui-focusVisible": {
+                  backgroundColor: "action.selected",
+                },
               }}
             >
               <Box
@@ -397,7 +441,7 @@ const LibraryEntryGroup: React.FC<LibraryEntryGroupProps> = ({
               <Typography variant="caption" color="text.secondary">
                 {usageCount}
               </Typography>
-            </Box>
+            </ButtonBase>
           </Tooltip>
         ) : (
           <Tooltip title={tn("used_by_beams", usageCount)}>
@@ -570,6 +614,7 @@ interface ShapeCotesProps {
 /**
  * The cote fields for `shape`'s own kind — never more than what that kind actually holds.
  * A candidate that violates `validate_profile_shape` (a negative cote, a wall thickness past the half-cote it's cut from) is dropped rather than committed.
+ * `h` comes before `b`, as the schema reads them from left to right.
  */
 const ShapeCotes: React.FC<ShapeCotesProps> = ({
   shape,
@@ -585,17 +630,17 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
       return (
         <>
           <CoteField
-            label="b"
-            title={t("profile_field_width")}
-            value={shape.b}
-            onChange={(b) => commit({ ...shape, b })}
-            disabled={disabled}
-          />
-          <CoteField
             label="h"
             title={t("profile_field_height")}
             value={shape.h}
             onChange={(h) => commit({ ...shape, h })}
+            disabled={disabled}
+          />
+          <CoteField
+            label="b"
+            title={t("profile_field_width")}
+            value={shape.b}
+            onChange={(b) => commit({ ...shape, b })}
             disabled={disabled}
           />
         </>
@@ -604,17 +649,17 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
       return (
         <>
           <CoteField
-            label="b"
-            title={t("profile_field_width")}
-            value={shape.b}
-            onChange={(b) => commit({ ...shape, b })}
-            disabled={disabled}
-          />
-          <CoteField
             label="h"
             title={t("profile_field_height")}
             value={shape.h}
             onChange={(h) => commit({ ...shape, h })}
+            disabled={disabled}
+          />
+          <CoteField
+            label="b"
+            title={t("profile_field_width")}
+            value={shape.b}
+            onChange={(b) => commit({ ...shape, b })}
             disabled={disabled}
           />
           <CoteField
@@ -659,17 +704,17 @@ const ShapeCotes: React.FC<ShapeCotesProps> = ({
       return (
         <>
           <CoteField
-            label="b"
-            title={t("profile_field_width")}
-            value={shape.b}
-            onChange={(b) => commit({ ...shape, b })}
-            disabled={disabled}
-          />
-          <CoteField
             label="h"
             title={t("profile_field_height")}
             value={shape.h}
             onChange={(h) => commit({ ...shape, h })}
+            disabled={disabled}
+          />
+          <CoteField
+            label="b"
+            title={t("profile_field_width")}
+            value={shape.b}
+            onChange={(b) => commit({ ...shape, b })}
             disabled={disabled}
           />
           <CoteField
@@ -826,6 +871,8 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
     null,
   );
 
+  const drillDown = useElementNavigation();
+
   const materialGroupRefs = React.useRef(new Map<ID, HTMLDivElement>());
   const profileGroupRefs = React.useRef(new Map<ID, HTMLDivElement>());
 
@@ -856,8 +903,7 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
   // What each write is built against: the stored entity, or the one shown when a later edit deleted it — the write brings it back.
   const stored_beam = (beam: BeamElement) =>
     (mechanism.mechanicalElements.find((el) => el.id === beam.id) as
-      | BeamElement
-      | undefined) ?? beam;
+      BeamElement | undefined) ?? beam;
   const stored_material = (material: MaterialDef) =>
     mechanism.materials.find((m) => m.id === material.id) ?? material;
   const stored_profile = (profile: ProfileDef) =>
@@ -884,13 +930,16 @@ export const MaterialsLibraryPanel: React.FC<MaterialsLibraryPanelProps> = ({
       ? beams.find((el) => el.id === hoveredPart.id)
       : undefined;
 
-  const selectBeams = (group: BeamElement[]) =>
+  // Like a card clicked in the panel, it opens the elements tab on what it selected.
+  const selectBeams = (group: BeamElement[]) => {
     setCanvasState(
       multiple_selection_state(
         group.map((beam) => beam.id),
         mechanism.mechanicalElements,
       ),
     );
+    if (group.length > 0) drillDown(group[0]);
+  };
 
   const addMaterial = () => {
     const material = default_material(materials.map((m) => m.name));

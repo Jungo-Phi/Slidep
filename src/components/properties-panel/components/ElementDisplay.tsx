@@ -1,11 +1,6 @@
 import React, { useState } from "react";
 import { Action, CanvasState, ID, UnionElement, ZERO } from "../../../types";
-import {
-  Box,
-  IconButton,
-  Typography,
-  Tooltip,
-} from "@mui/material";
+import { Box, IconButton, Typography, Tooltip } from "@mui/material";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import { HoveredPart, is_hovered } from "../../../types/hovered-part";
 import { element_to_hovered_part } from "../../canvas/utils";
@@ -78,7 +73,6 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
   };
 
   // Selecting from inside the panel is an explicit "tell me more about this one" gesture: it drills down to the tab hosting the element, wherever the card sits.
-  // A canvas selection goes through neither of these and keeps the active tab.
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!element || isEditing || !interactive) return;
@@ -120,6 +114,8 @@ const ElementDisplayComponent: React.FC<ElementDisplayProps> = ({
           onMouseEnter: handleMouseEnter,
           onMouseLeave: handleMouseLeave,
         })}
+      // Never a Tab stop: the name inside it is one, and the row around it answers the keyboard where it has to.
+      tabIndex={-1}
       sx={{
         borderRadius: 5,
         minHeight: rowHeight,

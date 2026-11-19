@@ -1,6 +1,7 @@
 import { ID, LoadElement, MechanicalElement, Mechanism } from "../../types";
 import { Reading, merged_internal, reading_from_focus } from "./element-readings";
 import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
+import { is_measured_reading } from "../../types/hovered-part";
 import type { CanvasState } from "../../types/canvas-state";
 
 /**
@@ -20,6 +21,8 @@ export function inspected_subject(
   focusedOverlay: FocusedOverlay | null,
   mechanism: Mechanism,
 ): InspectedSubject | undefined {
+  // The grab's arrow is selected on the canvas alone: it is the cursor's pull, with no page of its own, and stands in for whatever is selected underneath it all the same.
+  if (focusedOverlay && !is_measured_reading(focusedOverlay)) return undefined;
   if (focusedOverlay) {
     const element = mechanism.mechanicalElements.find(
       (el) => el.id === focusedOverlay.elementID,
@@ -54,7 +57,12 @@ export function carried_focus(
   state: CanvasState,
   elements: MechanicalElement[],
 ): FocusedOverlay | null {
-  if (!focus || !merged_internal(focus) || state.type !== "SelectedElement")
+  if (
+    !focus ||
+    !is_measured_reading(focus) ||
+    !merged_internal(focus) ||
+    state.type !== "SelectedElement"
+  )
     return null;
   if (state.elementID === focus.elementID) return null;
   const from = elements.find((el) => el.id === focus.elementID);

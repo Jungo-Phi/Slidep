@@ -9,6 +9,8 @@ import {
   Tooltip,
 } from "@mui/material";
 import {
+  ArrowLeft,
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   KeyboardArrowDown,
@@ -17,9 +19,8 @@ import {
   Pause,
   PlayArrow,
   Public,
-  RestartAlt,
 } from "@mui/icons-material";
-import { StringKey, t } from "../../i18n";
+import { t } from "../../i18n";
 import {
   Action,
   AppMode,
@@ -27,9 +28,10 @@ import {
   Mechanism,
   MechanismMetadata,
   SimulationSpeed,
+  is_simulating,
 } from "../../types";
 import { useAmbient } from "../common/use-ambient";
-import { at_recording_end } from "../solver/dynamics/simulation-engine";
+import { recording_end, seek_to } from "../solver/recording/seek";
 import {
   set_sim_clock as setRuntimeState,
   useSimClockSelector,
@@ -46,11 +48,7 @@ import {
   RUN_MODES,
   SPEEDS,
 } from "./playback-actions";
-import {
-  MenuTrigger,
-  ModeMenu,
-  PhysicsMenu,
-} from "./RunSettingsMenus";
+import { PhysicsMenu } from "./RunSettingsMenus";
 import { SaveStatus } from "../mechanisms-gallery/use-mechanism-library";
 import {
   TOP_BAR_CONTROL_HEIGHT,
@@ -131,8 +129,6 @@ interface ModeSelectorProps {
   mechanism: Mechanism;
   updateMetadata: (metadata: MechanismMetadata, touch?: boolean) => void;
   condensed: boolean;
-  /** Shows only the current mode, the others behind its menu. */
-  folded: boolean;
 }
 
 const MODE_SELECTOR_SX = {
@@ -148,64 +144,19 @@ const MODE_SELECTOR_SX = {
     "&.Mui-selected": {
       color: "primary.contrastText",
       backgroundColor: "primary.main",
-      "&:hover": { backgroundColor: "primary.dark" },
+      "&:hover, &.Mui-focusVisible": { backgroundColor: "primary.dark" },
     },
   },
 } as const;
 
-/** Every mode the unfolded selector shows, statics included, greyed out until it exists. */
-const MODE_BUTTONS: {
-  mode: "edition" | "static" | "kinematic" | "dynamic";
-  tooltipKey: StringKey;
-  disabled?: boolean;
-}[] = [
-  { mode: "edition", tooltipKey: "mode_edition_tooltip" },
-  { mode: "static", tooltipKey: "mode_static_tooltip", disabled: true },
-  { mode: "kinematic", tooltipKey: "mode_kinematic_tooltip" },
-  { mode: "dynamic", tooltipKey: "mode_dynamic_tooltip" },
-];
-
-/** Edition, statics, kinematics, dynamics: what the app is doing. */
+/** Statics, kinematics, dynamics: the mechanism at rest, or run one way or the other. */
 const ModeSelector: React.FC<ModeSelectorProps> = ({
   appMode,
   setAppMode,
   mechanism,
   updateMetadata,
   condensed,
-  folded,
 }) => {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  if (folded) {
-    const current = RUN_MODES.find((m) => m.mode === appMode) ?? RUN_MODES[0];
-    return (
-      <>
-        <Box sx={{ mr: TOP_BAR_SECTION_GAP }}>
-          <MenuTrigger
-            label={t(current.labelKey)}
-            tooltip={t(current.tooltipKey)}
-            expanded={!!anchorEl}
-            onToggle={(button) =>
-              setAnchorEl((open) => (open ? null : button))
-            }
-            outlined
-          >
-            <Box component="span" sx={{ fontSize: "0.75rem", fontWeight: 700 }}>
-              {t(current.labelKey)}
-            </Box>
-          </MenuTrigger>
-        </Box>
-        <ModeMenu
-          anchorEl={anchorEl}
-          onClose={() => setAnchorEl(null)}
-          nonModal
-          appMode={appMode}
-          setAppMode={setAppMode}
-          mechanism={mechanism}
-          updateMetadata={updateMetadata}
-        />
-      </>
-    );
-  }
   return (
     <ToggleButtonGroup
       value={appMode}
@@ -217,9 +168,9 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
       }}
       sx={MODE_SELECTOR_SX}
     >
-      {MODE_BUTTONS.map(({ mode, tooltipKey, disabled }) => {
-        const full = t(`mode_${mode}`);
-        const short = t(`mode_${mode}_short`);
+      {RUN_MODES.map(({ mode, labelKey, shortKey, tooltipKey }) => {
+        const full = t(labelKey);
+        const short = t(shortKey);
         // A shortened name is spelt out in full at the head of its tooltip.
         const truncated = condensed && short !== full;
         return (
@@ -238,7 +189,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
               )
             }
           >
-            <ToggleButton value={mode} disabled={disabled}>
+            <ToggleButton value={mode}>
               {condensed ? short : full}
             </ToggleButton>
           </Tooltip>
@@ -248,17 +199,49 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({
   );
 };
 
+/** A key combination for a tooltip, the arrow drawn rather than typed: the arrow characters of most fonts sit too low and too thin beside the text. */
+const ArrowKeys: React.FC<{ modifier?: string; direction: 1 | -1 }> = ({
+  modifier,
+  direction,
+}) => {
+  const Arrow = direction > 0 ? ArrowRight : ArrowLeft;
+  return (
+    <Box component="span" sx={{ whiteSpace: "nowrap" }}>
+      {modifier && `${modifier}+`}
+      <Arrow sx={{ fontSize: "1.75em", m: "-0.3em" }} />
+    </Box>
+  );
+};
+
+/** The jump to an end of the recording, and below it the steps the same arrow takes without Ctrl. */
+const SeekTooltip: React.FC<{ direction: 1 | -1 }> = ({ direction }) => (
+  <>
+    {t(direction > 0 ? "go_to_end" : "go_to_start")} (
+    <ArrowKeys modifier="Ctrl" direction={direction} />)
+    <Box component="span" sx={{ display: "block", opacity: 0.75 }}>
+      {t(direction > 0 ? "step_forward" : "step_back")}{" "}
+      {"1 s "}
+      (<ArrowKeys modifier="Shift" direction={direction} />)
+    </Box>
+    <Box component="span" sx={{ display: "block", opacity: 0.75 }}>
+      {t(direction > 0 ? "step_forward" : "step_back")}{" "}
+      {t("one_frame")} (<ArrowKeys direction={direction} />)
+    </Box>
+  </>
+);
+
 interface PlaybackControlsProps {
   appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
   mechanism: Mechanism;
   updateMetadata: (metadata: MechanismMetadata, touch?: boolean) => void;
   applyActions: (actions: Action[]) => void;
+  /** The mode names in their short form. */
+  shortModes: boolean;
+  /** The rules between the groups closed up, those around playback left out. */
+  tightRules: boolean;
+  /** The physics and layers menus without their labels. */
   condensed: boolean;
-  tight: boolean;
-  /** Shows only the current mode, the others behind its menu: narrower still than `tight`, the mode being read at a glance. */
-  foldMode: boolean;
-  resetToStart: () => void;
   handleSpaceKey: () => void;
   onOpenGallery: () => void;
   saveStatus: SaveStatus;
@@ -282,10 +265,9 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
   mechanism,
   updateMetadata,
   applyActions,
+  shortModes,
+  tightRules,
   condensed,
-  tight,
-  foldMode,
-  resetToStart,
   handleSpaceKey,
   onOpenGallery,
   saveStatus,
@@ -332,47 +314,19 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           setAppMode={setAppMode}
           mechanism={mechanism}
           updateMetadata={updateMetadata}
-          condensed={condensed}
-          folded={foldMode}
+          condensed={shortModes}
         />
 
-        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
+        {!tightRules && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
-        <Tooltip title={t("reset")}>
+        {/* Play/Pause stays live; the other buttons go dead at rest or at the ends of the recording. */}
+        <Tooltip title={<SeekTooltip direction={-1} />}>
           <span>
             <IconButton
               size="small"
               color="inherit"
-              disabled={appMode === "edition" || !timeline.hasRecording}
-              onClick={resetToStart}
-              sx={{
-                color: "primary.main",
-                "&:hover": { backgroundColor: "action.hover" },
-              }}
-            >
-              <RestartAlt sx={{ fontSize: 20 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
-
-        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
-
-        {/* Play/Pause stays live; the other buttons go dead in edition mode or at the ends of the recording. */}
-        <Tooltip title={t("go_to_start")}>
-          <span>
-            <IconButton
-              size="small"
-              color="inherit"
-              disabled={appMode === "edition" || timeline.atStart}
-              onClick={() =>
-                setRuntimeState((prev) => ({
-                  ...prev,
-                  time: 0,
-                  isPlaying: false,
-                  // Nothing recorded yet ⇒ the start IS the end.
-                  scrubbed: !at_recording_end(prev.simulationSnapshots, 0),
-                }))
-              }
+              disabled={!is_simulating(appMode) || timeline.atStart}
+              onClick={() => seek_to(0, true)}
               sx={TOP_BAR_SLIM_BUTTON_SX}
             >
               <FirstPage sx={{ fontSize: 20 }} />
@@ -384,6 +338,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           <IconButton
             size="small"
             onClick={handleSpaceKey}
+            data-hint-anchor="play"
             sx={{
               bgcolor: "primary.main",
               color: "primary.contrastText",
@@ -399,33 +354,21 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           </IconButton>
         </Tooltip>
 
-        <Tooltip title={t("go_to_end")}>
+        <Tooltip title={<SeekTooltip direction={1} />}>
           <span>
             <IconButton
               size="small"
               color="inherit"
-              disabled={appMode === "edition" || timeline.atEnd}
+              disabled={!is_simulating(appMode) || timeline.atEnd}
               sx={TOP_BAR_SLIM_BUTTON_SX}
-              onClick={() =>
-                setRuntimeState((prev) => {
-                  const snaps = prev.simulationSnapshots;
-                  const maxT = snaps.length > 0 ? snaps[snaps.length - 1].t : 0;
-                  // The end by construction: playing from here records on.
-                  return {
-                    ...prev,
-                    time: maxT,
-                    isPlaying: false,
-                    scrubbed: false,
-                  };
-                })
-              }
+              onClick={() => seek_to(recording_end(), true)}
             >
               <LastPage sx={{ fontSize: 20 }} />
             </IconButton>
           </span>
         </Tooltip>
 
-        {!condensed && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
+        {!tightRules && <Divider flexItem sx={TOP_BAR_DIVIDER_SX} />}
 
         {/* Simulation speed stepper */}
         {(() => {
@@ -469,7 +412,8 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
                       speed === 1
                         ? "text.secondary"
                         : "primary.main",
-                    "&:hover": { backgroundColor: "action.hover" },
+                    // `all: unset` takes the focus outline with it: the keyboard gets the hover's ground instead.
+                    "&:hover, &:focus-visible": { backgroundColor: "action.hover" },
                   }}
                 >
                   {speed}×
@@ -496,7 +440,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           flexItem
           sx={{
             ...TOP_BAR_DIVIDER_SX,
-            mx: tight ? -0.25 : condensed ? 0 : TOP_BAR_DIVIDER_SX.mx,
+            mx: tightRules ? 0 : TOP_BAR_DIVIDER_SX.mx,
           }}
         />
 
@@ -512,7 +456,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           flexItem
           sx={{
             ...TOP_BAR_DIVIDER_SX,
-            mx: tight ? -0.25 : condensed ? 0.25 : TOP_BAR_DIVIDER_SX.mx,
+            mx: tightRules ? 0.25 : TOP_BAR_DIVIDER_SX.mx,
           }}
         />
 
@@ -541,7 +485,7 @@ const PlaybackControlsView: React.FC<PlaybackControlsProps> = ({
           condensed={condensed}
         />
 
-        <Divider flexItem sx={{ mx: condensed ? 0.75 : 2 }} />
+        <Divider flexItem sx={{ mx: tightRules ? 0.75 : 2 }} />
       </Box>
 
       <Box

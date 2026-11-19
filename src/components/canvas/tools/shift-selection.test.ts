@@ -52,7 +52,6 @@ function step(state: CanvasState, event: CanvasEvent, id: ID): CanvasState {
     () => {},
     () => {},
     false,
-    false,
     () => {},
     () => {},
     at,

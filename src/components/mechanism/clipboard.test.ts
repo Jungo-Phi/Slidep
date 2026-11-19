@@ -4,16 +4,27 @@ import huygens from "../../../test-mechanisms/Huygen's chain drive.slidep?raw";
 import jansen from "../../../test-mechanisms/Jansen's linkage.slidep?raw";
 import poulie from "../../../test-mechanisms/Poulie bloqueuse.slidep?raw";
 import treillis from "../../../test-mechanisms/Treillis.slidep?raw";
-import { ID, MechanicalElement, Mechanism, Point2, WorldPoint } from "../../types";
+import {
+  ConstraintElement,
+  ID,
+  MechanicalElement,
+  Mechanism,
+  Point2,
+  WorldPoint,
+} from "../../types";
 import { load_mechanism } from "../../utils/load-mechanism";
 import { validate_mechanism } from "../../utils/validate-mechanism";
 import { apply_actions } from "./apply-actions";
 import {
   ClipboardContent,
   copied_selection,
+  elements_center,
+  link_actions,
   parse_clipboard,
   paste_actions,
   paste_delta,
+  pastes_linked,
+  plan_paste,
   serialize_clipboard,
 } from "./clipboard";
 
@@ -174,6 +185,74 @@ describe("pasting into another mechanism", () => {
   });
 });
 
+describe("linked paste", () => {
+  const source = load(jansen);
+  const allIDs = source.mechanicalElements.map((el) => el.id);
+  const count = (m: Mechanism, type: ConstraintElement["type"]) =>
+    m.constraintElements.filter((c) => c.type === type).length;
+  const lengths = count(source, "dimension-edge");
+  const radii = count(source, "dimension-radius");
+  const emptied = (): Mechanism => ({
+    ...source,
+    mechanicalElements: [],
+    constraintElements: [],
+    loads: [],
+    history: [],
+    future: [],
+  });
+
+  it("is measured on a mechanism with both kinds of dimension", () => {
+    expect(lengths).toBeGreaterThan(0);
+    expect(radii).toBeGreaterThan(0);
+  });
+
+  it("turns each length into an equality with the original edge, and each radius into a 1:1 ratio with the original gear", () => {
+    const plan = paste_actions(copied(allIDs, source), DELTA, source, true);
+    const after = apply_actions(source, plan.actions);
+    expect(after.constraintElements).toHaveLength(2 * source.constraintElements.length);
+    expect(count(after, "dimension-edge")).toBe(lengths);
+    expect(count(after, "dimension-radius")).toBe(radii);
+    expect(count(after, "equal")).toBe(2 * count(source, "equal") + lengths);
+    expect(count(after, "gear-ratio")).toBe(2 * count(source, "gear-ratio") + radii);
+    expect(issues(after)).toEqual(issues(source));
+
+    const links = after.constraintElements.flatMap((c) => {
+      if (source.constraintElements.some((o) => o.id === c.id)) return [];
+      if (c.type === "equal") return [[c.startEdgeID, c.endEdgeID]];
+      if (c.type === "gear-ratio") return [[c.startGearID, c.endGearID]];
+      return [];
+    });
+    expect(links.filter(([original]) => allIDs.includes(original))).toHaveLength(lengths + radii);
+    for (const [original, copy] of links)
+      if (allIDs.includes(original)) expect(plan.sources.get(copy)).toBe(original);
+  });
+
+  it("is what tying a plain paste afterwards gives, in one more history entry", () => {
+    const plan = paste_actions(copied(allIDs, source), DELTA, source);
+    const pasted = apply_actions(source, plan.actions);
+    const tie = link_actions(plan.sources, pasted);
+    expect(tie).toHaveLength(2 * (lengths + radii));
+    const tied = apply_actions(pasted, tie);
+    expect(tied.history.length).toBe(pasted.history.length + 1);
+    for (const type of ["dimension-edge", "dimension-radius", "equal", "gear-ratio"] as const)
+      expect(count(tied, type)).toBe(
+        count(apply_actions(source, paste_actions(copied(allIDs, source), DELTA, source, true).actions), type),
+      );
+    expect(link_actions(plan.sources, tied)).toEqual([]);
+  });
+
+  it("ties nothing to originals the destination does not hold", () => {
+    const text = serialize_clipboard(copied_selection(allIDs, source)!);
+    expect(pastes_linked(text, source)).toBe(true);
+    expect(pastes_linked(text, emptied())).toBe(false);
+
+    const plan = paste_actions(copied(allIDs, source), DELTA, emptied(), true);
+    const after = apply_actions(emptied(), plan.actions);
+    expect(count(after, "dimension-edge")).toBe(lengths);
+    expect(link_actions(plan.sources, after)).toEqual([]);
+  });
+});
+
 describe("names", () => {
   it("renames only a name the destination already uses", () => {
     const source = load(jansen);
@@ -216,26 +295,73 @@ describe("parse_clipboard", () => {
 
 describe("paste_delta", () => {
   const center = new Point2<"world">(1, 1);
+  const free = () => false;
+  /** Occupied wherever a centre in `spots` already sits. */
+  const taken = (...spots: WorldPoint[]) => (delta: WorldPoint) =>
+    spots.some((spot) => center.add(delta).sub(spot).length() < 0.01);
 
   it("carries the content to where it is wanted", () => {
-    const delta = paste_delta(center, new Point2<"world">(4, 3), [], 0.5);
+    const delta = paste_delta(center, new Point2<"world">(4, 3), free, 0.5);
     expect(delta.x).toBeCloseTo(3);
     expect(delta.y).toBeCloseTo(2);
   });
 
-  it("steps off every occupied spot", () => {
-    const first = paste_delta(center, center, [center], 0.5);
-    const second = paste_delta(center, center, [center, center.add(first)], 0.5);
-    expect(first.length()).toBeGreaterThan(0);
-    expect(second.sub(first).length()).toBeGreaterThan(0);
+  it("steps off every occupied spot, down and to the right first", () => {
+    const first = paste_delta(center, center, taken(center), 0.5);
+    const second = paste_delta(center, center, taken(center, center.add(first)), 0.5);
+    expect(first.x).toBeCloseTo(0.5);
+    expect(first.y).toBeCloseTo(-0.5);
+    expect(second.x).toBeCloseTo(1);
+    expect(second.y).toBeCloseTo(-1);
+  });
+
+  it("steps the other way rather than out of view", () => {
+    const view = { min: new Point2<"world">(0, 0.8), max: new Point2<"world">(10, 10) };
+    const delta = paste_delta(center, center, taken(center), 0.5, undefined, view);
+    expect(delta.x).toBeCloseTo(0.5);
+    expect(delta.y).toBeCloseTo(0.5);
+  });
+
+  it("settles for the aimed spot when every step aside is taken", () => {
+    const delta = paste_delta(center, center, () => true, 0.5);
+    expect(delta.length()).toBeCloseTo(0);
   });
 
   it("moves by whole grid steps, even when the offset is finer than the grid", () => {
-    const delta = paste_delta(center, center, [center], 0.1, 2);
+    const delta = paste_delta(center, center, taken(center), 0.1, 2);
     expect(Math.abs(delta.x)).toBeCloseTo(2);
     expect(Math.abs(delta.y)).toBeCloseTo(2);
-    const rounded = paste_delta(center, new Point2<"world">(4.1, 1), [], 0.1, 2);
+    const rounded = paste_delta(center, new Point2<"world">(4.1, 1), free, 0.1, 2);
     expect(rounded.x).toBeCloseTo(4);
     expect(rounded.y).toBeCloseTo(0);
+  });
+});
+
+describe("plan_paste", () => {
+  const source = load(jansen);
+  const text = serialize_clipboard(copied_selection(
+    source.mechanicalElements.map((el) => el.id),
+    source,
+  )!);
+  const center_of = (plan: { pastedIDs: ID[] }, m: Mechanism) =>
+    elements_center(m.mechanicalElements.filter((el) => plan.pastedIDs.includes(el.id)));
+
+  it("steps aside from a copy that is there, not from one that was undone", () => {
+    const plan = plan_paste(text, source)!;
+    const after = apply_actions(source, plan.actions);
+    const again = plan_paste(text, source)!;
+    expect(center_of(again, apply_actions(source, again.actions)).sub(center_of(plan, after)).length()).toBeLessThan(1e-6);
+    const third = plan_paste(text, after)!;
+    expect(center_of(third, apply_actions(after, third.actions)).sub(center_of(plan, after)).length()).toBeGreaterThan(0);
+  });
+
+  it("lands in the middle of the view when the original is out of it", () => {
+    const view = {
+      min: new Point2<"world">(1e4, 1e4),
+      max: new Point2<"world">(1e4 + 100, 1e4 + 100),
+    };
+    const plan = plan_paste(text, source, { view })!;
+    const center = center_of(plan, apply_actions(source, plan.actions));
+    expect(center.sub(new Point2<"world">(1e4 + 50, 1e4 + 50)).length()).toBeLessThan(1);
   });
 });

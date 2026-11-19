@@ -20,6 +20,7 @@ import {
 import { sorted_constraints_for_display } from "../element-order";
 import { t } from "../../../i18n";
 import { ANGLE, LENGTH } from "../../../utils/quantity-format";
+import { useRowArrows } from "../../common/keyboard-zones";
 
 interface ConstraintsPanelProps {
   hoveredPart: HoveredPart;
@@ -38,6 +39,10 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   applyActions: applyActions,
   mechanism,
 }) => {
+  // The up and down arrows run down both lists as one, a value to the next value, a name to the next name.
+  const listsRef = React.useRef<HTMLDivElement>(null);
+  useRowArrows(listsRef, "li");
+
   const handleMouseEnter = (constraint: ConstraintElement) => {
     setHoveredPart(element_to_hovered_part(constraint, true));
   };
@@ -207,14 +212,15 @@ export const ConstraintsPanel: React.FC<ConstraintsPanelProps> = ({
   );
 
   return (
-    <>
+    // No box of its own: the blocks lay out as the panel's children.
+    <Box ref={listsRef} sx={{ display: "contents" }}>
       {renderBlock(t("dimensions_section"), dimensions, t("dimensions_empty"))}
       {renderBlock(
         t("geometric_constraints_section"),
         geometrics,
         t("constraints_empty"),
       )}
-    </>
+    </Box>
   );
 };
 

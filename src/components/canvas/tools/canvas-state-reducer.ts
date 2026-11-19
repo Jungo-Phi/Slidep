@@ -1,5 +1,5 @@
 import { Point2, ZERO } from "../../../types/point2";
-import type { CanvasState } from "../../../types/canvas-state";
+import { type CanvasState, selected_ids } from "../../../types/canvas-state";
 import type { MomentBalanceReference } from "../../solver/analysis/force-balance";
 import { moment_balance_hover } from "./moment-balance-picking";
 import { get_hovered_elements_by_rect } from "../picking/get-hover";
@@ -51,7 +51,6 @@ import {
 import { TOOL_STATE_BY_KEY } from "../../../constants/shortcuts";
 import { hit_tolerance, pointer_kind } from "../../../utils/pointer-kind";
 import { tap_second_step } from "./touch-press";
-import { SIMULATION_TOOLS } from "../../../constants/canvas-state-sim-effect";
 import { armed_tool_state } from "./arm-tool";
 import {
   distributed_grab_magnitude,
@@ -303,6 +302,109 @@ function step_back(state: CanvasState): CanvasState {
   }
 }
 
+/**
+ * The pull a drag on `hit` starts, held at the point of it under `worldMousePos`; `null` on a part nothing can pull on.
+ * Read off the mechanism on screen: in simulation the pose being played, from rest the one the run is about to start from.
+ */
+function simulation_grab(
+  hit: HoveredPart,
+  mechanicalElements: MechanicalElement[],
+  worldMousePos: Point2,
+): Omit<Extract<CanvasState, { type: "SimulationDragging" }>, "type"> | null {
+  let simKey: string | null = null;
+  let simElementID: ID | null = null;
+  let bodyRatio: number | undefined = undefined;
+  let gearPerimeter:
+    | { gearID: ID; angleOffset: number; radius: number }
+    | undefined = undefined;
+  let beltPin: Extract<Link, { type: "BeltPin" }> | undefined =
+    undefined;
+  // A closed belt's junction is a point of the belt like any other, so a grab there is a belt-body grab at that arc-length — whether the cursor caught the node holding the junction (the usual case: a join is drawn over the belt) or the belt's own terminal.
+  const junctionBelt = mechanicalElements.find(
+    (e): e is BeltElement =>
+      e.type === "belt" &&
+      e.closed &&
+      (hit.type === "Node"
+        ? e.fixedNodeStartID === hit.id || e.fixedNodeEndID === hit.id
+        : hit.type === "Edge" &&
+          hit.part !== "body" &&
+          e.id === hit.id),
+  );
+  const junctionPin = junctionBelt
+    ? belt_body_grab_pin(
+        junctionBelt,
+        elements_by_id(mechanicalElements),
+        hit.position,
+        GRAB_BELT_KEY,
+      )
+    : null;
+  if (junctionPin && junctionBelt) {
+    simKey = junctionBelt.id;
+    simElementID = junctionBelt.id;
+    beltPin = junctionPin;
+  } else if (hit.type === "GearTooth") {
+    // Grab a gear tooth → rotate the gear: capture the angle offset of the grabbed point relative to the gear angle (held constant).
+    const grabbedGear = get_mechanical_element_from_id(
+      hit.id,
+      mechanicalElements,
+    ) as GearElement;
+    simKey = hit.id;
+    simElementID = hit.id;
+    gearPerimeter = {
+      gearID: hit.id,
+      angleOffset:
+        worldMousePos.sub(grabbedGear.position).angle() -
+        grabbedGear.angle,
+      radius: grabbedGear.radius,
+    };
+  } else if (hit.type === "Node") {
+    simKey = hit.id;
+    simElementID = hit.id;
+  } else if (hit.type === "BeltBody") {
+    // Grab any point of a closed belt → rotate the belt with the point under the cursor: bake a transient BeltPin at the grabbed arc-length (from the live sim geometry).
+    const belt = get_mechanical_element_from_id(
+      hit.id,
+      mechanicalElements,
+    ) as BeltElement;
+    const pin = belt_body_grab_pin(
+      belt,
+      elements_by_id(mechanicalElements),
+      hit.position,
+      GRAB_BELT_KEY,
+    );
+    if (pin) {
+      simKey = hit.id;
+      simElementID = hit.id;
+      beltPin = pin;
+    }
+  } else if (hit.type === "Edge") {
+    simElementID = hit.id;
+    if (hit.part === "start") simKey = `${hit.id}:start`;
+    else if (hit.part === "end") simKey = `${hit.id}:end`;
+    else {
+      // Body grab: pull the beam at the grabbed ratio.
+      const simEdge = get_mechanical_element_from_id(
+        hit.id,
+        mechanicalElements,
+      ) as EdgeElement;
+      simKey = hit.id;
+      bodyRatio = hit.position.parameter_on_segment(
+        simEdge.positionStart,
+        simEdge.positionEnd,
+      );
+    }
+  }
+  return simKey && simElementID
+    ? {
+        grabbedKey: simKey,
+        elementID: simElementID,
+        bodyRatio,
+        gearPerimeter,
+        beltPin,
+      }
+    : null;
+}
+
 export function canvasStateReducer(
   rawState: CanvasState,
   hoveredPart: HoveredPart,
@@ -321,7 +423,6 @@ export function canvasStateReducer(
   redoMechanism: () => void,
   onMouseUpHandler: () => void,
   isSimulating: boolean = false,
-  canSimulationGrab: boolean = false,
   onSimulationGrab: (
     key: string,
     target: Point2,
@@ -365,7 +466,7 @@ export function canvasStateReducer(
         break;
       }
       // Same reasoning as `BeltClosure` just above: handled here so the states below are typed against a target that has an id.
-      // Height/angle only change while editing — a recompile is what makes them take effect, so there is nothing useful to drag mid-simulation.
+      // Height/angle are only edited at rest: the model holds the floor fixed for the run, so a floor moved mid-run would cross the parts instead of pushing them.
       if (hoveredPart.type === "FloorHeight" || hoveredPart.type === "FloorAngle") {
         if (!isSimulating)
           setCanvasState({
@@ -401,6 +502,14 @@ export function canvasStateReducer(
         break;
       }
       switch (state.type) {
+        case "Grabbing":
+          if (hoveredPart.type === "Void") break;
+          setCanvasState({
+            type: "Grabbing",
+            pendingHit: hoveredPart,
+            downPos: worldMousePos,
+          });
+          break;
         case "Selecting":
         case "SelectedElement":
         case "EditingValue":
@@ -432,29 +541,7 @@ export function canvasStateReducer(
             }
             break;
           }
-          // In simulation: no multiple selection, and no Moving* on a click.
-          if (isSimulating) {
-            if (hoveredPart.type === "Void") {
-              setCanvasState({ type: "Selecting" });
-              break;
-            }
-            // A load's value label is editable during simulation too (hot reload): the same priority as the probe and the motor.
-            if (state.type !== "EditingValue" && state.type !== "PlacingValue") {
-              const editing = load_value_editing_state(hoveredPart, loadElements);
-              if (editing) {
-                setCanvasState(editing);
-                break;
-              }
-            }
-            setCanvasState({
-              type: "SelectedElement",
-              elementID: hoveredPart.id,
-              pendingHit: hoveredPart,
-              downPos: worldMousePos,
-            });
-            break;
-          }
-          // Multiple selection, with Shift.
+          // Multiple selection, with Shift — in simulation too: selecting reads the mechanism, it does not move it.
           if (state.type === "SelectedElement" && event.shiftKey) {
             if (hoveredPart.type === "Void") {
               setCanvasState({
@@ -584,6 +671,14 @@ export function canvasStateReducer(
               ),
             );
             break;
+          } else if (isSimulating) {
+            // A selection is not moved in simulation, where a drag pulls on the part instead: the press selects the element alone.
+            setCanvasState({
+              type: "SelectedElement",
+              elementID: hoveredPart.id,
+              pendingHit: hoveredPart,
+              downPos: worldMousePos,
+            });
           } else if (state.elementIDs.includes(hoveredPart.id)) {
             const grabbed = mechanicalElements.find(
               (element) => element.id === hoveredPart.id,
@@ -597,6 +692,7 @@ export function canvasStateReducer(
               grabbedID: hoveredPart.id,
               hasMoved: false,
               grabbedPoint,
+              pivot: state.pivot,
             };
             const held = selection_grabbed_point(moving, mechanicalElements);
             setCanvasState({
@@ -791,6 +887,24 @@ export function canvasStateReducer(
               ),
             );
           break;
+        // Once the drag crosses its threshold, the pull starts — from rest, the simulation with it (see `App`).
+        case "Grabbing": {
+          const hit = state.pendingHit;
+          if (
+            !hit ||
+            !state.downPos ||
+            worldMousePos.distance_to(state.downPos) * viewport.scale <
+              hit_tolerance().DRAG_START
+          )
+            break;
+          const grab = simulation_grab(hit, mechanicalElements, worldMousePos);
+          setCanvasState(
+            grab
+              ? { type: "SimulationDragging", ...grab }
+              : { type: "Grabbing" },
+          );
+          break;
+        }
         case "Selecting":
           if (state.pressSettled || !names_element(hoveredPart)) break;
           const constraint = constraintElements.find(
@@ -822,101 +936,15 @@ export function canvasStateReducer(
               setCanvasState(loadDragging);
               break;
             }
-            // Behind the recording frontier the loop replays snapshots and never consults the grab, so a drag there would pull on nothing.
-            if (!canSimulationGrab) break;
-            let simKey: string | null = null;
-            let simElementID: ID | null = null;
-            let bodyRatio: number | undefined = undefined;
-            let gearPerimeter:
-              | { gearID: ID; angleOffset: number; radius: number }
-              | undefined = undefined;
-            let beltPin: Extract<Link, { type: "BeltPin" }> | undefined =
-              undefined;
-            // A closed belt's junction is a point of the belt like any other, so a grab there is a belt-body grab at that arc-length — whether the cursor caught the node holding the junction (the usual case: a join is drawn over the belt) or the belt's own terminal.
-            const junctionBelt = mechanicalElements.find(
-              (e): e is BeltElement =>
-                e.type === "belt" &&
-                e.closed &&
-                (hit.type === "Node"
-                  ? e.fixedNodeStartID === hit.id || e.fixedNodeEndID === hit.id
-                  : hit.type === "Edge" &&
-                    hit.part !== "body" &&
-                    e.id === hit.id),
-            );
-            const junctionPin = junctionBelt
-              ? belt_body_grab_pin(
-                  junctionBelt,
-                  elements_by_id(mechanicalElements),
-                  hit.position,
-                  GRAB_BELT_KEY,
-                )
-              : null;
-            if (junctionPin && junctionBelt) {
-              simKey = junctionBelt.id;
-              simElementID = junctionBelt.id;
-              beltPin = junctionPin;
-            } else if (hit.type === "GearTooth") {
-              // Grab a gear tooth → rotate the gear: capture the angle offset of the grabbed point relative to the gear angle (held constant).
-              const grabbedGear = get_mechanical_element_from_id(
-                hit.id,
-                mechanicalElements,
-              ) as GearElement;
-              simKey = hit.id;
-              simElementID = hit.id;
-              gearPerimeter = {
-                gearID: hit.id,
-                angleOffset:
-                  worldMousePos.sub(grabbedGear.position).angle() -
-                  grabbedGear.angle,
-                radius: grabbedGear.radius,
-              };
-            } else if (hit.type === "Node") {
-              simKey = hit.id;
-              simElementID = hit.id;
-            } else if (hit.type === "BeltBody") {
-              // Grab any point of a closed belt → rotate the belt with the point under the cursor: bake a transient BeltPin at the grabbed arc-length (from the live sim geometry).
-              const belt = get_mechanical_element_from_id(
-                hit.id,
-                mechanicalElements,
-              ) as BeltElement;
-              const pin = belt_body_grab_pin(
-                belt,
-                elements_by_id(mechanicalElements),
-                hit.position,
-                GRAB_BELT_KEY,
-              );
-              if (pin) {
-                simKey = hit.id;
-                simElementID = hit.id;
-                beltPin = pin;
-              }
-            } else if (hit.type === "Edge") {
-              simElementID = hit.id;
-              if (hit.part === "start") simKey = `${hit.id}:start`;
-              else if (hit.part === "end") simKey = `${hit.id}:end`;
-              else {
-                // Body grab: pull the beam at the grabbed ratio.
-                const simEdge = get_mechanical_element_from_id(
-                  hit.id,
-                  mechanicalElements,
-                ) as EdgeElement;
-                simKey = hit.id;
-                bodyRatio = hit.position.parameter_on_segment(
-                  simEdge.positionStart,
-                  simEdge.positionEnd,
-                );
-              }
-            }
-            if (simKey && simElementID) {
+            // Any other part is pulled on, as the grab tool does at rest: in motion, dragging a part is taking hold of it.
+            // A grounded node is pulled on too: it holds, and the pull it resists is shown.
+            const grab = simulation_grab(hit, mechanicalElements, worldMousePos);
+            if (grab)
               setCanvasState({
                 type: "SimulationDragging",
-                grabbedKey: simKey,
-                elementID: simElementID,
-                bodyRatio,
-                gearPerimeter,
-                beltPin,
+                ...grab,
+                selectedID: state.elementID,
               });
-            }
             break;
           }
           switch (hit.type) {
@@ -1306,8 +1334,12 @@ export function canvasStateReducer(
               ? hoveredPart.position.sub(state.grabOffset).sub(held)
               : screen2world_vec(event.mouseDelta, viewport);
           if (delta.length_squared() < 1e-24) break;
-          if (!state.hasMoved) {
-            setCanvasState({ ...state, hasMoved: true });
+          if (!state.hasMoved || state.pivot) {
+            setCanvasState({
+              ...state,
+              hasMoved: true,
+              pivot: state.pivot?.add(delta),
+            });
           }
           actions.push({
             type: "MoveElements",
@@ -1441,6 +1473,9 @@ export function canvasStateReducer(
           actions.push(...r.actions);
           break;
         }
+        case "Grabbing":
+          if (state.pendingHit) setCanvasState({ type: "Grabbing" });
+          break;
         case "Selecting":
           if (state.pressSettled) {
             setCanvasState({ type: "Selecting" });
@@ -1732,6 +1767,7 @@ export function canvasStateReducer(
           setCanvasState({
             type: "SelectedMultiple",
             elementIDs: state.elementIDs,
+            pivot: state.pivot,
           });
           break;
         case "ErasingMultiple":
@@ -1759,10 +1795,12 @@ export function canvasStateReducer(
           break;
         case "SimulationDragging":
           onSimulationGrabEnd();
-          setCanvasState({
-            type: "SelectedElement",
-            elementID: state.elementID,
-          });
+          // The grab tool only arms at rest: once let go, the selection tool takes over, keeping what it held.
+          setCanvasState(
+            state.selectedID
+              ? { type: "SelectedElement", elementID: state.selectedID }
+              : { type: "Selecting" },
+          );
           break;
       }
       break;
@@ -1778,6 +1816,12 @@ export function canvasStateReducer(
           setCanvasState(step_back(state));
           break;
         case "Delete":
+          // Mid-run, only loads go: they are inputs the run absorbs, whereas the structure is only edited at rest, where the user goes on purpose.
+          if (
+            isSimulating &&
+            !selected_ids(state).every((id) => loadElements.some((load) => load.id === id))
+          )
+            break;
           switch (state.type) {
             case "SelectedElement":
               actions.push(
@@ -1818,7 +1862,7 @@ export function canvasStateReducer(
         default: {
           // A Ctrl combination belongs to the browser or the clipboard: Ctrl+C must not arm the damper.
           if (event.ctrlKey) {
-            if (event.key.toLowerCase() === "a" && !isSimulating)
+            if (event.key.toLowerCase() === "a")
               setCanvasState(
                 multiple_selection_state(
                   mechanicalElements.map((element) => element.id),
@@ -1828,7 +1872,9 @@ export function canvasStateReducer(
             break;
           }
           const toolState = TOOL_STATE_BY_KEY[event.key.toLowerCase()];
-          if (toolState && (!isSimulating || SIMULATION_TOOLS.has(toolState)))
+          // The grab tool only arms at rest: in motion, the selection tool pulls on a part itself.
+          if (toolState === "Grabbing" && isSimulating) break;
+          if (toolState)
             setCanvasState(
               armed_tool_state(
                 toolState,

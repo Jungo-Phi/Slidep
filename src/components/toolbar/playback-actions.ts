@@ -6,15 +6,12 @@ import {
   Mechanism,
   MechanismMetadata,
   SimulationSpeed,
+  is_simulating,
 } from "../../types";
-import {
-  set_sim_clock as setRuntimeState,
-  useSimClockSelector,
-} from "../solver/dynamics/sim-clock";
+import { useSimClockSelector } from "../solver/dynamics/sim-clock";
 import {
   CLOCK_MIRROR_MS,
   shown_parameters,
-  simulationResetPatch,
 } from "../solver/recording/use-simulation-playback";
 import { apply_parameter_snapshot_to_mechanism } from "../solver/dynamics/simulation-engine";
 
@@ -77,7 +74,7 @@ export const usePhysicsSwitches = (
   ];
 };
 
-/** The modes a menu offers: statics is left out until it exists. */
+/** The modes the selector offers, rest first. */
 export const RUN_MODES: {
   mode: AppMode;
   labelKey: StringKey;
@@ -85,10 +82,10 @@ export const RUN_MODES: {
   tooltipKey: StringKey;
 }[] = [
   {
-    mode: "edition",
-    labelKey: "mode_edition",
-    shortKey: "mode_edition_short",
-    tooltipKey: "mode_edition_tooltip",
+    mode: "static",
+    labelKey: "mode_static",
+    shortKey: "mode_static_short",
+    tooltipKey: "mode_static_tooltip",
   },
   {
     mode: "kinematic",
@@ -107,7 +104,10 @@ export const RUN_MODES: {
 /** Simulation speed steps, slowest to fastest. */
 export const SPEEDS: SimulationSpeed[] = [0.1, 0.25, 0.5, 1, 2, 4, 10];
 
-/** Switches the app to `newMode`, with the simulation reset that entering it calls for. */
+/**
+ * Switches the app to `newMode` and remembers it as the mechanism's last run mode.
+ * `setAppMode` is `useSimulationPlayback`'s `changeMode`, which sets the clock along with the mode.
+ */
 export function change_app_mode(
   newMode: AppMode,
   setAppMode: (mode: AppMode) => void,
@@ -115,13 +115,7 @@ export function change_app_mode(
   updateMetadata: (metadata: MechanismMetadata, touch?: boolean) => void,
 ): void {
   setAppMode(newMode);
-  // Same tick as `setAppMode`, not left to the hook's own effect: switching directly between kinematic and dynamic (no edition in between) otherwise leaves a render where `appMode` already reads the new mode but `runtimeState.simulationSnapshots` still holds the other mode's snapshot shape — see `simulationResetPatch`.
-  setRuntimeState((prev) => ({
-    ...prev,
-    ...simulationResetPatch(newMode, mechanism),
-    isPlaying: false,
-  }));
-  if (newMode !== "edition")
+  if (is_simulating(newMode))
     // Remembering the last mode is a preference, not a content edit — it must not bump `modifiedAt` and surface the mechanism as "recently modified" in the gallery just for having been tried in simulation.
     updateMetadata({ ...mechanism.metadata, lastSimulationMode: newMode }, false);
 }

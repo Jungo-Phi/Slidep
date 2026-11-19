@@ -206,7 +206,7 @@ export const ElementProperties: React.FC<ElementPropertiesProps> = ({
       | undefined) ?? el;
 
   // Under a simulation the geometry is the pose on screen, read rather than set.
-  const live = appMode !== "edition";
+  const live = appMode !== "static";
   const geometry = live ? shown_as(element) : element;
 
   // A spring with no rest length of its own takes the drawn one, and follows it.

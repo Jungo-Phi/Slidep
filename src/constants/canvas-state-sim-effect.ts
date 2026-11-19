@@ -1,18 +1,9 @@
 import { CanvasStateType } from "../types";
-import { ToolStateType } from "./shortcuts";
-
-/** The tools that can be armed while a simulation runs: every other one is greyed out in the palette and deaf to its shortcut. */
-export const SIMULATION_TOOLS: ReadonlySet<ToolStateType> = new Set<ToolStateType>([
-  "Selecting",
-  "PlacingForceStart",
-  "PlacingMomentStart",
-  "PlacingProbe",
-  "Measuring",
-]);
 
 /**
  * What entering a canvas state does to a running simulation, whichever route led there (palette, shortcut, drag, click on a value).
- * - `"exit"`: back to edition, for gestures that edit the structure.
+ * Every tool can be armed during a run: one that edits the structure brings the mechanism back to rest as soon as it is armed.
+ * - `"exit"`: back to rest, for gestures that edit the structure.
  * - `"pause"`: stays in simulation but holds the mechanism still, so the gesture does not chase a moving target.
  * - `"none"`: the run goes on.
  */
@@ -24,6 +15,7 @@ export const CANVAS_STATE_SIM_EFFECT: Record<CanvasStateType, SimEffect> = {
   SelectingMultiple: "none",
   SelectedMultiple: "none",
   SimulationDragging: "none",
+  Grabbing: "none",
   PlacingProbe: "none",
   PlacingProbeMetrics: "none",
   PickingMomentBalanceNode: "none",

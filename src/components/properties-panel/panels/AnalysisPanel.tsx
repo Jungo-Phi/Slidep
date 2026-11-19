@@ -112,7 +112,8 @@ import { Link } from "../../../types";
 import { undriven_motors } from "../../solver/analysis/motion-modes";
 import { ChainAnalysis, useDofAnalysis } from "../useDofAnalysis";
 import { structure_references } from "../../solver/recording/use-simulation-playback";
-import { ddl_status } from "../ddl-status";
+import { ddl_status, type DdlStatus } from "../ddl-status";
+import { report_hint_situation, resolve_hint } from "../../hints/hints";
 import { AnimatedMode, useModeAnimation } from "../useModeAnimation";
 import {
   ANGULAR_VELOCITY,
@@ -197,6 +198,8 @@ interface AnalysisPanelProps {
   setMomentBalanceReferenceHovered: (hovered: boolean) => void;
   /** See `App`'s own `setFocusedOverlay`. */
   setFocusedOverlay: (overlay: FocusedOverlay) => void;
+  /** Opens the elements tab, where a term clicked in the force balance is read. */
+  showElementPage: () => void;
   /** The mechanism's own readings over the whole run — energy balance, most stressed beam — shown after the degrees of freedom, ahead of the force balance. */
   runSummary?: React.ReactNode;
 }
@@ -301,6 +304,40 @@ const MotorSpeed: React.FC<{
   );
 };
 
+/** A chain card's first row: the DOF figure and the verdict on it. */
+const ChainHeadline: React.FC<{ mobility: number; status: DdlStatus }> = ({
+  mobility,
+  status,
+}) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1 }}>
+    <Typography variant="body1" fontWeight={700} color="primary" sx={{ flex: 1 }}>
+      {t("ddl_abbrev")} = {mobility}
+    </Typography>
+
+    {/* The verdict is a couple of words; the sentence behind it waits behind the mark rather than crowding a row meant to be read at a glance. */}
+    <Typography
+      variant="body2"
+      fontWeight={600}
+      color={status.color}
+      noWrap
+      sx={{ maxWidth: "75%" }}
+    >
+      {status.label}
+    </Typography>
+    {status.hint && (
+      <Tooltip title={status.hint}>
+        <InfoOutlined
+          sx={{
+            fontSize: 16,
+            color: "text.disabled",
+            "&:hover": { color: "text.secondary" },
+          }}
+        />
+      </Tooltip>
+    )}
+  </Box>
+);
+
 /** One chain's block: its mobility headline, its motors, and its redundancies. */
 const ChainCardView: React.FC<{
   analysis: ChainAnalysis;
@@ -367,6 +404,8 @@ const ChainCardView: React.FC<{
 
   return (
     <Box
+      // A rigid chain is what the DDL hint points at: the card that says why nothing moves.
+      data-hint-anchor={mobility.mobility === 0 ? "ddl" : undefined}
       // Pointing at a chain lights it on the canvas; leaving lets the whole mechanism come back.
       onMouseEnter={() => {
         setHovered(true);
@@ -386,39 +425,7 @@ const ChainCardView: React.FC<{
         backgroundColor: hovered ? "background.hover" : "background.sunken",
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1 }}>
-        <Typography
-          variant="body1"
-          fontWeight={700}
-          color="primary"
-          sx={{ flex: 1 }}
-        >
-          {t("ddl_abbrev")} = {mobility.mobility}
-        </Typography>
-
-        {/* The verdict is a couple of words; the sentence behind it waits behind the
-            mark rather than crowding a row meant to be read at a glance. */}
-        <Typography
-          variant="body2"
-          fontWeight={600}
-          color={status.color}
-          noWrap
-          sx={{ maxWidth: "75%" }}
-        >
-          {status.label}
-        </Typography>
-        {status.hint && (
-          <Tooltip title={status.hint}>
-            <InfoOutlined
-              sx={{
-                fontSize: 16,
-                color: "text.disabled",
-                "&:hover": { color: "text.secondary" },
-              }}
-            />
-          </Tooltip>
-        )}
-      </Box>
+      <ChainHeadline mobility={mobility.mobility} status={status} />
 
       {/* One row per mode: pointing at it swings the mechanism along that freedom. */}
       {(modes.length > 0 || idleMotors.length > 0) && (
@@ -797,6 +804,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   setMomentBalanceReference,
   setMomentBalanceReferenceHovered,
   setFocusedOverlay,
+  showElementPage,
   runSummary,
 }) => {
   const { palette } = useTheme();
@@ -938,7 +946,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     t(
       appMode === "kinematic" && metric_needs_dynamics(metric)
         ? "chart_not_in_kinematic"
-        : appMode === "edition"
+        : appMode === "static"
           ? "chart_run_simulation"
           : "chart_waiting",
     );
@@ -975,6 +983,26 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     ],
   );
   const analysis = useDofAnalysis(analysedMechanism, runtimeState.isPlaying, references);
+
+  // A run on a rigid structure is where the mobility card answers the question the user is asking: why nothing moves.
+  const totalMobility = analysis.chains.reduce(
+    (sum, chain) => sum + chain.mobility.mobility,
+    0,
+  );
+  const rigid =
+    analysis.ready && mechanism.mechanicalElements.length > 0 && totalMobility === 0;
+  const simulating = appMode !== "static";
+  React.useEffect(() => {
+    report_hint_situation("ddl", simulating && rigid);
+  }, [simulating, rigid]);
+  React.useEffect(() => () => report_hint_situation("ddl", false), []);
+  // The hint is done once a structure seen rigid in a run is given some mobility: a mechanism that was never stuck has taught nothing about the card.
+  const rigidRunSeenRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!analysis.ready) return;
+    if (simulating && rigid) rigidRunSeenRef.current = true;
+    else if (rigidRunSeenRef.current && totalMobility !== 0) resolve_hint("ddl");
+  }, [analysis.ready, simulating, rigid, totalMobility]);
 
   /** The mode being pointed at, if any. */
   const [animated, setAnimated] = React.useState<AnimatedMode>(null);
@@ -1142,9 +1170,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   );
 
   // A term clicked selects the very thing pointing at it already lights up — a load through the ordinary element selection, exactly as clicking its own arrow on the canvas does; a weight or support reaction through `focusedOverlay`, the same register `onSelectOverlay` reports into from a canvas click.
-  // The grab is a passing interaction rather than something to select: its row answers to a hover only.
+  // Either way the elements tab opens on it, as it does for a click on the canvas.
+  // The grab is selected on the canvas alone, as a click on its arrow does: it has no page to open.
   const handleClickBalanceTerm = (term: BalanceTerm) => {
-    if (term.kind === "grab") return;
+    if (term.kind === "grab") {
+      setFocusedOverlay({ elementID: term.elementID, kind: "grab" });
+      return;
+    }
     if (term.kind === "load")
       setCanvasState({ type: "SelectedElement", elementID: term.elementID });
     else
@@ -1153,6 +1185,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         kind: term.kind === "weight" ? "weight" : "reaction-support",
         which: term.kind === "support" ? "node" : undefined,
       });
+    showElementPage();
   };
 
   return (
@@ -1188,9 +1221,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             ))}
             {/* Only once measured: an empty list before the first pass means "not yet", which is not the same statement as "nothing moves". */}
             {analysis.ready && analysis.chains.length === 0 && (
-              <Typography variant="body2" color="text.disabled" sx={{ p: 1 }}>
-                {t("ddl_rigid_zero")}
-              </Typography>
+              // Read as an anchored beam reads: nothing here moves, so the mechanism is a rigid structure.
+              <Box
+                data-hint-anchor="ddl"
+                sx={{ py: 1, borderRadius: 1, backgroundColor: "background.sunken" }}
+              >
+                <ChainHeadline mobility={0} status={ddl_status(0, 0, appMode)} />
+              </Box>
             )}
           </Box>
         </CollapsibleSection>
@@ -1465,7 +1502,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                                 }
                               : undefined
                           }
-                          onSeek={appMode !== "edition" ? seekTime : undefined}
+                          onSeek={appMode !== "static" ? seekTime : undefined}
                         />
                       </Box>
                     );
@@ -1532,7 +1569,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       unitFactor={unit.factor}
                       showZero={metric_shows_zero(metric)}
                       emptyMessage={chart_empty_message(metric)}
-                      onSeek={appMode !== "edition" ? seekTime : undefined}
+                      onSeek={appMode !== "static" ? seekTime : undefined}
                     />
                     <Box
                       sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}
@@ -1560,12 +1597,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                           onMouseLeave={() =>
                             setHoveredPart({ type: "Void", position: ZERO })
                           }
-                          onClick={() =>
+                          // Opens the element's page, as a balance term clicked does.
+                          onClick={() => {
                             setCanvasState({
                               type: "SelectedElement",
                               elementID: el.id,
-                            })
-                          }
+                            });
+                            showElementPage();
+                          }}
                           sx={{ height: 20 }}
                         />
                       ))}

@@ -15,7 +15,7 @@ interface StructureOnlyProps {
 }
 
 /**
- * Greys out its children while a simulation runs, if what they emit is a structure edit — one that would exit to edition and lose the recording.
+ * Greys out its children while a simulation runs, if what they emit is a structure edit — one that would bring the mechanism back to rest and cut the recording off.
  *
  * The panel itself is what teaches which quantities can change mid-run: a live mass next to a greyed bar length says "this one, not that one" without any badge or text.
  */

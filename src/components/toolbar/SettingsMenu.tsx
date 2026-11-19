@@ -19,6 +19,7 @@ import {
   GridOff,
   GridOn,
   LightMode,
+  RestartAlt,
   Settings,
   SettingsBrightness,
   Visibility,
@@ -39,12 +40,16 @@ import {
 } from "../../utils/snap-corridor";
 import NumberInput from "../properties-panel/components/NumberInput";
 import { ANGLE, rad_to_deg } from "../../utils/quantity-format";
+import { HINT_ORDER, reset_hints, usePendingHints } from "../hints/hints";
 
 /** A theme family is named by its id; only the ones with a translation read differently. */
 const theme_family_label = (name: string): string => {
   const key = `theme_family_${name.toLowerCase()}`;
   return is_string_key(key) ? t(key) : name;
 };
+
+/** Marks the rows that preview a theme: the pointer anywhere else in the menu drops the preview. */
+const THEME_PREVIEW_ZONE = "data-theme-preview";
 
 /**
  * The ambience the whole app is in, whichever family it wears — the choice is global, as it is in the system it can defer to, and not a property of each family.
@@ -95,6 +100,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   previewLater,
 }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const allHintsPending = usePendingHints().length === HINT_ORDER.length;
   const popup = useNonModalPopup(!!anchorEl, anchorEl, () => {
     previewLater(null);
     setAnchorEl(null);
@@ -127,8 +133,14 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         open={!!anchorEl}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
-        // Leaving the list — for another setting or out of the menu entirely — drops the preview, armed or showing, and restores the chosen theme.
-        MenuListProps={{ onMouseLeave: () => previewLater(null) }}
+        // Leaving the theme rows — for another setting or out of the menu entirely — drops the preview, armed or showing, and restores the chosen theme.
+        MenuListProps={{
+          onMouseOver: (event) => {
+            const target = event.target as Element;
+            if (!target.closest(`[${THEME_PREVIEW_ZONE}]`)) previewLater(null);
+          },
+          onMouseLeave: () => previewLater(null),
+        }}
       >
         <MenuItem disableRipple onClick={() => setShowGrid(!showGrid)}>
           <FormControlLabel
@@ -312,6 +324,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
 
         <Divider />
         <Box
+          {...{ [THEME_PREVIEW_ZONE]: true }}
           sx={{
             display: "flex",
             alignItems: "center",
@@ -362,6 +375,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
           return (
             <MenuItem
               key={family.name}
+              {...{ [THEME_PREVIEW_ZONE]: true }}
               selected={family.name === themeChoice.family}
               onClick={() => changeTheme(family.name, themeChoice.mode)}
               onMouseEnter={() => previewLater(resolved)}
@@ -378,6 +392,14 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         <Divider />
         <MenuItem disabled sx={{ fontSize: "0.85rem" }}>
           {t("element_style")}
+        </MenuItem>
+        <Divider />
+        {/* Greyed while every hint is still to come: there is nothing to bring back, and the change of state is what says the reset was taken. */}
+        <MenuItem disabled={allHintsPending} onClick={reset_hints}>
+          <Box sx={{ display: "flex", mr: 1 }}>
+            <RestartAlt fontSize="small" />
+          </Box>
+          <Typography variant="body1">{t("reset_hints")}</Typography>
         </MenuItem>
       </Menu>
     </>

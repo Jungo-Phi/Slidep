@@ -6,10 +6,9 @@ import { UnionElement } from "../../types";
  *
  * Selecting an element from *inside* the panel is an explicit "tell me more about this one" gesture, so it always drills down to the tab that hosts what the card names — elements for a mechanical element or a load, constraints for a constraint — whatever panel the card itself sits in (analysis, connections, materials…).
  *
- * That is deliberately not the same rule as selecting on the canvas: in simulation, a canvas drag takes hold of an element and must leave the active tab alone, only a click without drag opening its tab (see `handleCanvasTap` in App.tsx).
- * Keying the behaviour on where the selection came from — rather than on which card was clicked — is what keeps the two apart without special cases scattered through the panels.
+ * A selection alone does not always move the tab — not on a phone in a simulation (see `handlePhoneCanvasTap` in App.tsx) — so the panel asks for the tab itself.
  *
- * Provided once by PropertiesPanel; ElementDisplay consumes it.
+ * Provided once by PropertiesPanel; ElementDisplay and the materials library consume it.
  * Undefined outside a provider, in which case a click only selects.
  */
 export const ElementNavigationContext = React.createContext<

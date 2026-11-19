@@ -37,6 +37,7 @@ export interface DraggedTerminal {
 // Define the possible types of canvas states
 export type CanvasStateType =
   | "Selecting"
+  | "Grabbing"
   | "SelectedElement"
   | "MovingNode"
   | "MovingEdgeStartPoint"
@@ -115,6 +116,16 @@ export type CanvasState =
       type: "Selecting"; // Selection tool active
       /** The press still held already decided the selection, so its release must not act on what lies under the cursor. */
       pressSettled?: true;
+    }
+  /**
+   * The grab tool, at rest only: a drag on a part sets the mechanism moving and pulls on it, the selection tool taking over once let go.
+   * A click without a drag does nothing: reading an element is the selection tool's business.
+   */
+  | {
+      type: "Grabbing";
+      /** The part pressed, and where: the grab starts once the drag crosses its threshold. */
+      pendingHit?: HoveredPart;
+      downPos?: WorldPoint;
     }
   | {
       type: "SelectingMultiple";
@@ -207,6 +218,8 @@ export type CanvasState =
       grabbedPoint?: "position" | "start" | "end";
       /** From that point to the cursor at the press, kept for the whole drag so the selection does not jump under the cursor. */
       grabOffset?: WorldPoint;
+      /** The selection's own pivot, carried along with it; unset for the selection's default. */
+      pivot?: WorldPoint;
     }
   | { type: "Erasing" }
   | { type: "ErasingMultiple"; startPos: WorldPoint; hoveredElementIDs: ID[] }
@@ -309,6 +322,8 @@ export type CanvasState =
       bodyRatio?: number;
       gearPerimeter?: { gearID: ID; angleOffset: number; radius: number };
       beltPin?: Extract<Link, { type: "BeltPin" }>;
+      /** The element the selection tool held when its drag became a pull: let go, it stays selected. */
+      selectedID?: ID;
     }
   /** Opened on a click (no drag) on a floor handle — see `DraggingFloorHeight`/
    * `DraggingFloorAngle`.

@@ -255,7 +255,7 @@ export const PhoneQuickBar: React.FC<PhoneQuickBarProps> = ({
           canvasState={canvasState}
           setCanvasState={setCanvasState}
           mechanism={mechanism}
-          appMode="edition"
+          appMode="static"
         />
       ),
     );

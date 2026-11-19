@@ -176,6 +176,7 @@ export function aims_until_lift(
     case "PlacingValue":
     case "EditingValue":
     case "SimulationDragging":
+    case "Grabbing":
     case "PlacingProbeMetrics":
       return false;
     default: {

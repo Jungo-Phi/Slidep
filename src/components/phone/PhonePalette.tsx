@@ -7,7 +7,6 @@ import {
   PaletteElement,
 } from "../element-palette/edition-palette";
 import { palette_click_state } from "../element-palette/palette-click";
-import { SIMULATION_TOOLS } from "../../constants/canvas-state-sim-effect";
 import {
   PHONE_LAYOUT,
   PHONE_QUICK_TOOLS,
@@ -35,7 +34,7 @@ export const PhoneToolButton: React.FC<PhoneToolButtonProps> = ({
   appMode,
   onPicked,
 }) => {
-  const simulating = appMode !== "edition";
+  const simulating = appMode !== "static";
   const highlighted = element.hilightRule(canvasState, mechanism);
   const color =
     simulating && element.simHilightColor
@@ -96,7 +95,7 @@ export const PhonePalette: React.FC<PhonePaletteProps> = ({
   appMode,
   onPicked,
 }) => {
-  const simulating = appMode !== "edition";
+  const simulating = appMode !== "static";
   return (
     // The groups flow side by side rather than one per row: most hold a handful of tools, and a row each would leave the sheet mostly empty.
     <Box
@@ -112,10 +111,10 @@ export const PhonePalette: React.FC<PhonePaletteProps> = ({
       }}
     >
       {edition_palette().map((group) => {
-        // In edition the quick-access bar always holds the selection tool and the eraser; in simulation it gives way to the transport, and the selection tool comes back here.
+        // At rest the quick-access bar always holds the selection, grab and eraser tools; in simulation it gives way to the transport, and they come back here — all but the grab, which exists at rest only.
         const elements = group.elements.filter((element) =>
           simulating
-            ? SIMULATION_TOOLS.has(element.goToStateType)
+            ? !element.restOnly
             : !PHONE_QUICK_TOOLS.FIXED.includes(element.goToStateType),
         );
         if (elements.length === 0) return null;

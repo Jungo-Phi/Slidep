@@ -41,6 +41,13 @@ import { EXAMPLE_MECHANISMS } from "../../constants/example-mechanisms";
 import MechanismCard from "./MechanismCard";
 import { INLINE_INPUT_SX } from "./inline-input-sx";
 import { usePhoneLayout } from "../phone/use-phone-layout";
+import { OverlayScrollArea } from "../properties-panel/components/OverlayScrollArea";
+import {
+  CardSpot,
+  GALLERY_KEYS,
+  GalleryKey,
+  card_neighbour,
+} from "./gallery-keyboard";
 
 interface MechanismsGalleryProps {
   open: boolean;
@@ -60,7 +67,10 @@ interface MechanismsGalleryProps {
   onRestoreExamples: () => void;
   onUpdateMetadata: (
     createdAtId: number,
-    metadata: Pick<MechanismMetadata, "name" | "description" | "author" | "tags">,
+    metadata: Pick<
+      MechanismMetadata,
+      "name" | "description" | "author" | "tags"
+    >,
   ) => void;
   /** The mechanism open in the app, marked among the others. */
   currentId: number;
@@ -74,12 +84,29 @@ const ICON_ONLY_ACTIONS_MAX_WIDTH = 1200;
 // Height of the "New mechanism" card when the library is empty, with no existing card to copy the height from.
 const NEW_CARD_FALLBACK_HEIGHT = 300;
 
+/** The roving key of the "New mechanism" card; a mechanism's is its `createdAt`. */
+const NEW_CARD_KEY = "new";
+
+/** The cards of the grid as the arrows see them, read off the cards on screen. */
+function card_spots(
+  grid: HTMLElement,
+): (CardSpot & { element: HTMLElement })[] {
+  return Array.from(
+    grid.querySelectorAll<HTMLElement>("[data-gallery-card]"),
+  ).map((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      element,
+      column: Number(element.dataset.column),
+      row: Number(element.dataset.row),
+      middle: (rect.top + rect.bottom) / 2,
+    };
+  });
+}
+
 /** Lowercased and stripped of diacritics, so the search treats "moteur" and "môteur" alike. */
 const fold = (text: string) =>
-  text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+  text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /** One of the library's own actions, in the header. */
 const LibraryAction: React.FC<{
@@ -90,7 +117,14 @@ const LibraryAction: React.FC<{
   onClick: () => void;
   /** Shows the icon alone, the label heading the tooltip instead. */
   iconOnly?: boolean;
-}> = ({ icon, label, tooltip, disabled = false, onClick, iconOnly = false }) => (
+}> = ({
+  icon,
+  label,
+  tooltip,
+  disabled = false,
+  onClick,
+  iconOnly = false,
+}) => (
   <Tooltip
     title={
       iconOnly ? (
@@ -160,7 +194,7 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   // The typed value keeps the field itself responsive; filtering, sorting and the resulting card shuffle across columns run on this one instead, a beat behind, so a fast typist never waits on a render of the whole grid between keystrokes.
   const deferredSearch = useDeferredValue(search);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const searching = deferredSearch.trim().length > 0;
 
   // Cleared on every fresh opening rather than on close, which covers every way the dialog closes (button, backdrop, Escape, loading a mechanism) from a single spot.
@@ -168,11 +202,18 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
   const [wasOpen, setWasOpen] = useState(open);
   // The mechanism whose details are raised, on a phone.
   const [detailsId, setDetailsId] = useState<number | null>(null);
+  /**
+   * The card Tab stops on in the grid, the one the arrows last reached: the grid is one stop for Tab, the arrows moving between its cards.
+   * Back on "New mechanism" whenever the focus leaves the grid, so that entering it always starts there.
+   */
+  const [rovingKey, setRovingKey] = useState(NEW_CARD_KEY);
+  const gridRef = useRef<HTMLDivElement>(null);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
       setSearch("");
       setDetailsId(null);
+      setRovingKey(NEW_CARD_KEY);
     }
   }
 
@@ -245,6 +286,68 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
         record.metadata.tags.some((tag) => fold(tag).includes(needle))
       );
     });
+
+  // A key no card holds any more — a search hides "New mechanism", a card is deleted — falls back to the first card shown.
+  const shownKeys = [
+    ...(searching ? [] : [NEW_CARD_KEY]),
+    ...sortedMechanismRecords.map((record) =>
+      String(record.metadata.createdAt),
+    ),
+  ];
+  const tabKey = shownKeys.includes(rovingKey) ? rovingKey : shownKeys[0];
+
+  // A card deleted from the keyboard took the focus with it: it goes on to the next card in reading order, the previous one for the last.
+  const refocusRef = useRef<{ deleted: number; next: string | null } | null>(
+    null,
+  );
+  const handleDelete = (createdAtId: number) => {
+    const key = String(createdAtId);
+    const keyAt = (index: number) => shownKeys[index] ?? null;
+    const index = shownKeys.indexOf(key);
+    const card = contentRef.current?.querySelector(
+      `[data-mechanism-id="${createdAtId}"]`,
+    );
+    refocusRef.current = card?.contains(document.activeElement)
+      ? { deleted: createdAtId, next: keyAt(index + 1) ?? keyAt(index - 1) }
+      : null;
+    onDelete(createdAtId);
+  };
+  useEffect(() => {
+    const pending = refocusRef.current;
+    if (!pending || !gridRef.current) return;
+    // Not deleted yet, or declined: the card is still there, and so is the focus.
+    if (presentIds.has(pending.deleted)) return;
+    refocusRef.current = null;
+    gridRef.current
+      .querySelector<HTMLElement>(`[data-gallery-key="${pending.next}"]`)
+      ?.focus({ preventScroll: true });
+    // `presentIds` is rebuilt from `mechanismRecords` at every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mechanismRecords]);
+
+  const focusGrid = () =>
+    gridRef.current
+      ?.querySelector<HTMLElement>(`[data-gallery-key="${tabKey}"]`)
+      ?.focus({ preventScroll: true });
+
+  const handleGridKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (!GALLERY_KEYS.has(event.key)) return;
+    const target = event.target as HTMLElement;
+    // A field keeps its arrows for its own text.
+    if (target.closest("input, textarea")) return;
+    const card = target.closest<HTMLElement>("[data-gallery-card]");
+    if (!card || !gridRef.current) return;
+    const spots = card_spots(gridRef.current);
+    const from = spots.find((spot) => spot.element === card);
+    if (!from) return;
+    event.preventDefault();
+    const to = card_neighbour(spots, from, event.key as GalleryKey);
+    // The browser's own scroll to a focused element is a jump, and once done leaves the smooth one nothing to do: the grid's own scroll is the only one.
+    if (to) to.element.focus({ preventScroll: true });
+    // Above the first row stands the search, which leads down into the grid.
+    else if (event.key === "ArrowUp" && target === card)
+      searchInputRef.current?.focus();
+  };
 
   // Number of columns actually shown at the current breakpoint, so cards can be distributed ourselves (see below) instead of letting CSS `columns` do it column by column, which would break reading order.
   const theme = useTheme();
@@ -371,6 +474,11 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
           placeholder={t("search_placeholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowDown") return;
+            event.preventDefault();
+            focusGrid();
+          }}
           inputRef={searchInputRef}
           slotProps={{
             input: {
@@ -477,10 +585,26 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
             </>
           ) : (
             <>
+              {/* Focusable, for its tooltip to be read from the keyboard too. */}
               <Tooltip title={t("storage_notice")}>
-                <InfoOutlined
-                  sx={{ fontSize: 20, color: "text.secondary", mr: 3 }}
-                />
+                <Box
+                  component="span"
+                  tabIndex={0}
+                  aria-label={t("storage_notice")}
+                  sx={{
+                    display: "inline-flex",
+                    p: 0.5,
+                    mr: 2.5,
+                    borderRadius: 1,
+                    color: "text.secondary",
+                    "&:focus-visible": {
+                      outline: "none",
+                      backgroundColor: "action.hover",
+                    },
+                  }}
+                >
+                  <InfoOutlined sx={{ fontSize: 20 }} />
+                </Box>
               </Tooltip>
               <LibraryAction
                 iconOnly={iconOnlyActions}
@@ -524,108 +648,175 @@ const MechanismsGalleryView: React.FC<MechanismsGalleryProps> = ({
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: 2 }} ref={contentRef}>
-        {searching && sortedMechanismRecords.length === 0 ? (
-          <Box
-            sx={{
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Typography color="text.secondary">{t("no_results")}</Typography>
-          </Box>
-        ) : (
-          <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
-            {cardColumns.map((column, columnIndex) => (
+      {/* The same floating scrollbar as the panels', which fades while the cards are only being looked at. */}
+      <DialogContent
+        dividers
+        sx={{
+          p: 0,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <OverlayScrollArea sx={{ flex: 1 }} scrollerRef={contentRef}>
+          <Box sx={{ p: 2 }}>
+            {searching && sortedMechanismRecords.length === 0 ? (
               <Box
-                key={columnIndex}
                 sx={{
+                  py: 20,
                   display: "flex",
-                  flexDirection: "column",
-                  gap: 1.5,
-                  flex: 1,
-                  minWidth: 0,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                {/* The "New mechanism" card: hidden during a search, since it is not one of the results.
-                    It always takes the first column. */}
-                {!searching && columnIndex === 0 && (
+                <Typography color="text.secondary">
+                  {t("no_results")}
+                </Typography>
+              </Box>
+            ) : (
+              <Box
+                ref={gridRef}
+                onKeyDown={handleGridKeyDown}
+                onFocus={(event) => {
+                  const card = (
+                    event.target as HTMLElement
+                  ).closest<HTMLElement>("[data-gallery-key]");
+                  if (card?.dataset.galleryKey)
+                    setRovingKey(card.dataset.galleryKey);
+                  // The whole card comes into view, not just the control that took the focus.
+                  card?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                }}
+                onBlur={(event) => {
+                  if (
+                    !event.currentTarget.contains(
+                      event.relatedTarget as Node | null,
+                    )
+                  )
+                    setRovingKey(NEW_CARD_KEY);
+                }}
+                sx={{
+                  display: "flex",
+                  gap: 1.5,
+                  alignItems: "flex-start",
+                  // A card scrolled into view keeps the grid's margin from the edge.
+                  "& [data-gallery-card]": { scrollMarginBlock: 16 },
+                }}
+              >
+                {cardColumns.map((column, columnIndex) => (
                   <Box
-                    onClick={onNew}
+                    key={columnIndex}
                     sx={{
-                      height: newCardHeight,
                       display: "flex",
                       flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer",
-                      border: "2px dashed",
-                      borderColor: "dividers.ground",
-                      borderRadius: 2,
-                      bgcolor: "background.sunken",
-                      transition: "border-color 0.15s, background-color 0.15s",
-                      "&:hover": {
-                        borderColor: "primary.main",
-                        bgcolor: "action.hover",
-                      },
+                      gap: 1.5,
+                      flex: 1,
+                      minWidth: 0,
                     }}
                   >
-                    <AddCircleOutline
-                      sx={{ fontSize: 48, color: "text.secondary", mb: 1 }}
-                    />
-                    <Typography variant="h6" color="text.secondary">
-                      {t("new_mechanism")}
-                    </Typography>
-                  </Box>
-                )}
+                    {/* The "New mechanism" card: hidden during a search, since it is not one of the results.
+                    It always takes the first column. */}
+                    {!searching && columnIndex === 0 && (
+                      <Box
+                        onClick={onNew}
+                        role="button"
+                        tabIndex={tabKey === NEW_CARD_KEY ? 0 : -1}
+                        data-gallery-card=""
+                        data-gallery-key={NEW_CARD_KEY}
+                        data-column={0}
+                        data-row={0}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ")
+                            return;
+                          event.preventDefault();
+                          onNew();
+                        }}
+                        sx={{
+                          height: newCardHeight,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          border: "2px dashed",
+                          borderColor: "dividers.ground",
+                          borderRadius: 2,
+                          bgcolor: "background.sunken",
+                          transition:
+                            "border-color 0.15s, background-color 0.15s",
+                          // The orange border says where the keyboard is, as on the other cards.
+                          "&:focus-visible": { outline: "none" },
+                          "&:hover, &:focus-visible": {
+                            borderColor: "primary.main",
+                            bgcolor: "action.hover",
+                          },
+                        }}
+                      >
+                        <AddCircleOutline
+                          sx={{ fontSize: 48, color: "text.secondary", mb: 1 }}
+                        />
+                        <Typography variant="h6" color="text.secondary">
+                          {t("new_mechanism")}
+                        </Typography>
+                      </Box>
+                    )}
 
-                {column.map((mechanismRecord, rowIndex) => {
-                  const card = (
-                    <MechanismCard
-                      key={mechanismRecord.metadata.createdAt}
-                      mechanismRecord={mechanismRecord}
-                      onLoad={onLoad}
-                      onRename={onRename}
-                      onDelete={onDelete}
-                      onExport={onExport}
-                      onDuplicate={handleDuplicate}
-                      onUpdateTags={onUpdateTags}
-                      allTags={allTags}
-                      startInNameEdit={
-                        !phone &&
-                        mechanismRecord.metadata.createdAt === justDuplicatedId
-                      }
-                      onNameEditStarted={() => setJustDuplicatedId(null)}
-                      compact={phone}
-                      onShowDetails={() =>
-                        setDetailsId(mechanismRecord.metadata.createdAt)
-                      }
-                      isOpen={
-                        phone && mechanismRecord.metadata.createdAt === currentId
-                      }
-                      detailsShown={
-                        !!detailsRecord &&
-                        mechanismRecord.metadata.createdAt === detailsId
-                      }
-                    />
-                  );
-                  // The first element of each column (first row) is measured to size the "New mechanism" card on the smallest one.
-                  if (rowIndex !== 0) return card;
-                  return (
-                    <Box
-                      key={mechanismRecord.metadata.createdAt}
-                      ref={getFirstRowRef(columnIndex)}
-                    >
-                      {card}
-                    </Box>
-                  );
-                })}
+                    {column.map((mechanismRecord, rowIndex) => {
+                      const key = String(mechanismRecord.metadata.createdAt);
+                      // Under "New mechanism", the first column's cards stand a rank lower.
+                      const row =
+                        !searching && columnIndex === 0
+                          ? rowIndex + 1
+                          : rowIndex;
+                      const card = (
+                        <MechanismCard
+                          key={mechanismRecord.metadata.createdAt}
+                          mechanismRecord={mechanismRecord}
+                          tabbable={key === tabKey}
+                          gridPosition={{ column: columnIndex, row }}
+                          onLoad={onLoad}
+                          onRename={onRename}
+                          onDelete={handleDelete}
+                          onExport={onExport}
+                          onDuplicate={handleDuplicate}
+                          onUpdateTags={onUpdateTags}
+                          allTags={allTags}
+                          startInNameEdit={
+                            !phone &&
+                            mechanismRecord.metadata.createdAt ===
+                              justDuplicatedId
+                          }
+                          onNameEditStarted={() => setJustDuplicatedId(null)}
+                          compact={phone}
+                          onShowDetails={() =>
+                            setDetailsId(mechanismRecord.metadata.createdAt)
+                          }
+                          isOpen={
+                            phone &&
+                            mechanismRecord.metadata.createdAt === currentId
+                          }
+                          detailsShown={
+                            !!detailsRecord &&
+                            mechanismRecord.metadata.createdAt === detailsId
+                          }
+                        />
+                      );
+                      // The first element of each column (first row) is measured to size the "New mechanism" card on the smallest one.
+                      if (rowIndex !== 0) return card;
+                      return (
+                        <Box
+                          key={mechanismRecord.metadata.createdAt}
+                          ref={getFirstRowRef(columnIndex)}
+                        >
+                          {card}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                ))}
               </Box>
-            ))}
+            )}
           </Box>
-        )}
+        </OverlayScrollArea>
       </DialogContent>
       {detailsRecord && (
         <MechanismDetailsPanel

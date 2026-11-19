@@ -42,6 +42,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             gap: 0.25,
             ml: -0.5,
             borderRadius: 1,
+            "&:hover, &.Mui-focusVisible": { backgroundColor: "action.hover" },
           }}
         >
           <KeyboardArrowDown

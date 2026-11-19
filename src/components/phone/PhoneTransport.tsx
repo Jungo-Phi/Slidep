@@ -125,6 +125,7 @@ export const PlayFab: React.FC<{ onPlay: () => void }> = ({ onPlay }) => (
   <IconButton
     aria-label={t("play")}
     onClick={onPlay}
+    data-hint-anchor="play"
     sx={{
       position: "absolute",
       left: 12,

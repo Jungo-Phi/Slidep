@@ -43,7 +43,7 @@ import { RedundancySymbol } from "../../solver/analysis/redundancy-symbols";
 import { Point2 } from "../../../types/point2";
 import { get_element_icon } from "../../element-palette/elementIcon";
 import {
-  MeasuredReading,
+  HoveredReading,
   ID,
   ScreenPoint,
   UnionElement,
@@ -1210,6 +1210,7 @@ export function draw_beam(
 /**
  * `coilPitch` is the world length one coil stands for, from `spring_coil_pitch`; `undefined` for a mechanism with no span at all, where the spring is left to be counted against itself.
  * `seamless` names the ends whose stub a weld has already drawn (`edge_stub_length`).
+ * `thin` draws the backing bar and the stubs thinner.
  */
 export function draw_spring(
   ctx: CanvasRenderingContext2D,
@@ -1219,6 +1220,7 @@ export function draw_spring(
   restLength: number | undefined = undefined,
   scale: number = 1,
   seamless: { start?: boolean; end?: boolean } = {},
+  thin: boolean = false,
 ) {
   ctx.save();
   ctx.translate(start.x, start.y);
@@ -1248,6 +1250,7 @@ export function draw_spring(
   const oldStrokeStyle = ctx.strokeStyle;
   const oldFillStyle = ctx.fillStyle;
   const widthChange = ctx.lineWidth - STROKE_WIDTHS.STANDARD;
+  const coilRadius = DIM.SPRING_COIL_RADIUS - (thin ? 1 : 0)
 
   ctx.lineCap = "round";
   ctx.lineWidth = STROKE_WIDTHS.SPIRE + widthChange;
@@ -1255,24 +1258,26 @@ export function draw_spring(
   ctx.globalAlpha *= DIM.SPRING_BACK_COIL_OPACITY;
   for (let i = 1; i <= coilNb - 1; i++) {
     ctx.beginPath();
-    ctx.moveTo(deca(i, 0.25), DIM.SPRING_COIL_RADIUS);
-    ctx.lineTo(deca(i, 0.75), -DIM.SPRING_COIL_RADIUS);
+    ctx.moveTo(deca(i, 0.25), coilRadius);
+    ctx.lineTo(deca(i, 0.75), -coilRadius);
     ctx.stroke();
   }
   ctx.restore();
 
   // Backing bar
-  ctx.lineCap = "square";
+  ctx.lineCap = thin ? "butt" : "square";
   ctx.beginPath();
-  ctx.moveTo(DIM.TAC, 0);
-  ctx.lineTo(length - DIM.TAC, 0);
-  ctx.lineWidth = DIM.SPRING_INNER_WIDTH + widthChange;
+  ctx.moveTo(0, 0);
+  ctx.lineTo(length, 0);
+  ctx.lineWidth = DIM.SPRING_INNER_WIDTH + widthChange - (thin ? 2 : 0);
   ctx.strokeStyle = oldStrokeStyle;
   ctx.stroke();
   ctx.strokeStyle = oldFillStyle;
-  ctx.lineWidth =
-    DIM.SPRING_INNER_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
-  ctx.stroke();
+  if (!thin) {
+    ctx.lineWidth =
+      DIM.SPRING_INNER_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
+    ctx.stroke();
+  }
   ctx.strokeStyle = oldStrokeStyle;
   const stub = edge_stub_length("spring");
   for (const [skip, from, to] of [
@@ -1283,12 +1288,14 @@ export function draw_spring(
     ctx.beginPath();
     ctx.moveTo(from, 0);
     ctx.lineTo(to, 0);
-    ctx.lineWidth = DIM.BEAM_WIDTH + widthChange;
+    ctx.lineWidth = DIM.BEAM_WIDTH + widthChange - (thin ? 2 : 0);
     ctx.strokeStyle = oldStrokeStyle;
     ctx.stroke();
     ctx.strokeStyle = oldFillStyle;
-    ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
-    ctx.stroke();
+    if (!thin) {
+      ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD - widthChange;
+      ctx.stroke();
+    }
     ctx.strokeStyle = oldStrokeStyle;
   }
 
@@ -1297,8 +1304,8 @@ export function draw_spring(
   ctx.lineWidth = STROKE_WIDTHS.SPIRE + widthChange;
   for (let i = 1; i <= coilNb; i++) {
     ctx.beginPath();
-    ctx.moveTo(deca(i, -0.25), -DIM.SPRING_COIL_RADIUS);
-    ctx.lineTo(deca(i, 0.25), DIM.SPRING_COIL_RADIUS);
+    ctx.moveTo(deca(i, -0.25), -coilRadius);
+    ctx.lineTo(deca(i, 0.25), coilRadius);
     ctx.stroke();
   }
   ctx.restore();
@@ -2830,7 +2837,7 @@ export interface OverlayArrow {
  * An overlay reading clicked on the canvas, kept just long enough to re-derive its own value declaratively on every render — never the `OverlayArrow`/`OverlayMoment` object itself, rebuilt from scratch every frame and so unfit to hold onto.
  * The same identity a hover names (`HoveredReading`), so the two are compared field by field and never confused with the element the reading belongs to.
  */
-export type FocusedOverlay = MeasuredReading;
+export type FocusedOverlay = HoveredReading;
 
 /** The grab is drawn in the load's accent, being an action the user applies; every measured reading has its own hue. */
 function overlay_arrow_color(kind: ReadingKind): string {
@@ -2849,29 +2856,41 @@ function overlay_arrow_screen_geometry(
   viewport: ViewportState,
   arrow: OverlayArrow,
 ): { base: ScreenPoint; vector: ScreenPoint; tip: ScreenPoint } | undefined {
-  const base = world2screen(arrow.at, viewport);
-  // A grab is where its spring is, wherever the force it gives points and however small it is.
-  if (arrow.springTo) {
-    const tip = world2screen(arrow.springTo, viewport);
-    return tip.distance_to(base) > 1e-3 ? { base, vector: tip.sub(base), tip } : undefined;
-  }
   const magnitude = arrow.vector.length();
   if (magnitude < 1e-9) return undefined;
+  const base = world2screen(arrow.at, viewport);
   const vector = world2screen_vec(arrow.vector, viewport).with_length(
     overlay_arrow_screen_length(arrow),
   );
   return { base, vector, tip: base.add(vector) };
 }
 
-/** Whether `mouseScreen` sits over `arrow`'s shaft or tip — same tolerance a user-placed force uses in `get-hover.ts`. */
+/** Screen-space ends of a grab's spring, wherever the force it gives points and however small it is; `undefined` for a spring at rest or for any other reading. */
+function grab_spring_screen_geometry(
+  viewport: ViewportState,
+  arrow: OverlayArrow,
+): { base: ScreenPoint; tip: ScreenPoint } | undefined {
+  if (!arrow.springTo) return undefined;
+  const base = world2screen(arrow.at, viewport);
+  const tip = world2screen(arrow.springTo, viewport);
+  return tip.distance_to(base) > 1e-3 ? { base, tip } : undefined;
+}
+
+/**
+ * Whether `mouseScreen` sits over `arrow`'s shaft or tip — same tolerance a user-placed force uses in `get-hover.ts`.
+ * A grab is reached through its spring, and through its force arrow only while that one is drawn (`forceShown`): an arrow nobody sees takes no hover.
+ */
 export function overlay_arrow_hit(
   mouseScreen: ScreenPoint,
   viewport: ViewportState,
   arrow: OverlayArrow,
+  forceShown: boolean = false,
 ): boolean {
+  const spring = grab_spring_screen_geometry(viewport, arrow);
+  if (spring && arrow_hit(mouseScreen, spring.base, spring.tip)) return true;
+  if (arrow.springTo && !forceShown) return false;
   const geom = overlay_arrow_screen_geometry(viewport, arrow);
-  if (!geom) return false;
-  return arrow_hit(mouseScreen, geom.base, geom.tip);
+  return !!geom && arrow_hit(mouseScreen, geom.base, geom.tip);
 }
 
 /**
@@ -2885,12 +2904,15 @@ export function draw_overlay_arrow(
   arrow: OverlayArrow,
   isHovered: boolean = false,
   isSelected: boolean = false,
+  /** A grab's force is drawn whatever the cursor does: it is held, or its value is on screen. */
+  forceShown: boolean = false,
 ) {
-  // A grab is its spring, whose force reads as an arrow only while the cursor is on it.
-  const spring = arrow.springTo ? overlay_arrow_screen_geometry(viewport, arrow) : undefined;
+  // A grab is its spring, whose force reads as an arrow only while it is pointed at, selected or held.
+  const spring = grab_spring_screen_geometry(viewport, arrow);
   if (arrow.springTo && !spring) return;
   const magnitude = arrow.vector.length();
-  const drawsForce = magnitude >= 1e-9 && (!arrow.springTo || isHovered);
+  const drawsForce =
+    magnitude >= 1e-9 && (!arrow.springTo || isHovered || isSelected || forceShown);
   if (!spring && !drawsForce) return;
   const base = world2screen(arrow.at, viewport);
   const screenVec = drawsForce
@@ -2905,11 +2927,11 @@ export function draw_overlay_arrow(
     STROKE_WIDTHS.STANDARD +
     (isSelected ? 1 : 0) +
     (isHovered ? STROKE_WIDTHS.HOVER_GAIN : 0);
+  if (spring) draw_grab_spring(ctx, spring.base, spring.tip);
   if (isSelected) {
     ctx.shadowColor = baseColor;
     ctx.shadowBlur = INTERACTION_SPECS.SELECTION_HALO_SIZE;
   }
-  if (spring) draw_grab_spring(ctx, spring.base, spring.tip);
   if (screenVec)
     draw_force(
       ctx,
@@ -2924,12 +2946,12 @@ export function draw_overlay_arrow(
   ctx.restore();
 }
 
-/** One coil per this many screen pixels of the spring: its length is the whole of what the drawing says, so the coils follow it rather than being counted against a rest length it has none of. */
-const GRAB_COIL_PITCH_PX = 14;
+/** Coils of the grab's spring, whatever its length: stretching it spreads them, as pulling on a real spring does, and never adds any. */
+const GRAB_SPRING_COILS = 6;
 
 /**
- * The spring a grab pulls with, from the grabbed point to the cursor, and a dot where the cursor holds it.
- * Shorter than its own terminals a spring has no coils to draw, and is a line.
+ * The spring a grab pulls with, from the grabbed point to the cursor, with a dot where the cursor holds it.
+ * Shorter than its own terminals a spring has no coils to draw, and is its trunk alone, so the spring grows out of it.
  */
 function draw_grab_spring(
   ctx: CanvasRenderingContext2D,
@@ -2937,19 +2959,24 @@ function draw_grab_spring(
   tip: ScreenPoint,
 ) {
   const draw = () => {
-    if (base.distance_to(tip) > 2 * DIM.TAC) draw_spring(ctx, base, tip, GRAB_COIL_PITCH_PX);
+    const length = base.distance_to(tip);
+    if (length > 2 * DIM.TAC)
+      draw_spring(ctx, base, tip, length / GRAB_SPRING_COILS, undefined, 1, {}, true);
     else {
+      ctx.save();
+      ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD + 2;
+      ctx.lineCap = "butt";
       ctx.beginPath();
       ctx.moveTo(base.x, base.y);
       ctx.lineTo(tip.x, tip.y);
       ctx.stroke();
+      ctx.restore();
     }
+    ctx.beginPath();
+    ctx.arc(tip.x, tip.y, DIM.EDGE_ENDPOINT_RADIUS, 0, TAU);
+    ctx.fill();
   };
-  with_halo(ctx, draw);
   draw();
-  ctx.beginPath();
-  ctx.arc(tip.x, tip.y, DIM.PIVOT_INNER_RADIUS, 0, TAU);
-  ctx.fill();
 }
 
 /**

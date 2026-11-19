@@ -200,8 +200,7 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
   const speed = common_value(
     elements,
     is_motorised,
-    (el) =>
-      alone ? shown(el).motor.speed : Math.abs(shown(el).motor.speed),
+    (el) => (alone ? shown(el).motor.speed : Math.abs(shown(el).motor.speed)),
     ANGULAR_VELOCITY(),
   );
   const beams = elements.filter((el): el is BeamElement => el.type === "beam");
@@ -256,58 +255,6 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
         pb: 0.5,
       }}
     >
-      {(length || radius) && (
-        <StructureOnly
-          actions={[
-            "ChangeEdgeLength",
-            "ChangeDimensionEdgeValue",
-            "ChangeGearRadius",
-          ]}
-        >
-          <Row>
-            {length && (
-              <NumberInput
-                label="L"
-                title={t("length")}
-                kind={LENGTH}
-                value={length.value}
-                mixed={length.mixed}
-                onChange={(newLength) =>
-                  applyActions(
-                    length.elements.flatMap((el) => set_length(el, newLength)),
-                  )
-                }
-                unsigned
-              />
-            )}
-            {radius && (
-              <NumberInput
-                label="R"
-                title={t("radius")}
-                kind={LENGTH}
-                value={radius.value}
-                mixed={radius.mixed}
-                onChange={(newRadius) =>
-                  applyActions(
-                    radius.elements.map((el) => ({
-                      type: "ChangeGearRadius",
-                      id: el.id,
-                      newRadius,
-                      oldRadius: el.radius,
-                      target: new Point2(
-                        el.position.x + newRadius,
-                        el.position.y,
-                      ),
-                      committed: true,
-                    })),
-                  )
-                }
-                unsigned
-              />
-            )}
-          </Row>
-        </StructureOnly>
-      )}
       {mass && (
         <Row>
           <NumberInput
@@ -541,21 +488,78 @@ export const GroupProperties: React.FC<GroupPropertiesProps> = ({
         </Row>
       )}
       {beams.length > 0 && (
-        <MaterialProfileSection
-          elements={beams}
-          shownElements={beams.map((beam) => shown(beam))}
-          materials={materials}
-          profiles={profiles}
-          storedMaterials={storedMaterials}
-          storedProfiles={storedProfiles}
-          // `shownElements` is the whole mechanism on screen when the overview passes it — which is what tells who else shares an entry.
-          allBeams={shownElements.filter(
-            (el): el is BeamElement => el.type === "beam",
-          )}
-          applyActions={applyActions}
-          setHighlight={setHighlight}
-          onSelectBeams={onSelectBeams}
-        />
+        <Row>
+          <Box sx={{mb: 1}}>
+            <MaterialProfileSection
+              elements={beams}
+              shownElements={beams.map((beam) => shown(beam))}
+              materials={materials}
+              profiles={profiles}
+              storedMaterials={storedMaterials}
+              storedProfiles={storedProfiles}
+              // `shownElements` is the whole mechanism on screen when the overview passes it — which is what tells who else shares an entry.
+              allBeams={shownElements.filter(
+                (el): el is BeamElement => el.type === "beam",
+              )}
+              applyActions={applyActions}
+              setHighlight={setHighlight}
+              onSelectBeams={onSelectBeams}
+            />
+          </Box>
+        </Row>
+      )}
+      {/* After the material and profile, as on a single beam's page. */}
+      {(length || radius) && (
+        <StructureOnly
+          actions={[
+            "ChangeEdgeLength",
+            "ChangeDimensionEdgeValue",
+            "ChangeGearRadius",
+          ]}
+        >
+          <Row>
+            {length && (
+              <NumberInput
+                label="L"
+                title={t("length")}
+                kind={LENGTH}
+                value={length.value}
+                mixed={length.mixed}
+                onChange={(newLength) =>
+                  applyActions(
+                    length.elements.flatMap((el) => set_length(el, newLength)),
+                  )
+                }
+                unsigned
+              />
+            )}
+            {radius && (
+              <NumberInput
+                label="R"
+                title={t("radius")}
+                kind={LENGTH}
+                value={radius.value}
+                mixed={radius.mixed}
+                onChange={(newRadius) =>
+                  applyActions(
+                    radius.elements.map((el) => ({
+                      type: "ChangeGearRadius",
+                      id: el.id,
+                      newRadius,
+                      oldRadius: el.radius,
+                      target: new Point2(
+                        el.position.x + newRadius,
+                        el.position.y,
+                      ),
+                      committed: true,
+                    })),
+                  )
+                }
+                unsigned
+              />
+            )}
+          </Row>
+        </StructureOnly>
       )}
     </Box>
   );

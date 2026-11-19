@@ -17,11 +17,11 @@ export type DdlStatus = {
  * How a chain's mobility reads in the active mode.
  *
  * Mobility only.
- * The hyperstaticity is a separate statement with its own block: the two answer different questions — what moves, and which constraints repeat each other — and folding them into one signed number is what used to make this panel unreadable.
+ * The hyperstaticity is a separate statement with its own block: the two answer different questions — what moves, and which constraints repeat each other — and folding them into one signed number makes the panel unreadable.
  * A chain can perfectly well be mobile *and* over-constrained at once.
  *
- * Edition reads like kinematics rather than saying nothing: how a mobility stands against the motors driving it is a fact about the design, true whatever mode one looks at it in, and a sentence that vanished on entering simulation read as something breaking.
- * What edition must not do is restate the figure — "one mobility" under "DDL = 1" was the panel's worst repetition, and that phrasing is gone from every mode.
+ * At rest it reads like kinematics rather than saying nothing: how a mobility stands against the motors driving it is a fact about the design, true whatever mode one looks at it in, and a sentence that vanished on entering simulation would read as something breaking.
+ * No verdict restates the figure: "one mobility" under "DDL = 1" says nothing twice.
  */
 export function ddl_status(
   mobility: number,
@@ -40,20 +40,6 @@ export function ddl_status(
 
   switch (appMode) {
     case "static":
-      // A mobility nothing drives is what makes a structure a mechanism: under load it moves instead of carrying.
-      if (undriven > 0)
-        return {
-          label: t("ddl_unstable"),
-          hint: t("ddl_unstable_hint"),
-          color: ORANGE,
-        };
-      return {
-        label: t("ddl_isostatic"),
-        hint: t("ddl_isostatic_hint"),
-        color: GREEN,
-      };
-
-    case "edition":
     case "kinematic":
       if (mobility === 0) return rigid;
       if (drivers === 0)

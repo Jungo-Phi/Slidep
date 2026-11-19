@@ -2,7 +2,7 @@
  * What each profile kind looks like and which cotes are read off it — the only file to touch when a new `ProfileShape` kind appears.
  * Everything here is expressed against the *drawn* geometry (`DrawnShape`, px, centred on the section's own centre) and never against the view: where a cote ends up on screen is `section-schema-layout`'s business.
  *
- * Cotes are placed to cost the schema as little height as possible — a thickness goes out to the side rather than off the top, since the panel has width to spare and the profiles that matter are tall.
+ * Cotes stand to the side of the section or inside it, never above or below: the section takes the schema's full height, and the neutral axis sits at the same height whatever the profile.
  */
 
 import { ProfileShape } from "../../../types/material";
@@ -58,6 +58,10 @@ export interface LeaderCote extends CoteBase {
   to: (d: DrawnShape) => Point;
   /** Unit direction the leader runs in. */
   out: Point;
+  /** Arrowheads set outside the two points, pointing in: what a cote across a whole section reads best with. */
+  arrowsOutside?: true;
+  /** The arrowheads alone, no line drawn between them: across the section, a line would read as part of its drawing. */
+  open?: true;
 }
 
 export type Annotation = OffsetCote | LeaderCote;
@@ -102,14 +106,32 @@ function i_path(hw: number, hh: number, tw: number, tf: number): string {
 
 const CENTRED = () => ({ x: 0, y: 0 });
 
-/** The overall width, read off the bottom. */
-const width_cote = (value: number): Annotation => ({
-  kind: "offset",
+const { FONT, TEXT_GAP, ARROW_SPREAD } = SECTION_SCHEMA;
+
+/**
+ * Where a horizontal cote stands, its label set above it, for the two together to sit centred between `top` and `bottom`.
+ * `spread` is how far its arrowheads reach below the line, where they stand inside that band.
+ */
+const centred_with_label = (top: number, bottom: number, spread = 0) =>
+  (top + bottom + FONT + TEXT_GAP - spread) / 2;
+
+/** The width cote below the neutral axis, centred with its label down to `bottom` — but on a section too low for that, kept well clear of `bottom` all the same. */
+const under_axis = (bottom: number) =>
+  Math.min(centred_with_label(0, bottom), bottom * 0.85);
+
+/** The overall width, read at height `at` (below the neutral axis) by two arrowheads pointing in at the edges, its label carried out to the right. */
+const width_cote = (
+  value: number,
+  at: (d: DrawnShape) => number,
+): Annotation => ({
+  kind: "leader",
   name: "b",
   value,
-  side: "bottom",
-  span: (d) => [-d.hw, d.hw],
-  at: (d) => d.hh,
+  from: (d) => ({ x: d.hw, y: at(d) }),
+  to: (d) => ({ x: -d.hw, y: at(d) }),
+  out: { x: 1, y: 0 },
+  arrowsOutside: true,
+  open: true,
 });
 
 /** The bending cote, read off the left — vertical here because that is the plane the 2D
@@ -123,14 +145,21 @@ const height_cote = (value: number): Annotation => ({
   at: (d) => -d.hw,
 });
 
-/** The diameter, read off the bottom across the horizontal tangent points. */
+const ANGLE = (SECTION_SCHEMA.ROUND_COTE_ANGLE * Math.PI) / 180;
+/** The two directions a round section is read along, both just below the horizontal: off it so a cote does not sit on the neutral axis, under it so its label rises no higher than the section. */
+const LOWER_RIGHT = { x: Math.cos(ANGLE), y: Math.sin(ANGLE) };
+const LOWER_LEFT = { x: -LOWER_RIGHT.x, y: LOWER_RIGHT.y };
+
+/** The diameter, read through the centre by two arrowheads pointing in at the outline, and carried out to the lower left — a round section has no `h` cote taking that side. */
 const diameter_cote = (value: number): Annotation => ({
-  kind: "offset",
+  kind: "leader",
   name: "d",
   value,
-  side: "bottom",
-  span: (d) => [-d.hw, d.hw],
-  at: () => 0,
+  from: (d) => ({ x: d.hw * LOWER_LEFT.x, y: d.hw * LOWER_LEFT.y }),
+  to: (d) => ({ x: -d.hw * LOWER_LEFT.x, y: -d.hw * LOWER_LEFT.y }),
+  out: LOWER_LEFT,
+  arrowsOutside: true,
+  open: true,
 });
 
 /** A straight wall's thickness, read off the right at the top corner: both its points lie on the
@@ -148,8 +177,13 @@ const wall_cote = (
   at: (d) => d.hw,
 });
 
-const ANGLE = (SECTION_SCHEMA.ROUND_WALL_ANGLE * Math.PI) / 180;
-const RADIAL = { x: Math.cos(ANGLE), y: -Math.sin(ANGLE) };
+
+/** The web's cote, under the top flange of an I, its arrowheads never down on the neutral axis however low the flange. */
+const tw_height = (d: DrawnShape) =>
+  Math.min(
+    centred_with_label(-(d.hh - d.t.tf), 0, ARROW_SPREAD),
+    -ARROW_SPREAD - 1,
+  );
 
 export function describe_shape(shape: ProfileShape): ShapeDescription {
   switch (shape.kind) {
@@ -159,7 +193,10 @@ export function describe_shape(shape: ProfileShape): ShapeDescription {
         thicknesses: {},
         centroid: CENTRED,
         path: (d) => rect_path(-d.hw, -d.hh, d.hw, d.hh),
-        annotations: [width_cote(shape.b), height_cote(shape.h)],
+        annotations: [
+          width_cote(shape.b, (d) => under_axis(d.hh)),
+          height_cote(shape.h),
+        ],
       };
 
     case "box":
@@ -170,7 +207,8 @@ export function describe_shape(shape: ProfileShape): ShapeDescription {
         path: (d) =>
           `${rect_path(-d.hw, -d.hh, d.hw, d.hh)} ${rect_path(-d.hw + d.t.e, -d.hh + d.t.e, d.hw - d.t.e, d.hh - d.t.e)}`,
         annotations: [
-          width_cote(shape.b),
+          // At the bore's height, below the neutral axis as on a solid section.
+          width_cote(shape.b, (d) => under_axis(d.hh - d.t.e)),
           height_cote(shape.h),
           wall_cote("e", shape.e, "e"),
         ],
@@ -193,17 +231,17 @@ export function describe_shape(shape: ProfileShape): ShapeDescription {
         path: (d) => `${circle_path(d.hw)} ${circle_path(d.hw - d.t.e)}`,
         annotations: [
           diameter_cote(shape.d),
-          // A bore has no straight edge to hang a cote off, so the wall is read along a radius — the only direction that crosses it squarely.
+          // A bore has no straight edge to hang a cote off, so the wall is read along a radius — the only direction that crosses it squarely — on the side the diameter leaves free.
           {
             kind: "leader",
             name: "e",
             value: shape.e,
-            from: (d) => ({ x: d.hw * RADIAL.x, y: d.hw * RADIAL.y }),
+            from: (d) => ({ x: d.hw * LOWER_RIGHT.x, y: d.hw * LOWER_RIGHT.y }),
             to: (d) => ({
-              x: (d.hw - d.t.e) * RADIAL.x,
-              y: (d.hw - d.t.e) * RADIAL.y,
+              x: (d.hw - d.t.e) * LOWER_RIGHT.x,
+              y: (d.hw - d.t.e) * LOWER_RIGHT.y,
             }),
-            out: RADIAL,
+            out: LOWER_RIGHT,
           },
         ],
       };
@@ -215,18 +253,18 @@ export function describe_shape(shape: ProfileShape): ShapeDescription {
         centroid: CENTRED,
         path: (d) => i_path(d.hw, d.hh, d.t.tw, d.t.tf),
         annotations: [
-          width_cote(shape.b),
+          // Its arrows on the bottom flange's tips, its label carried out to the right.
+          width_cote(shape.b, (d) => d.hh - d.t.tf / 2),
           height_cote(shape.h),
           wall_cote("tf", shape.tf, "tf"),
-          // Across the web, three quarters of the way down to the bottom flange: clear of the neutral axis, and low enough to pass under the run `tf`'s own label makes down the right-hand side.
-          // Its leader then leaves through the open notch.
+          // Across the web, it and its label centred between the neutral axis and the top flange, its leader leaving through the open notch to the left, where it balances the cotes on the right.
           {
             kind: "leader",
             name: "tw",
             value: shape.tw,
-            from: (d) => ({ x: d.t.tw / 2, y: ((d.hh - d.t.tf) * 3) / 4 }),
-            to: (d) => ({ x: -d.t.tw / 2, y: ((d.hh - d.t.tf) * 3) / 4 }),
-            out: { x: 1, y: 0 },
+            from: (d) => ({ x: -d.t.tw / 2, y: tw_height(d) }),
+            to: (d) => ({ x: d.t.tw / 2, y: tw_height(d) }),
+            out: { x: -1, y: 0 },
           },
         ],
       };

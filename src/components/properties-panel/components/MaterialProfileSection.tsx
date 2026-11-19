@@ -2,6 +2,7 @@ import React from "react";
 import {
   Box,
   Button,
+  ButtonBase,
   Divider,
   IconButton,
   Link,
@@ -48,23 +49,27 @@ import { useNonModalPopup } from "../../common/use-non-modal-popup";
 import { FIELD_LABEL_SX } from "../inspector-metrics";
 import { icon } from "../../element-palette/iconDataUris";
 import {
+  activation_props,
+  focus_hover_props,
+} from "../../common/keyboard-activation";
+import {
   CanvasHighlight,
   NO_HIGHLIGHT,
 } from "../../canvas/drawing/draw-canvas";
 
 /**
  * The material/profile of a beam, or of a whole selection of them at once — a picker showing "mixte" when they don't agree, and assigning to every one of them.
- * At rest the section stays compact: the profile's schema and the material's values, read-only.
+ * At rest the section stays compact: under each picker, a card with the material's values or the profile's schema, read-only.
  *
  * Each picker offers the mechanism's own library, plus "+ Nouveau…" at the bottom of its menu, which opens a small panel docked on the picker to name and configure a new entry right there — dimensioning a beam that needs a profile absent from the library shouldn't mean losing the beam's own context to go do that elsewhere.
  * That entry is a draft until the panel's own "Create": dismissing the panel (click away, Escape, ✕) leaves both the library and the beam untouched, and confirming creates and assigns it in a single undo step.
  *
- * The pencil opens the same kind of docked panel on the entry the beams already hold — its name and values, edited live — since that is where users look for it, not in the library tab.
+ * Clicking that card opens the same kind of docked panel on the entry the beams already hold — its name and values, edited live — since that is where users look for it, not in the library tab.
  * Such an entry may be shared with beams outside the selection, which an edit here reaches as well: rather than forbidding it, the panel says so — "Partagé avec N autres poutres", and hovering it lights those beams up on the canvas — and offers "Dissocier", which gives the selection a copy of its own (create + assign, one undo step) to keep editing without touching the others.
  *
  * When the beams don't agree on one entry ("mixte"), there is nothing single to show or edit: in place of the schema (or of the material's values) sits the list of the entries the selection holds, each narrowing the selection down to its own beams — lit up on the canvas while hovered.
  *
- * The library icon jumps to the library tab and opens the entries held — duplicate/delete and the full list of users live there.
+ * The library icon beside each picker jumps to the library tab, opening the entries held — duplicate/delete and the full list of users live there.
  */
 
 interface LibraryPickerProps {
@@ -76,10 +81,6 @@ interface LibraryPickerProps {
   onCreateNew: () => void;
   createNewLabel: string;
   onOpenInLibrary: () => void;
-  /** Opens the selected entry's own editor — disabled while there isn't a single one to edit. */
-  onEdit: () => void;
-  /** Why "Edit" is disabled, while the beams don't agree on one entry. */
-  editDisabledHint: string;
 }
 
 /** Forwards its own root, so the parent can dock its panels (draft, editor) on it. */
@@ -93,8 +94,6 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
       onCreateNew,
       createNewLabel,
       onOpenInLibrary,
-      onEdit,
-      editDisabledHint,
     },
     ref,
   ) => {
@@ -105,66 +104,54 @@ const LibraryPicker = React.forwardRef<HTMLDivElement, LibraryPickerProps>(
     const selected = entries.find((entry) => entry.id === selectedID);
 
     return (
+      // Centred over the card below it, as the card's own content is.
       <Box
         ref={ref}
         sx={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
+          display: "flex",
           alignItems: "center",
-          gap: 1.5,
+          justifyContent: "center",
+          gap: 1,
         }}
       >
         <Typography sx={FIELD_LABEL_SX}>{label}</Typography>
-        <Box
+        {/* A button, so that Tab reaches it like every other field of the panel. */}
+        <ButtonBase
           onClick={(e) => {
             const field = e.currentTarget;
             setAnchorEl((current) => (current ? null : field));
           }}
+          aria-haspopup="menu"
           sx={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            cursor: "pointer",
+            gap: 0.5,
+            // A long name gives way rather than widening the section.
+            maxWidth: 160,
             borderRadius: 3,
             border: 1,
             borderColor: "divider",
             pl: 1,
             py: 0.25,
-            "&:hover": { backgroundColor: "action.hover" },
+            pr: 0.25,
+            "&:hover, &.Mui-focusVisible": { backgroundColor: "action.hover" },
           }}
         >
           <Typography variant="body2" noWrap>
             {selected?.name ?? t("mixed_value")}{" "}
           </Typography>
           <KeyboardArrowDown fontSize="small" />
-        </Box>
-        <Box
-          sx={{
-            display: "flex",
-            justifySelf: "end",
-            flexShrink: 0,
-            // Ink rather than the IconButton default (`action.active`, a faded ink), like the rest of the panel; a disabled button keeps its own grey.
-            "& .MuiIconButton-root:not(.Mui-disabled)": { color: "text.primary" },
-          }}
-        >
-          {/* Kept in place when mixed, only disabled: the row doesn't shift, and the tooltip says what to do instead. */}
-          <Tooltip title={selected ? t("edit") : editDisabledHint}>
-            <span>
-              <IconButton
-                size="small"
-                onClick={onEdit}
-                disabled={!selected}
-              >
-                <Edit fontSize="inherit" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title={t("open_in_library")}>
-            <IconButton size="small" onClick={onOpenInLibrary}>
-              <LibraryIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        </Box>
+        </ButtonBase>
+        <Tooltip title={t("open_in_library")}>
+          <IconButton
+            size="small"
+            onClick={onOpenInLibrary}
+            // Ink rather than the IconButton default (`action.active`, a faded ink), like the rest of the panel.
+            sx={{ color: "text.primary" }}
+          >
+            <LibraryIcon fontSize="inherit" />
+          </IconButton>
+        </Tooltip>
         <Menu {...popup} anchorEl={anchorEl} open={!!anchorEl}>
           {entries.map((entry) => (
             <MenuItem
@@ -217,10 +204,11 @@ function useOwnHighlight(setHighlight?: (highlight: CanvasHighlight) => void) {
 }
 
 /**
- * The schema/values block's own height, whatever it shows.
- * Fits the tallest schema at `PAGE_SECTION_SIZE` (a tube, 82 px with its cotes) and the material's four caption lines without a scrollbar; only a long mixed list scrolls.
+ * The height of each card, whatever it shows: switching selections must not make the panel below jump, so a long mixed list scrolls inside it instead.
+ * The material's fits its values on two caption lines; the profile's fits a schema at `PAGE_SECTION_SIZE`, 64 px with its cotes whatever the profile.
  */
-const SUMMARY_HEIGHT = 84;
+const MATERIAL_CARD_HEIGHT = 48;
+const PROFILE_CARD_HEIGHT = 74;
 
 /** One side of that block: its content centred while it fits, scrolled from its top once it doesn't. */
 const SUMMARY_COLUMN_SX = {
@@ -231,6 +219,76 @@ const SUMMARY_COLUMN_SX = {
   overflowY: "auto",
   "& > *": { my: "auto" },
 } as const;
+
+const CARD_EDIT_CLASS = "entry-card-edit";
+const CARD_CONTENT_CLASS = "entry-card-content";
+
+/**
+ * What the beams' entry says, on the panel's card ground.
+ * The card itself opens the entry's editor: its values are what one edits, so the way to them is the values themselves.
+ * On hover the pencil comes up in its middle, over the values faded behind it: the whole card is the button, not a corner of it.
+ * Without `onEdit`, while the beams hold several entries, it is a plain card listing them.
+ */
+const EntryCard: React.FC<{
+  height: number;
+  onEdit?: () => void;
+  children: React.ReactNode;
+}> = ({ height, onEdit, children }) => (
+  <Box
+    role={onEdit ? "button" : undefined}
+    tabIndex={onEdit ? 0 : undefined}
+    aria-label={onEdit ? t("edit") : undefined}
+    onClick={onEdit}
+    // Enter only: Space belongs to the run, wherever the focus is.
+    onKeyDown={
+      onEdit
+        ? (event) => {
+            if (event.key === "Enter") onEdit();
+          }
+        : undefined
+    }
+    sx={{
+      position: "relative",
+      display: "flex",
+      height,
+      px: 1,
+      py: 0.5,
+      borderRadius: 1,
+      backgroundColor: "background.sunken",
+      cursor: onEdit ? "pointer" : "default",
+      ...(onEdit && {
+        "&:hover, &:focus-visible": {
+          backgroundColor: "background.hover",
+          [`& .${CARD_EDIT_CLASS}`]: { opacity: 1 },
+          [`& .${CARD_CONTENT_CLASS}`]: { opacity: 0.25 },
+        },
+      }),
+    }}
+  >
+    <Box
+      className={CARD_CONTENT_CLASS}
+      sx={{ ...SUMMARY_COLUMN_SX, transition: "opacity 120ms" }}
+    >
+      {children}
+    </Box>
+    {onEdit && (
+      <Edit
+        className={CARD_EDIT_CLASS}
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
+          fontSize: 24,
+          color: "text.primary",
+          opacity: 0,
+          transition: "opacity 120ms",
+        }}
+      />
+    )}
+  </Box>
+);
 
 /** One entry the selection holds, and which of its beams hold it. */
 interface EntryGroup {
@@ -264,6 +322,15 @@ const GroupList: React.FC<{
                 }
               : undefined
           }
+          {...activation_props(
+            onSelectBeams &&
+              (() => {
+                clear();
+                onSelectBeams(group.beamIDs);
+              }),
+          )}
+          {...(onSelectBeams &&
+            focus_hover_props((on) => (on ? light(group.beamIDs) : clear())))}
           sx={{
             display: "flex",
             alignItems: "center",
@@ -271,7 +338,8 @@ const GroupList: React.FC<{
             px: 0.75,
             borderRadius: 3,
             cursor: onSelectBeams ? "pointer" : "default",
-            "&:hover": { backgroundColor: "action.hover" },
+            "&:hover, &:focus-visible": { backgroundColor: "action.hover" },
+            "&:focus-visible": { outline: "none" },
           }}
         >
           {/* Half the panel's width: a long name is the part that gives way, the count never does. */}
@@ -442,7 +510,9 @@ function entry_groups(
     .map((entry) => ({
       id: entry.id,
       name: entry.name,
-      beamIDs: elements.filter((el) => read(el) === entry.id).map((el) => el.id),
+      beamIDs: elements
+        .filter((el) => read(el) === entry.id)
+        .map((el) => el.id),
     }))
     .filter((group) => group.beamIDs.length > 0);
 }
@@ -547,9 +617,9 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
   const draftMaterial = draft?.section === "materials" ? draft.material : null;
   const draftProfile = draft?.section === "profiles" ? draft.profile : null;
   // Which held entry's editor is open — the same one-at-a-time rule.
-  const [editing, setEditing] = React.useState<
-    "materials" | "profiles" | null
-  >(null);
+  const [editing, setEditing] = React.useState<"materials" | "profiles" | null>(
+    null,
+  );
 
   const editDraftMaterial = (patch: Partial<MaterialDef>) =>
     setDraft((cur) =>
@@ -600,294 +670,164 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
     });
 
   return (
-    // The full width whatever it holds: sized by its contents, it would shift its pickers each time another profile's schema came in wider or narrower.
+    // Each row at its own width, centred like the other physical properties.
     <Box
       sx={{
         display: "flex",
         flexDirection: "column",
-        alignItems: "stretch",
-        width: "100%",
+        alignItems: "center",
         gap: 1,
+        my: -0.5,
       }}
     >
-      <LibraryPicker
-        ref={materialPickerRef}
-        label={t("material_label")}
-        entries={materials}
-        selectedID={materialID}
-        onSelect={(newMaterialID) =>
-          applyActions(assignMaterial(newMaterialID))
-        }
-        onCreateNew={() => {
-          setEditing(null);
-          setDraft({
-            section: "materials",
-            material: default_material(materials.map((m) => m.name)),
-          });
-        }}
-        createNewLabel={t("add_material")}
-        editDisabledHint={t("edit_disabled_material")}
-        onOpenInLibrary={() =>
-          focusLibraryEntry(
-            "materials",
-            used((el) => el.materialID),
-          )
-        }
-        onEdit={() => {
-          setDraft(null);
-          setEditing("materials");
-        }}
-      />
-      <Popover
-        open={!!draftMaterial}
-        anchorEl={materialPickerRef.current}
-        onClose={() => setDraft(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-      >
-        {draftMaterial && (
-          <Box sx={{ width: 260 }}>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                bgcolor: "background.default",
-                p: 1,
-              }}
-            >
-              <InlineName
-                name={draftMaterial.name}
-                onCommit={(name) => editDraftMaterial({ name })}
-              />
-              <Tooltip title={t("cancel")}>
-                <IconButton size="small" onClick={() => setDraft(null)}>
-                  <Close fontSize="inherit" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-            <Divider sx={{ mb: 1 }} />
-            <MaterialDetail
-              E={draftMaterial.E}
-              Re={draftMaterial.Re}
-              rho={draftMaterial.rho}
-              onChangeE={(E) => editDraftMaterial({ E })}
-              onChangeRe={(Re) => editDraftMaterial({ Re })}
-              onChangeRho={(rho) => editDraftMaterial({ rho })}
-            />
-            <Box sx={{ display: "flex", justifyContent: "center", p: 1 }}>
-              <Button
-                fullWidth
-                size="small"
-                variant="outlined"
-                startIcon={<Check fontSize="small" />}
-                onClick={() => createMaterial(draftMaterial)}
-              >
-                {t("create")}
-              </Button>
-            </Box>
-          </Box>
-        )}
-      </Popover>
-      {material && (
-        <EntryEditor
-          open={editing === "materials"}
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+        <LibraryPicker
+          ref={materialPickerRef}
+          label={t("material_label")}
+          entries={materials}
+          selectedID={materialID}
+          onSelect={(newMaterialID) =>
+            applyActions(assignMaterial(newMaterialID))
+          }
+          onCreateNew={() => {
+            setEditing(null);
+            setDraft({
+              section: "materials",
+              material: default_material(materials.map((m) => m.name)),
+            });
+          }}
+          createNewLabel={t("add_material")}
+          onOpenInLibrary={() =>
+            focusLibraryEntry(
+              "materials",
+              used((el) => el.materialID),
+            )
+          }
+        />
+        <Popover
+          open={!!draftMaterial}
           anchorEl={materialPickerRef.current}
-          onClose={() => setEditing(null)}
-          name={material.name}
-          onRename={(newName) =>
-            applyActions([
-              ...revive_material(material),
-              {
-                type: "RenameMaterial",
-                id: material.id,
-                newName,
-                oldName: material.name,
-              },
-            ])
-          }
-          otherBeamIDs={others((beam) => beam.materialID, material.id)}
-          onDetach={() => detachMaterial(material)}
-          detachHint={t("detach_hint_material")}
-          setHighlight={setHighlight}
+          onClose={() => setDraft(null)}
+          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
         >
-          <MaterialDetail
-            E={material.E}
-            Re={material.Re}
-            rho={material.rho}
-            onChangeE={(newE) =>
-              applyActions([
-                {
-                  type: "ChangeMaterialE",
-                  id: material.id,
-                  delta: newE - stored_material(material).E,
-                },
-              ])
-            }
-            onChangeRe={(newRe) =>
-              applyActions([
-                {
-                  type: "ChangeMaterialRe",
-                  id: material.id,
-                  delta: newRe - stored_material(material).Re,
-                },
-              ])
-            }
-            onChangeRho={(newRho) =>
-              applyActions([
-                {
-                  type: "ChangeMaterialRho",
-                  id: material.id,
-                  delta: newRho - stored_material(material).rho,
-                },
-              ])
-            }
-          />
-        </EntryEditor>
-      )}
-      <LibraryPicker
-        ref={profilePickerRef}
-        label={t("profile_label")}
-        entries={profiles}
-        selectedID={profileID}
-        onSelect={(newProfileID) => applyActions(assignProfile(newProfileID))}
-        onCreateNew={() => {
-          setEditing(null);
-          setDraft({
-            section: "profiles",
-            profile: default_profile(profiles.map((p) => p.name)),
-          });
-        }}
-        createNewLabel={t("add_profile")}
-        editDisabledHint={t("edit_disabled_profile")}
-        onOpenInLibrary={() =>
-          focusLibraryEntry(
-            "profiles",
-            used((el) => el.profileID),
-          )
-        }
-        onEdit={() => {
-          setDraft(null);
-          setEditing("profiles");
-        }}
-      />
-      <Popover
-        open={!!draftProfile}
-        anchorEl={profilePickerRef.current}
-        onClose={() => setDraft(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-      >
-        {draftProfile && (
-          <Box sx={{ width: 260 }}>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                bgcolor: "background.default",
-                p: 1,
-              }}
-            >
-              <InlineName
-                name={draftProfile.name}
-                onCommit={(name) => editDraftProfile({ name })}
-              />
-              <Tooltip title={t("cancel")}>
-                <IconButton size="small" onClick={() => setDraft(null)}>
-                  <Close fontSize="inherit" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-            <Divider sx={{ mb: 1 }} />
-            <ProfileDetail
-              shape={draftProfile.shape}
-              onChangeShape={(shape) => editDraftProfile({ shape })}
-            />
-            <Box sx={{ display: "flex", justifyContent: "center", p: 1 }}>
-              <Button
-                fullWidth
-                size="small"
-                variant="outlined"
-                startIcon={<Check fontSize="small" />}
-                onClick={() => createProfile(draftProfile)}
+          {draftMaterial && (
+            <Box sx={{ width: 260 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  bgcolor: "background.default",
+                  p: 1,
+                }}
               >
-                {t("create")}
-              </Button>
+                <InlineName
+                  name={draftMaterial.name}
+                  onCommit={(name) => editDraftMaterial({ name })}
+                />
+                <Tooltip title={t("cancel")}>
+                  <IconButton size="small" onClick={() => setDraft(null)}>
+                    <Close fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Divider sx={{ mb: 1 }} />
+              <MaterialDetail
+                E={draftMaterial.E}
+                Re={draftMaterial.Re}
+                rho={draftMaterial.rho}
+                onChangeE={(E) => editDraftMaterial({ E })}
+                onChangeRe={(Re) => editDraftMaterial({ Re })}
+                onChangeRho={(rho) => editDraftMaterial({ rho })}
+              />
+              <Box sx={{ display: "flex", justifyContent: "center", p: 1 }}>
+                <Button
+                  fullWidth
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Check fontSize="small" />}
+                  onClick={() => createMaterial(draftMaterial)}
+                >
+                  {t("create")}
+                </Button>
+              </Box>
             </Box>
-          </Box>
-        )}
-      </Popover>
-      {profile && (
-        <EntryEditor
-          open={editing === "profiles"}
-          anchorEl={profilePickerRef.current}
-          onClose={() => setEditing(null)}
-          name={profile.name}
-          onRename={(newName) =>
-            applyActions([
-              ...revive_profile(profile),
-              {
-                type: "RenameProfile",
-                id: profile.id,
-                newName,
-                oldName: profile.name,
-              },
-            ])
-          }
-          otherBeamIDs={others((beam) => beam.profileID, profile.id)}
-          onDetach={() => detachProfile(profile)}
-          detachHint={t("detach_hint_profile")}
-          setHighlight={setHighlight}
-        >
-          <ProfileDetail
-            shape={profile.shape}
-            onChangeShape={(newShape) =>
+          )}
+        </Popover>
+        {material && (
+          <EntryEditor
+            open={editing === "materials"}
+            anchorEl={materialPickerRef.current}
+            onClose={() => setEditing(null)}
+            name={material.name}
+            onRename={(newName) =>
               applyActions([
+                ...revive_material(material),
                 {
-                  type: "ChangeProfileShape",
-                  id: profile.id,
-                  newShape,
-                  oldShape: stored_profile(profile).shape,
+                  type: "RenameMaterial",
+                  id: material.id,
+                  newName,
+                  oldName: material.name,
                 },
               ])
             }
-          />
-        </EntryEditor>
-      )}
-      {/* The profile always on the left, the material always on the right — the schema and the values when the beams agree, the list of what they hold when they don't.
-          A fixed height whatever shows: switching selections mustn't make the panel below jump, so a long list scrolls inside its own column instead. */}
-      <Box
-        sx={{
-          display: "flex",
-          gap: 1,
-          height: SUMMARY_HEIGHT,
-        }}
-      >
-        <Box sx={SUMMARY_COLUMN_SX}>
-          {profile ? (
-            <SectionSchema
-              shape={profile.shape}
-              size={SECTION_SCHEMA.PAGE_SECTION_SIZE}
+            otherBeamIDs={others((beam) => beam.materialID, material.id)}
+            onDetach={() => detachMaterial(material)}
+            detachHint={t("detach_hint_material")}
+            setHighlight={setHighlight}
+          >
+            <MaterialDetail
+              E={material.E}
+              Re={material.Re}
+              rho={material.rho}
+              onChangeE={(newE) =>
+                applyActions([
+                  {
+                    type: "ChangeMaterialE",
+                    id: material.id,
+                    delta: newE - stored_material(material).E,
+                  },
+                ])
+              }
+              onChangeRe={(newRe) =>
+                applyActions([
+                  {
+                    type: "ChangeMaterialRe",
+                    id: material.id,
+                    delta: newRe - stored_material(material).Re,
+                  },
+                ])
+              }
+              onChangeRho={(newRho) =>
+                applyActions([
+                  {
+                    type: "ChangeMaterialRho",
+                    id: material.id,
+                    delta: newRho - stored_material(material).rho,
+                  },
+                ])
+              }
             />
-          ) : (
-            <GroupList
-              groups={entry_groups(
-                shownElements,
-                (el) => el.profileID,
-                profiles,
-              )}
-              onSelectBeams={onSelectBeams}
-              setHighlight={setHighlight}
-            />
-          )}
-        </Box>
-        <Box sx={SUMMARY_COLUMN_SX}>
+          </EntryEditor>
+        )}
+        {/* Under its picker, what the material says: its values when the beams agree, the list of what they hold when they don't. */}
+        <EntryCard
+          height={MATERIAL_CARD_HEIGHT}
+          onEdit={
+            material
+              ? () => {
+                  setDraft(null);
+                  setEditing("materials");
+                }
+              : undefined
+          }
+        >
           {material ? (
             <Box
               sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignSelf: "center",
-                minWidth: 0,
+                display: "grid",
+                gridTemplateColumns: "auto auto",
+                columnGap: 2,
               }}
             >
               <Typography variant="caption" color="text.secondary" noWrap>
@@ -916,7 +856,142 @@ export const MaterialProfileSection: React.FC<MaterialProfileSectionProps> = ({
               setHighlight={setHighlight}
             />
           )}
-        </Box>
+        </EntryCard>
+      </Box>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+        <LibraryPicker
+          ref={profilePickerRef}
+          label={t("profile_label")}
+          entries={profiles}
+          selectedID={profileID}
+          onSelect={(newProfileID) => applyActions(assignProfile(newProfileID))}
+          onCreateNew={() => {
+            setEditing(null);
+            setDraft({
+              section: "profiles",
+              profile: default_profile(profiles.map((p) => p.name)),
+            });
+          }}
+          createNewLabel={t("add_profile")}
+          onOpenInLibrary={() =>
+            focusLibraryEntry(
+              "profiles",
+              used((el) => el.profileID),
+            )
+          }
+        />
+        <Popover
+          open={!!draftProfile}
+          anchorEl={profilePickerRef.current}
+          onClose={() => setDraft(null)}
+          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        >
+          {draftProfile && (
+            <Box sx={{ width: 260 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  bgcolor: "background.default",
+                  p: 1,
+                }}
+              >
+                <InlineName
+                  name={draftProfile.name}
+                  onCommit={(name) => editDraftProfile({ name })}
+                />
+                <Tooltip title={t("cancel")}>
+                  <IconButton size="small" onClick={() => setDraft(null)}>
+                    <Close fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Divider sx={{ mb: 1 }} />
+              <ProfileDetail
+                shape={draftProfile.shape}
+                onChangeShape={(shape) => editDraftProfile({ shape })}
+              />
+              <Box sx={{ display: "flex", justifyContent: "center", p: 1 }}>
+                <Button
+                  fullWidth
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Check fontSize="small" />}
+                  onClick={() => createProfile(draftProfile)}
+                >
+                  {t("create")}
+                </Button>
+              </Box>
+            </Box>
+          )}
+        </Popover>
+        {profile && (
+          <EntryEditor
+            open={editing === "profiles"}
+            anchorEl={profilePickerRef.current}
+            onClose={() => setEditing(null)}
+            name={profile.name}
+            onRename={(newName) =>
+              applyActions([
+                ...revive_profile(profile),
+                {
+                  type: "RenameProfile",
+                  id: profile.id,
+                  newName,
+                  oldName: profile.name,
+                },
+              ])
+            }
+            otherBeamIDs={others((beam) => beam.profileID, profile.id)}
+            onDetach={() => detachProfile(profile)}
+            detachHint={t("detach_hint_profile")}
+            setHighlight={setHighlight}
+          >
+            <ProfileDetail
+              shape={profile.shape}
+              onChangeShape={(newShape) =>
+                applyActions([
+                  {
+                    type: "ChangeProfileShape",
+                    id: profile.id,
+                    newShape,
+                    oldShape: stored_profile(profile).shape,
+                  },
+                ])
+              }
+            />
+          </EntryEditor>
+        )}
+        {/* The same for the profile: its schema, or the list. */}
+        <EntryCard
+          height={PROFILE_CARD_HEIGHT}
+          onEdit={
+            profile
+              ? () => {
+                  setDraft(null);
+                  setEditing("profiles");
+                }
+              : undefined
+          }
+        >
+          {profile ? (
+            <SectionSchema
+              shape={profile.shape}
+              size={SECTION_SCHEMA.PAGE_SECTION_SIZE}
+            />
+          ) : (
+            <GroupList
+              groups={entry_groups(
+                shownElements,
+                (el) => el.profileID,
+                profiles,
+              )}
+              onSelectBeams={onSelectBeams}
+              setHighlight={setHighlight}
+            />
+          )}
+        </EntryCard>
       </Box>
     </Box>
   );

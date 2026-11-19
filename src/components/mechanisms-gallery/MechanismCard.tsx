@@ -35,7 +35,18 @@ interface MechanismCardProps {
   isOpen?: boolean;
   /** Whether its details are the ones raised. */
   detailsShown?: boolean;
+  /**
+   * Whether Tab stops on it and on its controls: in the gallery, only the card the arrows last reached is, so that Tab crosses the grid in one step.
+   * See `gallery-keyboard.ts` for the arrows.
+   */
+  tabbable?: boolean;
+  /** Its column and rank in the gallery, which the arrows read off the card itself. */
+  gridPosition?: { column: number; row: number };
 }
+
+/** The keys that act on a focused card or control as a click does. */
+const is_activation = (event: React.KeyboardEvent) =>
+  event.key === "Enter" || event.key === " ";
 
 export const MechanismCard: React.FC<MechanismCardProps> = ({
   mechanismRecord,
@@ -52,8 +63,15 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
   onShowDetails,
   isOpen = false,
   detailsShown = false,
+  tabbable = true,
+  gridPosition,
 }) => {
   const [hovered, setHovered] = useState(false);
+  // The keyboard on the card or inside it shows it as the pointer does: its hidden buttons come up, where the focus is about to go.
+  const [focused, setFocused] = useState(false);
+  const shown = hovered || focused;
+  const tabIndex = tabbable ? 0 : -1;
+  const cardRef = useRef<HTMLDivElement>(null);
   const description = mechanismRecord.metadata.description;
 
   // The duplicate/export/delete buttons stay collapsed to zero width until hovered — mounting them is invisible either way, so it's deferred like a thumbnail's drawing, off of the batch that mounts every other card in the gallery at once.
@@ -76,6 +94,8 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
   }, [startInNameEdit, onNameEditStarted]);
 
   const discardNameRef = useRef(false);
+  // A name edit closed from the keyboard hands the focus back to the title it came from.
+  const refocusTitleRef = useRef(false);
 
   const commitName = () => {
     setEditingName(false);
@@ -93,16 +113,25 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
     e.stopPropagation();
     if (e.key === "Escape") {
       discardNameRef.current = true;
+      refocusTitleRef.current = true;
       (e.target as HTMLElement).blur();
     } else if (e.key === "Enter") {
+      refocusTitleRef.current = true;
       (e.target as HTMLElement).blur();
     }
   };
 
-  const nameRef = useRef<HTMLSpanElement>(null);
+  const nameRef = useRef<HTMLSpanElement | null>(null);
+  const setNameElement = (element: HTMLSpanElement | null) => {
+    nameRef.current = element;
+    if (element && refocusTitleRef.current) {
+      refocusTitleRef.current = false;
+      element.focus();
+    }
+  };
   const [nameTruncated, setNameTruncated] = useState(false);
-  const hoveredRef = useRef(hovered);
-  hoveredRef.current = hovered;
+  const hoveredRef = useRef(shown);
+  hoveredRef.current = shown;
   useEffect(() => {
     const el = nameRef.current;
     if (!el) return;
@@ -118,10 +147,36 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
 
   return (
     <Box
+      ref={cardRef}
       data-mechanism-id={mechanismRecord.metadata.createdAt}
+      data-gallery-card=""
+      data-gallery-key={mechanismRecord.metadata.createdAt}
+      data-column={gridPosition?.column}
+      data-row={gridPosition?.row}
+      role="button"
+      aria-label={mechanismRecord.metadata.name || t("untitled")}
+      tabIndex={tabIndex}
       onClick={() => onLoad(mechanismRecord)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setFocused(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget) {
+          if (!is_activation(event)) return;
+          event.preventDefault();
+          onLoad(mechanismRecord);
+          return;
+        }
+        // From one of its controls, Escape comes back to the card rather than closing the gallery.
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          cardRef.current?.focus();
+        }
+      }}
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -132,13 +187,15 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
         bgcolor: detailsShown ? "action.selected" : "background.default",
         overflow: "hidden",
         transition: "border-color 0.15s, background-color 0.15s",
-        "&:hover": {
+        // The orange border already says which card the keyboard is on: the theme's focus outline would double it.
+        "&:focus-visible": { outline: "none" },
+        "&:hover, &:focus-within": {
           borderColor: "primary.main",
           bgcolor: "action.hover",
         },
       }}
     >
-      <MechanismThumbnail record={mechanismRecord} hovered={hovered} />
+      <MechanismThumbnail record={mechanismRecord} hovered={shown} />
 
       <Divider sx={{ borderColor: "dividers.ground" }} />
 
@@ -192,7 +249,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                 disableHoverListener={!nameTruncated}
               >
                 <Typography
-                  ref={nameRef}
+                  ref={setNameElement}
                   variant="h6"
                   noWrap
                   fontWeight="600"
@@ -211,7 +268,26 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                           setEditingName(true);
                         }
                   }
-                  sx={{ cursor: compact ? "pointer" : "text" }}
+                  {...(!compact && {
+                    role: "button",
+                    tabIndex,
+                    onKeyDown: (e: React.KeyboardEvent) => {
+                      if (!is_activation(e)) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setEditingName(true);
+                    },
+                  })}
+                  sx={{
+                    cursor: compact ? "pointer" : "text",
+                    borderRadius: 1,
+                    px: 0.5,
+                    mx: -0.5,
+                    "&:focus-visible": {
+                      outline: "none",
+                      backgroundColor: "action.hover",
+                    },
+                  }}
                 >
                   {mechanismRecord.metadata.name || t("untitled")}
                 </Typography>
@@ -222,6 +298,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                   size="small"
                   color="inherit"
                   aria-label={t("mechanism_details")}
+                  tabIndex={tabIndex}
                   onClick={(e) => {
                     e.stopPropagation();
                     onShowDetails?.();
@@ -237,8 +314,8 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                     flexShrink: 0,
                     ml: 0.5,
                     mr: -0.5,
-                    width: hovered ? 96 : 0,
-                    opacity: hovered ? 1 : 0,
+                    width: shown ? 96 : 0,
+                    opacity: shown ? 1 : 0,
                     overflow: "hidden",
                     transition: "width 0.15s, opacity 0.15s, margin-left 0.15s",
                   }}
@@ -249,6 +326,8 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                         <IconButton
                           size="small"
                           color="inherit"
+                          aria-label={t("duplicate")}
+                          tabIndex={tabIndex}
                           onClick={(e) => {
                             e.stopPropagation();
                             onDuplicate(mechanismRecord.metadata.createdAt);
@@ -261,6 +340,8 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                         <IconButton
                           size="small"
                           color="inherit"
+                          aria-label={t("export")}
+                          tabIndex={tabIndex}
                           onClick={(e) => {
                             e.stopPropagation();
                             onExport(mechanismRecord);
@@ -273,6 +354,8 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
                         <IconButton
                           size="small"
                           color="error"
+                          aria-label={t("delete")}
+                          tabIndex={tabIndex}
                           onClick={(e) => {
                             e.stopPropagation();
                             onDelete(mechanismRecord.metadata.createdAt);
@@ -314,6 +397,7 @@ export const MechanismCard: React.FC<MechanismCardProps> = ({
             }
             mechanismLength={mechanismRecord.mechanicalElements.length}
             modifiedAt={mechanismRecord.metadata.modifiedAt}
+            tabbable={tabbable}
           />
         )}
       </Box>

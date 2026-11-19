@@ -181,6 +181,9 @@ export const SNACKBAR_DURATION = {
   REPORT: 12000,
 };
 
+/** How long Space must be held for its release to bring the run back to rest: shorter, the press was a tap, which only plays or pauses (ms). */
+export const SPACE_HOLD_MS = 300;
+
 /**
  * The properties panel's floating scrollbar: the thumb is drawn over the content rather than in a column of its own, so the width the children get never changes when the panel starts scrolling.
  */
@@ -193,8 +196,10 @@ export const OVERLAY_SCROLLBAR = {
   MIN_THUMB_HEIGHT: 28,
   /** Shortest it gets while squeezed against an edge by an overscroll (px). */
   MIN_SQUEEZED_HEIGHT: 8,
-  /** Time without scrolling, pointer off the panel, before the thumb fades (ms). */
+  /** Time without scrolling, or the pointer coming onto the area or near its edge, before the thumb fades (ms). */
   IDLE_MS: 900,
+  /** How close to the edge the thumb runs along the pointer brings it back (px). */
+  REVEAL_PX: 24,
   FADE_MS: 200,
 };
 

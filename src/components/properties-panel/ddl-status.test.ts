@@ -10,22 +10,15 @@ const label = (m: number, drivers: number, mode: AppMode) =>
 describe("ddl_status", () => {
   set_language("fr");
 
-  it("édition : même lecture qu'en cinématique", () => {
-    // Le rapport entre mobilité et moteurs est un fait de conception, vrai quel que soit le mode ; une phrase qui disparaissait en entrant en simulation se lisait comme une panne.
+  it("au repos : même lecture qu'en cinématique", () => {
+    // How a mobility stands against its motors is a fact about the design, true whatever the mode; a sentence that vanished on entering simulation would read as something breaking.
     for (let m = 0; m <= 3; m++)
       for (let drivers = 0; drivers <= 2; drivers++)
-        expect(label(m, drivers, "edition")).toBe(
+        expect(label(m, drivers, "static")).toBe(
           label(m, drivers, "kinematic"),
         );
-    // Ce qu'elle ne fait plus : répéter le chiffre affiché juste au-dessus.
-    expect(label(1, 0, "edition")).not.toMatch(/1 ddl/);
-  });
-
-  it("statique : une mobilité non pilotée rend la structure instable", () => {
-    expect(label(0, 0, "static")).toBe("Isostatique");
-    expect(label(1, 0, "static")).toBe("Instable");
-    // Pilotée, elle est tenue : le moteur bloque le degré.
-    expect(label(1, 1, "static")).toBe("Isostatique");
+    // The verdict never restates the figure shown just above it.
+    expect(label(1, 0, "static")).not.toMatch(/1 ddl/);
   });
 
   it("cinématique : compare mobilités et moteurs", () => {
@@ -43,8 +36,8 @@ describe("ddl_status", () => {
   });
 
   it("le décompte vit dans l'explication, pas dans le verdict", () => {
-    // Le verdict partage sa ligne avec le chiffre de DDL : il tient en deux mots et renvoie le détail au survol.
-    // Le nombre de mobilités non pilotées, lui, ne doit pas se perdre en route — et il s'accorde.
+    // The verdict shares its row with the DOF figure: two words, the detail left to the hover.
+    // The count of undriven mobilities must still reach the reader, with its plural agreement.
     const underdriven = (n: number) => ddl_status(n + 1, 1, "kinematic");
     expect(underdriven(1).label).not.toMatch(/\d/);
     expect(underdriven(1).hint).toMatch(tn("ddl_underdriven_hint", 1));
@@ -52,8 +45,8 @@ describe("ddl_status", () => {
   });
 
   it("aucun mode n'annonce jamais un DDL négatif", () => {
-    // L'hyperstatisme se dit dans son propre bloc, il n'est pas une mobilité négative — c'est toute la raison de la séparation m / h.
-    const modes: AppMode[] = ["edition", "static", "kinematic", "dynamic"];
+    // Hyperstaticity has its own block and is not a negative mobility: that is the whole point of keeping m and h apart.
+    const modes: AppMode[] = ["static", "kinematic", "dynamic"];
     for (const mode of modes)
       for (let drivers = 0; drivers <= 3; drivers++)
         for (let m = 0; m <= 3; m++)

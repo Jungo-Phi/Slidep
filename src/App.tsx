@@ -34,6 +34,7 @@ import {
   ID,
   Mechanism,
   MechanismMetadata,
+  ParameterSnapshot,
   Point2,
   PropertiesPanelTab,
   SimulationConfig,
@@ -83,6 +84,8 @@ import {
 } from "./components/solver/analysis/redundancy-symbols";
 
 import { ElementPalette } from "./components/element-palette";
+import { HintLayer } from "./components/hints/HintLayer";
+import { resolve_hint } from "./components/hints/hints";
 import {
   PropertiesPanel,
   type PropertiesPanelProps,
@@ -142,26 +145,37 @@ import {
 } from "./components/mechanism/history-seal";
 import {
   is_display_only_bundle,
+  is_inert_bundle,
   is_load_value_only_bundle,
   is_observation_only_bundle,
   is_structure_bundle,
 } from "./components/mechanism/action-kind";
 import MechanismsGallery from "./components/mechanisms-gallery/MechanismsGallery";
 import {
+  focus_zone,
+  useRovingToolbar,
+  useZoneCycling,
+  zone_props,
+} from "./components/common/keyboard-zones";
+import {
   fit_to_content,
   useMechanismLibrary,
 } from "./components/mechanisms-gallery/use-mechanism-library";
 
-/** Shortens the labels (Édition → Édit) and hides the chip labels. */
-const CONDENSED_BREAKPOINT = 1350;
-/** Also folds the physics switches into a menu, for narrow windows: the zoom stepper, the most used of the bar, keeps its place. */
-const TIGHT_BREAKPOINT = 1150;
-/** Also folds the mode selector into a menu, for the narrowest windows short of the phone layout. */
-const FOLD_MODE_BREAKPOINT = 1050;
+/** Shortens the mode names (Statique → Stat): the widest labels of the bar go first. */
+const SHORT_MODES_BREAKPOINT = 1250;
+/** Then closes up the rules between the groups of the bar. */
+const TIGHT_RULES_BREAKPOINT = 1155;
+/** Last, hides the labels of the physics and layers menus. */
+const CONDENSED_BREAKPOINT = 1080;
 
 /** Whether a canvas state is an armed placement tool waiting for its first click — no element selected, no gesture started. */
 const is_armed_tool_waiting = (state: CanvasState, mechanism: Mechanism) => {
-  if (state.type === "Selecting" || state.type === "SelectingMultiple")
+  if (
+    state.type === "Selecting" ||
+    state.type === "Grabbing" ||
+    state.type === "SelectingMultiple"
+  )
     return false;
   if ("elementIDs" in state) return state.elementIDs.length === 0;
   if (!("elementID" in state)) return true;
@@ -251,7 +265,7 @@ const App: React.FC = () => {
   >(EMPTY_REDUNDANCY_SYMBOLS);
 
   const modePreviewRef = useRef<Mechanism | null>(null);
-  const [appMode, setAppMode] = useState<AppMode>("edition");
+  const [appMode, setAppMode] = useState<AppMode>("static");
   const [snapToGrid, setSnapToGrid] = useState<boolean>(
     getStorageItem<boolean>("snapToGrid", true),
   );
@@ -261,6 +275,18 @@ const App: React.FC = () => {
   const [showContactPoints, setShowContactPoints] = useState<boolean>(
     getStorageItem<boolean>("showContactPoints", true),
   );
+  const [sidePanelOpen, setSidePanelOpenState] = useState<boolean>(
+    getStorageItem<boolean>("sidePanelOpen", true),
+  );
+  // Set when the canvas is about to change width for the panel folding or unfolding: that resize keeps the drawing's scale.
+  const panelToggledRef = useRef(false);
+  const setSidePanelOpen = useCallback((open: boolean) => {
+    setSidePanelOpenState((before) => {
+      if (before !== open) panelToggledRef.current = true;
+      return open;
+    });
+    setStorageItem("sidePanelOpen", open);
+  }, []);
   const { previewLens, previewLensLater } = useStressLensPreview(appMode);
   // What the canvas paints the beams with: the lens hovered in the menu while one is being tried on, the chosen one the rest of the time.
   const activeBeamStressLens = previewLens ?? mechanism.simulation.beamStressLens;
@@ -297,9 +323,13 @@ const App: React.FC = () => {
   }, [snapSettings]);
 
   // The top bar's width follows the window, not the canvas: these queries re-render the component every time a breakpoint is crossed.
+  // The keyboard crosses the window by zones, and the top bar is one Tab stop whose buttons the arrows walk.
+  useZoneCycling();
+  const topBarRef = useRef<HTMLElement>(null);
+  useRovingToolbar(topBarRef, { below: "palette" });
+  const shortModes = useMediaQuery(`(max-width:${SHORT_MODES_BREAKPOINT}px)`);
+  const tightRules = useMediaQuery(`(max-width:${TIGHT_RULES_BREAKPOINT}px)`);
   const condensed = useMediaQuery(`(max-width:${CONDENSED_BREAKPOINT}px)`);
-  const tight = useMediaQuery(`(max-width:${TIGHT_BREAKPOINT}px)`);
-  const foldMode = useMediaQuery(`(max-width:${FOLD_MODE_BREAKPOINT}px)`);
   const phone = usePhoneLayout();
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>(
     DEFAULT_SIMULATION_CONFIG,
@@ -346,32 +376,44 @@ const App: React.FC = () => {
       sheet && sheet.tab !== "palette" ? { ...sheet, tab } : sheet,
     );
   }, []);
-  // In a simulation, a click names an element, where a drag takes hold of it: the click opens the element's tab, the drag leaves the analysis being read where it is.
-  // A click on empty space goes back to the analysis — a click, not any deselection.
-  const handleCanvasTap = useCallback(
+  // The analysis has a panel of its own on the desktop, always on screen: only the phone, where it is one tab among others, is taken to it.
+  const showAnalysis = useCallback(() => {
+    if (phone) setActiveTab("analysis");
+  }, [phone]);
+  // On a phone in a simulation, where the analysis is one tab among others, a selection moves no tab: a tap does, since a drag takes hold of an element where a tap names it.
+  // A tap on an element opens its tab; a tap on empty space goes back to the analysis — a tap, not any deselection.
+  const handlePhoneCanvasTap = useCallback(
     (onElement: boolean, state: CanvasState) => {
-      if (appMode === "edition") return;
+      if (!is_simulating(appMode)) return;
       if (onElement && state.type === "SelectedElement")
         setActiveTab("elements");
-      else if (!onElement && state.type === "Selecting")
-        setActiveTab("analysis");
+      else if (!onElement && state.type === "Selecting") showAnalysis();
     },
-    [appMode],
+    [appMode, showAnalysis],
   );
-  // A reading's arrow clicked on the canvas is read on its element's own page.
+  // Enter on a selection from the keyboard opens its page, unfolding the panel, and hands it the focus to go on editing there.
+  const inspectFromCanvas = useCallback(() => {
+    const ids = selected_ids(canvasStateRef.current);
+    const mech = mechanismRef.current;
+    const constraintsOnly = ids.every((id) =>
+      mech.constraintElements.some((element) => element.id === id),
+    );
+    showTab(constraintsOnly ? "constraints" : "elements");
+    setSidePanelOpen(true);
+    // The page is drawn by the render this asks for, so it is entered on the next frame.
+    requestAnimationFrame(() => focus_zone("panel"));
+  }, [showTab, setSidePanelOpen]);
+  // A reading's arrow clicked on the canvas is read on its element's own page; the grab's has none, and leaves the tab where it is.
   const selectOverlayFromCanvas = useCallback((overlay: FocusedOverlay) => {
     setFocusedOverlay(overlay);
-    setActiveTab("elements");
+    if (is_measured_reading(overlay)) setActiveTab("elements");
   }, []);
   const [prevCanvasState, setPrevCanvasState] =
     useState<CanvasState>(canvasState);
-  const skipTabSyncStateRef = useRef<CanvasState | null>(null);
 
   if (prevCanvasState !== canvasState) {
     setPrevCanvasState(canvasState);
-    if (canvasState === skipTabSyncStateRef.current) {
-      // Kept as it is: this exact transition asked to keep the current tab.
-    } else if (
+    if (
       canvasState.type === "PlacingProbe" ||
       canvasState.type === "PlacingProbeMetrics" ||
       // Closing the metric box leaves its element selected, and the tab on the measures.
@@ -379,9 +421,13 @@ const App: React.FC = () => {
       (prevCanvasState.type === "PlacingProbeMetrics" &&
         selected_ids(canvasState)[0] === prevCanvasState.elementID)
     ) {
-      setActiveTab("analysis");
-    } else if (appMode === "edition") {
+      // The measures are read in the analysis.
+      if (phone) setActiveTab("analysis");
+    } else if (!(phone && is_simulating(appMode))) {
       if (
+        // A pull in a simulation takes hold of an element without selecting it: neither it nor its end moves the tab.
+        canvasState.type === "SimulationDragging" ||
+        prevCanvasState.type === "SimulationDragging" ||
         canvasState.type === "Erasing" ||
         canvasState.type === "ErasingMultiple" ||
         canvasState.type === "EditingValue" ||
@@ -418,12 +464,6 @@ const App: React.FC = () => {
     }
   }
 
-  const clearSelectionKeepTab = useCallback(() => {
-    const next: CanvasState = { type: "Selecting" };
-    skipTabSyncStateRef.current = next;
-    setCanvasState(next);
-  }, []);
-
   useEffect(() => {
     mechanismRef.current = mechanism;
   }, [mechanism]);
@@ -432,10 +472,11 @@ const App: React.FC = () => {
     canvasStateRef.current = canvasState;
   }, [canvasState]);
 
-  // A simulation opens on the mechanism's analysis, unless the elements tab is being read with an element or a load selected: that page is where the reader already was, and it stays.
+  // On the phone, a simulation opens on the mechanism's analysis, unless the elements tab is being read with an element or a load selected: that page is where the reader already was, and it stays.
   // A selection alone never pulls the tab over to the elements.
+  // The desktop has the analysis on screen already, beside the canvas: its tabs stay where they are.
   useEffect(() => {
-    if (appMode === "edition") return;
+    if (!phone || !is_simulating(appMode)) return;
     const mech = mechanismRef.current;
     const elementSelected = selected_ids(canvasStateRef.current).some(
       (id) =>
@@ -445,17 +486,23 @@ const App: React.FC = () => {
     setActiveTab((tab) =>
       tab === "elements" && elementSelected ? "elements" : "analysis",
     );
-  }, [appMode]);
+  }, [appMode, phone]);
+
+  /** Set once `markDirty` exists, below. */
+  const adoptValuesRef = useRef<(start: ParameterSnapshot) => void>(
+    () => {},
+  );
 
   const {
     liveFrameRef,
     timelineTrackRef,
     handleSpaceKey: handleSpaceKeyForMode,
-    handleEscapeKey,
     handleSimulationGrab,
     handleSimulationGrabEnd,
-    resetToStart,
-    exitToEdition,
+    changeMode,
+    goToRest,
+    cutKeptRecording,
+    restoreCutRecording,
     pauseSimulation,
     resetSimulationState: resetSimulationStateFor,
     simulationRef,
@@ -479,6 +526,7 @@ const App: React.FC = () => {
         ? hoveredPart.reading
         : null,
     inertiaNamed: hoveredBalanceTerm?.inertia === true,
+    adoptValues: (shown) => adoptValuesRef.current(shown),
     onRecordingLimitReached: (
       reason: SimulationLimitReason,
       maxTime: number,
@@ -501,12 +549,6 @@ const App: React.FC = () => {
     CLOCK_MIRROR_MS,
     same_members,
   );
-  // A grab is a live intervention on the mechanism, so it only has a meaning where the recording is being extended.
-  // Somewhere the user scrubbed to, playback re-reads what exists and never consults the grab, so the canvas must not offer one.
-  const canSimulationGrab = useSimClockSelector(
-    (clock) => is_simulating(appMode) && !clock.scrubbed,
-    CLOCK_MIRROR_MS,
-  );
   /** `momentBalanceReference` resolved to the pose on screen, the way every other position the panel reads is. */
   const momentBalancePoint = useSimClockSelector(
     (clock) =>
@@ -521,19 +563,35 @@ const App: React.FC = () => {
     (a, b) => a.equals(b),
   );
 
-  // Entering a gesture is what pauses or leaves a running simulation, whichever route led to it (see `CANVAS_STATE_SIM_EFFECT`).
-  // Keyed on the state alone: entering simulation with a tool still armed must not bounce straight back to edition.
+  // Entering a gesture is what pauses a running simulation or brings it back to rest, whichever route led to it (see `CANVAS_STATE_SIM_EFFECT`).
+  // Keyed on the state alone: entering simulation with a tool still armed must not bounce straight back to rest.
   useEffect(() => {
-    if (simulationRef.current.appMode === "edition") return;
+    if (!is_simulating(simulationRef.current.appMode)) {
+      // A pull from rest sets the mechanism moving from where it stands: a fresh run of the mode last used, not the replay of a kept one, which could not be pulled on.
+      if (canvasState.type === "SimulationDragging")
+        changeMode(mechanismRef.current.metadata.lastSimulationMode, {
+          fresh: true,
+        });
+      return;
+    }
     const effect = CANVAS_STATE_SIM_EFFECT[canvasState.type];
-    if (effect === "exit") exitToEdition();
+    if (effect === "exit") goToRest();
     if (effect !== "pause" || !sim_clock().isPlaying) return;
     pauseSimulation();
     // A pause nobody asked for reads as a bug, but only the first time: the notice is not repeated once seen.
     if (getStorageItem<boolean>(PAUSED_FOR_EDIT_NOTICE_KEY, false)) return;
     setStorageItem(PAUSED_FOR_EDIT_NOTICE_KEY, true);
     setSnackbar({ open: true, message: t("simulation_paused_for_edit") });
-  }, [canvasState.type, exitToEdition, pauseSimulation, simulationRef]);
+  }, [canvasState.type, changeMode, goToRest, pauseSimulation, simulationRef]);
+
+  // The action each hint points at resolves it, whether the hint was shown or not.
+  useEffect(() => {
+    if (is_simulating(appMode)) resolve_hint("run");
+  }, [appMode]);
+  useEffect(() => {
+    if (canvasState.type === "SimulationDragging") resolve_hint("grab");
+  }, [canvasState.type]);
+  const isPlaying = useSimClockSelector((clock) => clock.isPlaying, CLOCK_MIRROR_MS);
 
   const handleSpaceKey = useCallback(
     () => handleSpaceKeyForMode(mechanism.metadata.lastSimulationMode),
@@ -584,6 +642,23 @@ const App: React.FC = () => {
     },
     [markDirty],
   );
+
+  // The edit-at-t rule (see `rebased_bundle`) with no edit of its own: the values go back to those of a recorded instant, in one entry a single undo takes back.
+  // On the way back to rest, that instant is t=0 — an undo of it, being an edit at rest, cuts the kept recording off.
+  // `mechanismRef` is updated at once, for the structure edit that brought the mechanism back to rest to be cut from the history it lands on.
+  adoptValuesRef.current = (shown) => {
+    const before = mechanismRef.current;
+    const rebase = rebased_bundle(before, shown, []);
+    if (rebase.length === 0) return;
+    const after = apply_actions(before, rebase);
+    mechanismRef.current = after;
+    setMechanism((prev) => {
+      if (prev === before) return after;
+      const late = rebased_bundle(prev, shown, []);
+      return late.length === 0 ? prev : apply_actions(prev, late);
+    });
+    markDirty(true);
+  };
 
   // The tags already carried by a mechanism somewhere in the library.
   // The three simulation modes are always suggested alongside them, as the most common way to sort a library.
@@ -656,20 +731,26 @@ const App: React.FC = () => {
 
   const applyActions = useCallback(
     (actions: Action[]) => {
-      const simulating = simulationRef.current.appMode !== "edition";
+      const simulating = is_simulating(simulationRef.current.appMode);
       const observationOnly = is_observation_only_bundle(actions);
       const structure = is_structure_bundle(actions);
       // An edit made behind later ones in the recording cuts them off, values included (see `rebased_bundle`).
       // Their snapshots go now rather than in the recompile effect: an edit arriving before that effect runs must not see them and cut this one off in turn.
       const clock = sim_clock();
       // A lone `Blank` closing a coalescing run edits nothing, so it cuts nothing off.
-      const cutOff =
+      // A replayed recording's later values are not in the stored mechanism either, which stands at t=0 (see `adoptValues`): an edit at its end brings them back first.
+      const shown =
         simulating &&
         !observationOnly &&
         !structure &&
-        actions.some((action) => action.type !== "Blank") &&
-        clock.parameterSnapshots.some((s) => s.t > clock.time)
+        actions.some((action) => action.type !== "Blank")
           ? parameter_snapshot_at(clock.parameterSnapshots, clock.time)
+          : null;
+      const cutOff =
+        shown &&
+        (clock.parameterSnapshots.some((s) => s.t > clock.time) ||
+          rebased_bundle(mechanismRef.current, shown, []).length > 0)
+          ? shown
           : null;
       if (cutOff)
         set_sim_clock((prev) => ({
@@ -682,9 +763,10 @@ const App: React.FC = () => {
       // The values coming back may be anything, not just this load's: only a full recompile takes them all.
       else if (!cutOff && is_load_value_only_bundle(actions))
         loadValueOnlyEditRef.current = true;
-      if (simulating && structure) {
-        exitToEdition();
-      }
+      if (simulating && structure) goToRest();
+      // An edit at rest is an edit at t=0: it cuts off the whole kept recording.
+      if ((!simulating || structure) && !is_inert_bundle(actions))
+        cutKeptRecording(mechanismRef.current.history);
       setMechanism((prevMechanism) => {
         const newMechanism = apply_actions(
           prevMechanism,
@@ -706,7 +788,8 @@ const App: React.FC = () => {
     [
       markDirty,
       setCanvasState,
-      exitToEdition,
+      goToRest,
+      cutKeptRecording,
       simulationRef,
       observationOnlyEditRef,
       loadValueOnlyEditRef,
@@ -768,7 +851,7 @@ const App: React.FC = () => {
   const undoMechanism = useCallback(() => {
     if (mechanismRef.current.history.length === 0) return;
 
-    const isInSim = simulationRef.current.appMode !== "edition";
+    const isInSim = is_simulating(simulationRef.current.appMode);
     const observationOnly = is_observation_only_bundle(
       mechanismRef.current.history.slice(-1)[0],
     );
@@ -817,16 +900,17 @@ const App: React.FC = () => {
       return newMechanism;
     });
 
-    if (isInSim && !observationOnly) {
-      const isEditionAction =
-        mechanismRef.current.history.length <= simStartHistoryLengthRef.current;
-      if (isEditionAction) {
-        // Undoing an action made before entering simulation → exit to edition.
-        // The mode-change useEffect resets the kinematic state.
-        setAppMode("edition");
-      }
-      // Otherwise the [mechanism] effect recompiles + truncates snapshots.
-    }
+    // Undoing an edit made before the simulation started takes it back to rest.
+    // An edit made during it is the [mechanism] effect's business, which recompiles and truncates the snapshots.
+    const history = mechanismRef.current.history;
+    const leavesSimulation =
+      isInSim &&
+      !observationOnly &&
+      history.length <= simStartHistoryLengthRef.current;
+    if (leavesSimulation) changeMode("static", { keepValues: true });
+    // At rest, an undo is an edit like any other, unless it lands back on the history a cut-off recording was made for.
+    if ((!isInSim || leavesSimulation) && !is_inert_bundle(history[history.length - 1]))
+      if (!restoreCutRecording(history.slice(0, -1))) cutKeptRecording(history);
 
     markDirty(!displayOnly);
   }, [
@@ -836,6 +920,9 @@ const App: React.FC = () => {
     simulationRef,
     observationOnlyEditRef,
     simStartHistoryLengthRef,
+    changeMode,
+    cutKeptRecording,
+    restoreCutRecording,
   ]);
 
   const redoMechanism = useCallback(() => {
@@ -846,6 +933,11 @@ const App: React.FC = () => {
     const displayOnly = is_display_only_bundle(
       mechanismRef.current.future.slice(-1)[0],
     );
+    if (
+      !is_simulating(simulationRef.current.appMode) &&
+      !is_inert_bundle(mechanismRef.current.future.slice(-1)[0])
+    )
+      cutKeptRecording(mechanismRef.current.history);
 
     setMechanism((prevMechanism) => {
       const nextActions = prevMechanism.future.slice(-1)[0];
@@ -891,6 +983,8 @@ const App: React.FC = () => {
     signalConstraintChange,
     setCanvasState,
     observationOnlyEditRef,
+    simulationRef,
+    cutKeptRecording,
   ]);
 
   // Window-wide drop target for importing .slidep/.zip files, independent of whatever React element the pointer happens to be over (incl. portaled dialogs like the gallery).
@@ -997,11 +1091,15 @@ const App: React.FC = () => {
   const coverRef = useRef(cover);
   const canvasSizeRef = useRef<ViewArea | null>(null);
   const followViewArea = useCallback(
-    (before: ViewArea, after: ViewArea) =>
+    (before: ViewArea, after: ViewArea, keepScale = false) =>
       setMechanism((prev) => ({
         ...prev,
-        viewport: follow_view_area(prev.viewport, before, after, (area) =>
-          fit_to_content(prev, area),
+        viewport: follow_view_area(
+          prev.viewport,
+          before,
+          after,
+          (area) => fit_to_content(prev, area),
+          keepScale,
         ),
       })),
     [],
@@ -1013,10 +1111,14 @@ const App: React.FC = () => {
       if (width === 0 || height === 0) return;
       const before = canvasSizeRef.current;
       canvasSizeRef.current = { width, height };
+      // A panel folded or unfolded by the user shows more or less of the drawing, at the same size: a drawing that zoomed with it would read as having changed.
+      const keepScale = panelToggledRef.current;
+      panelToggledRef.current = false;
       if (before)
         followViewArea(
           view_area(before, coverRef.current),
           view_area({ width, height }, coverRef.current),
+          keepScale,
         );
     },
     [followViewArea],
@@ -1041,7 +1143,7 @@ const App: React.FC = () => {
       setPhoneSheet(null);
       return true;
     }
-    if (appMode !== "edition" || canvasStateRef.current.type !== "Selecting") {
+    if (is_simulating(appMode) || canvasStateRef.current.type !== "Selecting") {
       press_escape();
       return true;
     }
@@ -1087,10 +1189,9 @@ const App: React.FC = () => {
     activeTab: shownTab,
     constraintChangeRef,
     onSpaceKey: handleSpaceKey,
-    onEscapeKey: handleEscapeKey,
+    onEscapeKey: goToRest,
     onSimulationGrab: handleSimulationGrab,
     onSimulationGrabEnd: handleSimulationGrabEnd,
-    canSimulationGrab,
     snapToGrid,
     snapSettings,
     showGrid,
@@ -1108,6 +1209,7 @@ const App: React.FC = () => {
     onMomentBalanceReferencePicked: setMomentBalanceReference,
     momentBalanceReferenceHovered,
     onSelectOverlay: selectOverlayFromCanvas,
+    onInspect: inspectFromCanvas,
     focusedOverlay,
     librarySection:
       shownTab === "library" ? (librarySection ?? undefined) : undefined,
@@ -1120,7 +1222,6 @@ const App: React.FC = () => {
     setRedundancySymbols,
     modePreviewRef,
     setCanvasState,
-    clearSelectionKeepTab,
     canvasState,
     applyActions,
     mechanism,
@@ -1145,6 +1246,8 @@ const App: React.FC = () => {
     setLibrarySection,
     hoveredLibraryEntryID,
     setHoveredLibraryEntryID,
+    sideOpen: sidePanelOpen,
+    setSideOpen: setSidePanelOpen,
   };
 
   const toolsMenu = useMemo(
@@ -1153,8 +1256,6 @@ const App: React.FC = () => {
         mechanism={mechanism}
         recenterTarget={recenterTarget}
         onRecenter={recenter}
-        undoMechanism={undoMechanism}
-        redoMechanism={redoMechanism}
         onZoomTo={zoomTo}
         language={language}
         onSelectLang={handleSelectLang}
@@ -1178,8 +1279,6 @@ const App: React.FC = () => {
       mechanism,
       recenterTarget,
       recenter,
-      undoMechanism,
-      redoMechanism,
       zoomTo,
       language,
       handleSelectLang,
@@ -1248,7 +1347,7 @@ const App: React.FC = () => {
                 {...canvasProps}
                 onTap={(onElement, state) => {
                   onTap(onElement);
-                  handleCanvasTap(onElement, state);
+                  handlePhoneCanvasTap(onElement, state);
                 }}
               />
             )}
@@ -1259,7 +1358,7 @@ const App: React.FC = () => {
               recenterTarget,
               onRecenter: recenter,
               appMode,
-              setAppMode,
+              setAppMode: changeMode,
               updateMetadata,
               applyActions,
               onOpenGallery: handleOpenGallery,
@@ -1305,6 +1404,9 @@ const App: React.FC = () => {
           >
             {/* App Bar */}
             <AppBar
+              ref={topBarRef}
+              {...zone_props("topbar")}
+              role="toolbar"
               position="static"
               elevation={0}
               sx={{
@@ -1332,14 +1434,13 @@ const App: React.FC = () => {
               >
                 <PlaybackControls
                   appMode={appMode}
-                  setAppMode={setAppMode}
+                  setAppMode={changeMode}
                   mechanism={mechanism}
                   updateMetadata={updateMetadata}
                   applyActions={applyActions}
+                  shortModes={shortModes}
+                  tightRules={tightRules}
                   condensed={condensed}
-                  tight={tight}
-                  foldMode={foldMode}
-                  resetToStart={resetToStart}
                   handleSpaceKey={handleSpaceKey}
                   onOpenGallery={handleOpenGallery}
                   saveStatus={saveStatus}
@@ -1356,6 +1457,16 @@ const App: React.FC = () => {
               />
             </AppBar>
 
+            <ElementPalette
+              setCanvasState={setCanvasState}
+              canvasState={canvasState}
+              mechanism={mechanism}
+              appMode={appMode}
+              undoMechanism={undoMechanism}
+              redoMechanism={redoMechanism}
+              leaveSimulation={goToRest}
+            />
+
             {/* Main content area */}
             <Box
               component="main"
@@ -1367,18 +1478,12 @@ const App: React.FC = () => {
                 backgroundColor: "background.default",
               }}
             >
-              <ElementPalette
-                setCanvasState={setCanvasState}
-                canvasState={canvasState}
-                mechanism={mechanism}
-                appMode={appMode}
-              />
+              <PropertiesPanel {...panelProps} variant="analysis" />
 
               <Box sx={{ flexGrow: 1, minWidth: 0, position: "relative" }}>
                 <MechanicalCanvas
                   ref={canvasRef}
                   {...canvasProps}
-                  onTap={handleCanvasTap}
                 />
               </Box>
 
@@ -1411,6 +1516,16 @@ const App: React.FC = () => {
         />
         {/* After the gallery, which may open at launch: the welcome is read first, over it. */}
         <WelcomeDialog open={welcomeOpen} onClose={handleWelcomeClose} />
+        {!welcomeOpen && !galleryOpen && (
+          <HintLayer
+            eligible={{
+              run:
+                !is_simulating(appMode) &&
+                mechanism.mechanicalElements.length >= 3,
+              grab: is_simulating(appMode) && !isPlaying,
+            }}
+          />
+        )}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={snackbar.duration ?? SNACKBAR_DURATION.DEFAULT}

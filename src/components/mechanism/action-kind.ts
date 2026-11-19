@@ -7,7 +7,7 @@ import { Action, ID, UnionElement } from "../../types";
  * - **parameter** : loads, motor speed, the physical values of an element (mass, stiffness, damping, friction, material and profile), gravity/collisions/the floor, takes effect at the current time.
  * The past snapshots stay valid, the future ones are truncated and the motion is recomputed from there.
  * Does NOT leave simulation mode.
- * - **structure** (geometry, dimensions, node grounding, connections): exits to edition, which is why the controls emitting one are greyed out mid-run (see `StructureOnly`, which asks this module rather than deciding for itself).
+ * - **structure** (geometry, dimensions, node grounding, connections): brings the simulation back to rest, which is why the controls emitting one are greyed out mid-run (see `StructureOnly`, which asks this module rather than deciding for itself).
  */
 export const OBSERVATION_ACTIONS: Action["type"][] = [
   "SetProbes",
@@ -79,6 +79,12 @@ export const LOAD_VALUE_ACTIONS: Action["type"][] = [
 export const is_observation_only_bundle = (actions: Action[]) =>
   actions.length > 0 &&
   actions.every((a) => OBSERVATION_ACTIONS.includes(a.type));
+
+/** Whether a bundle leaves what a recording was made of untouched: observation actions and undo-boundary markers only. */
+export const is_inert_bundle = (actions: Action[]) =>
+  actions.every(
+    (a) => a.type === "Blank" || OBSERVATION_ACTIONS.includes(a.type),
+  );
 
 export const is_display_only_bundle = (actions: Action[]) =>
   actions.length > 0 && actions.every((a) => DISPLAY_ACTIONS.includes(a.type));

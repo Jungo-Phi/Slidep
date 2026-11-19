@@ -21,8 +21,7 @@ import { BeltShape } from "../snapshot";
 /**
  * Which pipeline a `load` runs: rigid-motion PBD, or XPBD with mass and gravity.
  * Fixed for the whole load — a recording is never a mix of the two.
- *
- * Deliberately its own type rather than `types/app-mode.ts`'s `SimulationMode` — that one also carries `"static"`, which has no recorder pipeline at all (its `ToggleButton` stays `disabled`), so a `RecorderMode` is never asked to mean something it cannot run.
+ * The same two values as `types/app-mode.ts`'s `SimulationMode`, kept apart so the worker side does not depend on the app's types.
  */
 export type RecorderMode = "kinematic" | "dynamic";
 

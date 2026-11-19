@@ -135,6 +135,47 @@ describe("grab dynamique = force (plus une contrainte de position)", () => {
     expect(p.y).toBeCloseTo(0, 9);
   });
 
+  it("un nœud ancré tiré montre le ressort, et l'appui le reprend", () => {
+    const ANCHOR = id();
+    const BEAM = id();
+    const pivot: PivotElement = {
+      type: "pivot",
+      id: ANCHOR,
+      probes: [],
+      overlays: {},
+      position: new Point2(0, 0),
+      isGrounded: true,
+      rotatingEdgesIDs: [BEAM],
+      fixedGearsIDs: [],
+      rotationalFriction: 0,
+    };
+    const beam: BeamElement = {
+      type: "beam",
+      id: BEAM,
+      probes: [],
+      overlays: {},
+      positionStart: new Point2(0, 0),
+      positionEnd: new Point2(10, 0),
+      fixedNodeStartID: ANCHOR,
+      fixedNodeEndID: undefined,
+      fixedNodesBodyIDs: [],
+      materialID: MATERIAL_ID,
+      profileID: PROFILE_ID,
+    };
+    const scene = mechanism([pivot, beam]);
+    const model = compile_simulation_model(scene);
+    const snapshot = grab_frames(model, { key: ANCHOR, target: new Point2(0, 1) }, 5);
+    expect(snapshot_point(snapshot, ANCHOR)!.y).toBeCloseTo(0, 9);
+    const pull = Math.hypot(snapshot.grab!.fx, snapshot.grab!.fy);
+    expect(snapshot.grab!.fy).toBeGreaterThan(0);
+    const balance = compute_force_balance(scene, snapshot, new Point2(0, 0))!;
+    const support = balance.actions
+      .filter((action) => action.kind === "support")
+      .reduce((sum, action) => sum + action.force.y, 0);
+    expect(support).toBeCloseTo(-snapshot.grab!.fy, 3);
+    expect(Math.hypot(balance.gap.x, balance.gap.y)).toBeLessThan(1e-3 * pull);
+  });
+
   it("un grab de corps tire la poutre entière vers la cible", () => {
     const BEAM = id();
     const beam: BeamElement = {

@@ -19,7 +19,8 @@ export type ToolStateType = PayloadFree<CanvasState>;
  */
 export const TOOL_SHORTCUTS = {
   Selecting: ["Escape"],
-  Erasing: ["a"],
+  Grabbing: ["a"],
+  Erasing: ["x"],
 
   PlacingSlider: ["s"],
   PlacingPivot: ["p"],
@@ -50,18 +51,14 @@ export const TOOL_SHORTCUTS = {
   Measuring: ["u"],
 } as const satisfies Partial<Record<ToolStateType, readonly string[]>>;
 
-/** Key names to display as something other than their `KeyboardEvent.key`. */
-const KEY_LABELS: Record<string, string> = {
-  Escape: "Esc",
-};
-
-/** A tool's shortcut for a tooltip: `"M"`, `"H/V"`, `"Esc"`, or `""`. */
+/** A tool's shortcut for a tooltip: `"M"`, `"H/V"`, `"Escape"`, or `""`. */
 export function shortcut_label(stateType: ToolStateType): string {
   const keys: readonly string[] | undefined = (
     TOOL_SHORTCUTS as Partial<Record<ToolStateType, readonly string[]>>
   )[stateType];
   if (!keys) return "";
-  return keys.map((key) => KEY_LABELS[key] ?? key.toUpperCase()).join("/");
+  // A letter as printed on its key, a named key spelled out in full.
+  return keys.map((key) => (key.length === 1 ? key.toUpperCase() : key)).join("/");
 }
 
 /**

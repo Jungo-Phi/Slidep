@@ -82,7 +82,6 @@ function step(
     () => {},
     () => {},
     false,
-    false,
     () => {},
     () => {},
     at,

@@ -22,9 +22,11 @@ import {
   Flip,
   Link,
   LinkOff,
+  PlayArrow,
   RotateLeft,
   RotateRight,
   SelectAll,
+  Stop,
   Visibility,
   VisibilityOff,
 } from "@mui/icons-material";
@@ -45,6 +47,7 @@ const ICONS: Record<string, React.ElementType> = {
   copy: ContentCopy,
   cut: ContentCut,
   paste: ContentPaste,
+  "paste-linked": Link,
   duplicate: AddToPhotos,
   delete: Delete,
   disconnect: LinkOff,
@@ -55,6 +58,8 @@ const ICONS: Record<string, React.ElementType> = {
   "select-all": SelectAll,
   recenter: CenterFocusStrong,
   overlays: Visibility,
+  "run-simulation": PlayArrow,
+  "leave-simulation": Stop,
 };
 
 /** Where a menu opens: at a point on screen, or against an element. */

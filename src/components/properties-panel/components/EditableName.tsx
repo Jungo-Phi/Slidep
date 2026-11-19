@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { TextField, Typography } from "@mui/material";
 
 interface EditableNameProps {
@@ -33,6 +33,15 @@ export const EditableName: React.FC<EditableNameProps> = ({
   const setOpen = (open: boolean) => {
     setEditing(open);
     onEditingChange?.(open);
+  };
+
+  // A field closed from the keyboard hands the focus back to the name it came from.
+  const refocusRef = useRef(false);
+  const setNameElement = (element: HTMLElement | null) => {
+    if (element && refocusRef.current) {
+      refocusRef.current = false;
+      element.focus();
+    }
   };
 
   // The field grows with what is typed: measured off a hidden span in the same font, since an input has no width of its own content.
@@ -84,8 +93,10 @@ export const EditableName: React.FC<EditableNameProps> = ({
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.stopPropagation();
+            refocusRef.current = true;
             commit();
           } else if (e.key === "Escape") {
+            refocusRef.current = true;
             setDraft(name);
             setOpen(false);
           }
@@ -118,7 +129,17 @@ export const EditableName: React.FC<EditableNameProps> = ({
 
   return (
     <Typography
+      ref={setNameElement}
+      role="button"
+      tabIndex={0}
       onClick={(e) => {
+        e.stopPropagation();
+        measure(name);
+        setOpen(true);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
         e.stopPropagation();
         measure(name);
         setOpen(true);
@@ -133,6 +154,8 @@ export const EditableName: React.FC<EditableNameProps> = ({
         textOverflow: "ellipsis",
         display: "inline-block",
         minWidth: 0,
+        borderRadius: "2px",
+        "&:focus-visible": { outline: "none", backgroundColor: "action.hover" },
       }}
     >
       {name}

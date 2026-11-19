@@ -77,7 +77,7 @@ export const MenuTrigger: React.FC<MenuTriggerProps> = ({
         borderRadius: outlined ? TOP_BAR_CONTROL_HEIGHT / 2 + "px" : 1,
         border: outlined ? 1 : 0,
         borderColor: (theme) => alpha(theme.palette.text.primary, 0.3),
-        "&:hover": { backgroundColor: "action.hover" },
+        "&:hover, &.Mui-focusVisible": { backgroundColor: "action.hover" },
       }}
     >
       {children}
@@ -208,7 +208,7 @@ export const PhysicsMenu: React.FC<
         step={field.step}
         unsigned
         onChange={write}
-        // The reset button eats into the field: a value with its unit would no longer fit.
+        // The reset button eats into the field: a value with its unit would not fit beside it.
         width={reset ? 112 : undefined}
         adornment={
           reset && {
@@ -243,7 +243,7 @@ export const PhysicsMenu: React.FC<
             gap: 1,
             pl: 2,
             pr: 2,
-            "&:hover": { backgroundColor: "action.hover" },
+            "&:hover, &.Mui-focusVisible": { backgroundColor: "action.hover" },
           }}
         >
           <ToggleIcon

@@ -29,7 +29,7 @@ export const PHONE_LAYOUT = {
 export const CANVAS_CORNER_BOTTOM =
   "calc(12px + var(--canvas-bottom-inset, 0px))";
 
-/** The tools the phone's quick-access bar offers in edition. */
+/** The tools the phone's quick-access bar offers at rest. */
 export const PHONE_QUICK_TOOLS: {
   /** Always there, first — and therefore left out of the sheet's palette. */
   FIXED: ToolStateType[];
@@ -39,7 +39,7 @@ export const PHONE_QUICK_TOOLS: {
    */
   BASE: ToolStateType[];
 } = {
-  FIXED: ["Selecting", "Erasing"],
+  FIXED: ["Selecting", "Grabbing", "Erasing"],
   BASE: [
     "PlacingBeamStart",
     "PlacingPivot",

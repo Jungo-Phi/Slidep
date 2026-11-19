@@ -383,6 +383,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                   <IconButton
                     size="small"
                     color="secondary"
+                    // The pointer's way to nudge the value, held down: the keyboard types it, and the buttons are no Tab stops on its way.
+                    tabIndex={-1}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       startRepeating(1);
@@ -402,6 +404,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                   <IconButton
                     size="small"
                     color="secondary"
+                    tabIndex={-1}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       startRepeating(-1);

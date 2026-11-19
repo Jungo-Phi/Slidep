@@ -30,18 +30,30 @@ interface OverlayScrollAreaProps {
   children: React.ReactNode;
   /** Styles the area itself; give it the height rule that makes it the one that scrolls. */
   sx?: SxProps<Theme>;
+  /** Receives the element that scrolls, for a caller that moves it itself. */
+  scrollerRef?: React.MutableRefObject<HTMLDivElement | null>;
 }
 
 /**
  * Vertical scroll area whose scrollbar floats over the content instead of taking a column of its own: the width the children get never changes, so nothing shifts sideways when the content starts overflowing and full-bleed rules still reach the edge.
- * The thumb shows while the pointer is on the area or while it scrolls, and is the only part that answers to the pointer — a track would catch clicks meant for the content under it.
+ * The thumb shows when the area scrolls, when the pointer comes onto it, and when the pointer nears the edge it runs along; it fades once none of these has happened for a while, unless the pointer is on the thumb itself.
+ * A bar left up for as long as the pointer is over the content would never go on an area that fills the screen.
+ * The thumb is the only part that answers to the pointer: a track would catch clicks meant for the content under it.
  */
 export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
   children,
   sx,
+  scrollerRef: outerScrollerRef,
 }) => {
   const areaRef = React.useRef<HTMLDivElement>(null);
   const scrollerRef = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    if (!outerScrollerRef) return;
+    outerScrollerRef.current = scrollerRef.current;
+    return () => {
+      outerScrollerRef.current = null;
+    };
+  }, [outerScrollerRef]);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const thumbRef = React.useRef<HTMLDivElement>(null);
 
@@ -53,7 +65,7 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
     const thumb = thumbRef.current;
     if (!area || !scroller || !content || !thumb) return;
 
-    let hovered = false;
+    let onThumb = false;
     let dragging = false;
     let idle: number | undefined;
 
@@ -80,14 +92,21 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
       if (!sticky) idle = window.setTimeout(hide, OVERLAY_SCROLLBAR.IDLE_MS);
     };
 
-    const onScroll = () => show(hovered || dragging);
-    // Watched on the area, not on the scroller: the thumb is the scroller's sibling, so a pointer moving onto it would leave the scroller and fade away the very bar it is reaching for.
-    const onEnter = () => {
-      hovered = true;
+    const onScroll = () => show(onThumb || dragging);
+    // Watched on the area, not on the scroller: the thumb is the scroller's sibling, so a pointer moving onto it would leave the scroller.
+    const onEnter = () => show(false);
+    // A pointer heading for the edge is likely reaching for the bar, which must be there by the time it arrives.
+    const onAreaMove = (event: PointerEvent) => {
+      if (onThumb || dragging) return;
+      const rect = area.getBoundingClientRect();
+      if (event.clientX > rect.right - OVERLAY_SCROLLBAR.REVEAL_PX) show(false);
+    };
+    const onThumbEnter = () => {
+      onThumb = true;
       show(true);
     };
-    const onLeave = () => {
-      hovered = false;
+    const onThumbLeave = () => {
+      onThumb = false;
       if (!dragging) show(false);
     };
 
@@ -124,7 +143,7 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
         thumb.removeEventListener("pointerup", onRelease);
         thumb.removeEventListener("pointercancel", onRelease);
         document.body.style.userSelect = "";
-        show(hovered);
+        show(onThumb);
       };
 
       thumb.addEventListener("pointermove", onMove);
@@ -173,7 +192,9 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
 
     scroller.addEventListener("scroll", onScroll, { passive: true });
     area.addEventListener("pointerenter", onEnter);
-    area.addEventListener("pointerleave", onLeave);
+    area.addEventListener("pointermove", onAreaMove);
+    thumb.addEventListener("pointerenter", onThumbEnter);
+    thumb.addEventListener("pointerleave", onThumbLeave);
     thumb.addEventListener("wheel", onWheel, { passive: false });
     thumb.addEventListener("pointerdown", onPointerDown);
     scroller.addEventListener("dragover", onDragOver);
@@ -188,7 +209,9 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
       observer.disconnect();
       scroller.removeEventListener("scroll", onScroll);
       area.removeEventListener("pointerenter", onEnter);
-      area.removeEventListener("pointerleave", onLeave);
+      area.removeEventListener("pointermove", onAreaMove);
+      thumb.removeEventListener("pointerenter", onThumbEnter);
+      thumb.removeEventListener("pointerleave", onThumbLeave);
       thumb.removeEventListener("wheel", onWheel);
       thumb.removeEventListener("pointerdown", onPointerDown);
       scroller.removeEventListener("dragover", onDragOver);
@@ -206,9 +229,12 @@ export const OverlayScrollArea: React.FC<OverlayScrollAreaProps> = ({
         ...(Array.isArray(sx) ? sx : [sx]),
       ]}
     >
+      {/* Not a Tab stop of its own, which would be a stop where nothing can be done: the controls inside bring it along by taking the focus. */}
       <Box
         ref={scrollerRef}
+        tabIndex={-1}
         sx={{
+          outline: "none",
           height: "100%",
           overflowY: "auto",
           overflowX: "hidden",

@@ -207,6 +207,8 @@ const FLOOR_HOVER_STATES = new Set<CanvasStateType>([
  */
 export const HOVER_TARGETS: Record<CanvasStateType, HoverTargets> = {
   Selecting: SELECT_ALL,
+  // The parts of the mechanism, which a pull can move: a constraint, a load or a badge has nothing to be pulled by.
+  Grabbing: { node: "centre", gear: "rim+body", edge: "ends+body", belt: "full" },
   SelectedElement: SELECT_ALL,
   SelectedMultiple: SELECT_ALL,
   Erasing: { ...SELECT_ALL, probeBadge: undefined, motorArrow: undefined },

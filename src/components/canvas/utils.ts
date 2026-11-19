@@ -1,5 +1,4 @@
 import {
-  AppMode,
   BeamElement,
   CanvasState,
   ConstraintElement,
@@ -330,15 +329,15 @@ export function linked_constraint(
 /**
  * Computes which constraints should be visible and at which opacity (0–1) given the current context.
  * A constraint absent from the returned map is hidden (neither drawn nor hit-testable).
- * Rules :
- * - Onglet "constraints" : toutes les contraintes, opaques (prioritaire sur le mode).
- * - Sinon en simulation : aucune contrainte.
- * - Sinon (édition, autre onglet) : dimensions toujours opaques ; badges géométriques uniquement pour les contraintes révélées au survol (`revealedOpacities`, avec leur opacité de fondu).
- * La contrainte en cours de sélection / déplacement / édition reste opaque.
+ * Rules:
+ * - "constraints" tab: every constraint, opaque (takes precedence over the mode).
+ * - Otherwise, while the mechanism moves: no constraint — in simulation, and on the swing back to rest, after which they show on the mechanism as it stands.
+ * - Otherwise (at rest, another tab): dimensions always opaque; geometric badges only for the constraints revealed by hover (`revealedOpacities`, with their fade opacity).
+ * The constraint being selected, moved or edited stays opaque.
  */
 export function compute_visible_constraints(
   constraints: ConstraintElement[],
-  appMode: AppMode,
+  moving: boolean,
   activeTab: PropertiesPanelTab,
   revealedOpacities: Map<ID, number>,
   canvasState: CanvasState,
@@ -350,13 +349,13 @@ export function compute_visible_constraints(
     return visible;
   }
 
-  if (appMode !== "edition") return visible;
+  if (moving) return visible;
 
   for (const c of constraints)
     if (c.type.startsWith("dimension-") || c.type === "gear-ratio")
       visible.set(c.id, 1);
 
-  // Badges révélés au survol : conserve la plus forte opacité (ne baisse jamais une dimension déjà à 1).
+  // Badges revealed by hover keep the highest opacity, never lowering a dimension already at 1.
   for (const [id, opacity] of revealedOpacities)
     visible.set(id, Math.max(visible.get(id) ?? 0, opacity));
 

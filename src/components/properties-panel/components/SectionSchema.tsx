@@ -33,7 +33,7 @@ const Cote: React.FC<CoteProps> = ({ cote, color }) => (
     {cote.attachments.map((seg, i) => (
       <line key={i} {...line_props(seg)} strokeWidth={SECTION_SCHEMA.EXT_WIDTH} />
     ))}
-    {[cote.line, ...cote.leader].map((seg, i) => (
+    {[...(cote.open ? [] : [cote.line]), ...cote.tails, ...cote.leader].map((seg, i) => (
       <line key={i} {...line_props(seg)} />
     ))}
     {cote.heads.map((head, i) => (
@@ -50,6 +50,7 @@ const Cote: React.FC<CoteProps> = ({ cote, color }) => (
       y={cote.text.y}
       fontSize={SECTION_SCHEMA.FONT}
       stroke="none"
+      fill={color}
       textAnchor={cote.text.anchor}
       dominantBaseline={cote.text.baseline}
       transform={
@@ -107,7 +108,11 @@ export const SectionSchema: React.FC<SectionSchemaProps> = ({
           strokeDasharray={SECTION_SCHEMA.AXIS_DASH}
         />
         {cotes.map((cote) => (
-          <Cote key={cote.name} cote={cote} color={palette.text.secondary} />
+          <Cote
+            key={cote.name}
+            cote={cote}
+            color={palette.text.secondary}
+          />
         ))}
       </svg>
     </Box>

@@ -35,11 +35,14 @@ const BarButton: React.FC<{
   label: string;
   active: boolean;
   accent?: boolean;
+  /** What a hint pointing at this slot looks for (see `hints.ts`). */
+  hintAnchor?: string;
   onClick: () => void;
   children: React.ReactNode;
-}> = ({ label, active, accent = false, onClick, children }) => (
+}> = ({ label, active, accent = false, hintAnchor, onClick, children }) => (
   <ButtonBase
     aria-label={label}
+    data-hint-anchor={hintAnchor}
     aria-pressed={accent ? undefined : active}
     onClick={onClick}
     sx={{
@@ -75,7 +78,7 @@ interface PhoneBottomBarProps {
   /** The tab whose sheet is up, `null` while the sheet is down. */
   sheetTab: SheetTab | null;
   onTab: (tab: SheetTab) => void;
-  /** Ends the simulation, back to edition. */
+  /** Ends the simulation, back to rest. */
   onStop: () => void;
 }
 
@@ -93,7 +96,7 @@ export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
   onTab,
   onStop,
 }) => {
-  const simulating = appMode !== "edition";
+  const simulating = appMode !== "static";
   const armed = armed_palette_element(canvasState, mechanism);
   const lit = sheetTab;
   const tabs: Exclude<SheetTab, "palette" | "project">[] = [
@@ -121,6 +124,8 @@ export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
       <BarButton
         label={armed ? t(armed.nameKey) : t("palette")}
         active={lit === "palette"}
+        // The slot shows the armed tool, so a hint about that tool points here.
+        hintAnchor={armed?.goToStateType}
         onClick={() => onTab("palette")}
       >
         {armed ? (

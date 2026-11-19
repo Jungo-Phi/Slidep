@@ -9,6 +9,10 @@ import {
   ROW_ICON_BUTTON_SX,
 } from "../inspector-metrics";
 import EditableName from "./EditableName";
+import {
+  activation_props,
+  focus_hover_props,
+} from "../../common/keyboard-activation";
 
 interface ReadingRowProps {
   /** Data URI of the layer's own glyph. */
@@ -70,6 +74,8 @@ export const ReadingRow: React.FC<ReadingRowProps> = ({
       onClick={onClick}
       onMouseEnter={() => onHoverChange?.(true)}
       onMouseLeave={() => onHoverChange?.(false)}
+      {...activation_props(onClick)}
+      {...focus_hover_props((on) => onHoverChange?.(on))}
       sx={(theme) => {
         const rest = selected
           ? theme.palette.action.selected
@@ -86,7 +92,10 @@ export const ReadingRow: React.FC<ReadingRowProps> = ({
           cursor: onClick ? "pointer" : "default",
           backgroundColor: rest,
           // Every row here answers the pointer, clickable or not: each stands for something drawn on the canvas, and the tint is what pairs the two — the same bond an `ElementDisplay` keeps with its own element.
-          "&:hover": { backgroundColor: theme.palette.action.hover },
+          "&:hover, &:focus-visible": {
+            backgroundColor: theme.palette.action.hover,
+          },
+          "&:focus-visible": { outline: "none" },
           // A control of its own is pointed at for itself, not for the row: as on an `ElementDisplay`, the row drops its tint — whatever the pointer resting on it told the canvas — and keeps only its selection.
           [`&:has(.${ROW_CONTROL_CLASS}:hover)`]: {
             backgroundColor: selected
@@ -100,7 +109,11 @@ export const ReadingRow: React.FC<ReadingRowProps> = ({
         component="img"
         src={icon}
         alt=""
-        sx={{ width: OVERLAY_ICON_SIZE, height: OVERLAY_ICON_SIZE, flexShrink: 0 }}
+        sx={{
+          width: OVERLAY_ICON_SIZE,
+          height: OVERLAY_ICON_SIZE,
+          flexShrink: 0,
+        }}
       />
       {onRename ? (
         <Box sx={{ flex: 1, minWidth: 0, display: "flex" }}>

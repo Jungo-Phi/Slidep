@@ -26,12 +26,15 @@ declare module "@mui/material/styles" {
     overlay: Record<PhysicsOverlayKind, string>;
     /** `error.main`, thinned to a background tint — for a row or chip flagged as wrong without hiding what's printed on it. */
     errorSoft: string;
+    /** The look of the canvas's constraint badges (`BADGE_FILL`, `BADGE_STROKE`), for the interface laid over the drawing beside them. */
+    badge: { fill: string; stroke: string };
   }
   interface PaletteOptions {
     dividers?: { ground: string; paper: string; toolbar: string };
     measure?: string;
     overlay?: Record<PhysicsOverlayKind, string>;
     errorSoft?: string;
+    badge?: { fill: string; stroke: string };
   }
 }
 
@@ -593,6 +596,10 @@ const status_palette = (s: ThemeSpec) => {
   };
 };
 
+/** A step off the ground, like the grid, but deliberately outside `gridContrast`: a theme that wants a loud grid does not want a loud badge outline. */
+const badge_stroke = (s: ThemeSpec): string =>
+  mix(s.appBackground, s.mode === "dark" ? "#FFFFFF" : "#000000", 0.4);
+
 const mui_palette = (s: ThemeSpec) => {
   const dark = s.mode === "dark";
   // The veil darkens a light ground and lightens a dark one: a black veil on a dark background is invisible.
@@ -623,6 +630,8 @@ const mui_palette = (s: ThemeSpec) => {
     // The default lands on `paper`, which is what most of the interface is made of.
     divider: divider_colors(s).paper,
     dividers: divider_colors(s),
+    // The opacity the canvas lays its badges with (`ICON_TRANSPARENCY`).
+    badge: { fill: alpha(s.paper, 0xc8 / 0xff), stroke: badge_stroke(s) },
     measure: measure_color(s),
     overlay: overlay_colors(s),
     action: {
@@ -635,7 +644,6 @@ const mui_palette = (s: ThemeSpec) => {
 };
 
 export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
-  const towards = s.mode === "dark" ? "#FFFFFF" : "#000000";
   // The drawing sits on the app's own ground; `paper` belongs to what floats above it — badges included, small labels laid over the drawing.
   const ground = s.appBackground;
 
@@ -650,10 +658,9 @@ export const canvas_palette = (s: ThemeSpec): CanvasPalette => {
     ACCENT: s.accent,
     ACCENT_DARK: s.accentDark,
 
-    // A step off the ground, like the grid, but deliberately outside `gridContrast`: a theme that wants a loud grid does not want a loud badge outline.
-    BADGE_STROKE: mix(ground, towards, 0.4),
+    BADGE_STROKE: badge_stroke(s),
     BADGE_FILL: s.paper,
-    // Selection pushes the paper further into its own tone — the opposite of `towards`, which pulls against it.
+    // Selection pushes the paper further into its own tone — the opposite of the outline, which steps off the ground towards the ink.
     // A theme whose paper already sits at the extreme gets no lift and leans on the outline alone.
     BADGE_FILL_SELECTED: mix(
       s.paper,
@@ -851,6 +858,24 @@ const components: ThemeOptions["components"] = {
     defaultProps: {
       arrow: true,
       disableInteractive: true,
+    },
+  },
+  // The keyboard on a toggle shows as the pointer does: `ButtonBase` draws no outline, and a tooltip alone does not say where the focus is.
+  // Selected, it takes the shade MUI gives a selected toggle under the pointer.
+  MuiToggleButton: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        "&.Mui-focusVisible:not(.Mui-selected)": {
+          backgroundColor: theme.palette.action.hover,
+        },
+        "&.Mui-selected.Mui-focusVisible": {
+          backgroundColor: alpha(
+            theme.palette.text.primary,
+            theme.palette.action.selectedOpacity +
+              theme.palette.action.hoverOpacity,
+          ),
+        },
+      }),
     },
   },
   MuiIconButton: {

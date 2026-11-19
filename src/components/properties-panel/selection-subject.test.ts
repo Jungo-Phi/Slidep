@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ID, MechanicalElement } from "../../types";
 import type { CanvasState } from "../../types/canvas-state";
 import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
-import { carried_focus } from "./selection-subject";
+import type { Mechanism } from "../../types/mechanism";
+import { carried_focus, inspected_subject } from "./selection-subject";
 
 const element = (id: string, type: string) =>
   ({ id, type }) as unknown as MechanicalElement;
@@ -52,5 +53,18 @@ describe("carried_focus", () => {
 
   it("keeps nothing when nothing was named", () => {
     expect(carried_focus(null, selected("beam-2"), ELEMENTS)).toBeNull();
+  });
+});
+
+describe("inspected_subject", () => {
+  const MECHANISM = { mechanicalElements: ELEMENTS, loads: [] } as unknown as Mechanism;
+  const grab = { elementID: "pivot-1", kind: "grab" } as unknown as FocusedOverlay;
+
+  it("has no page for the grab's arrow, whatever is selected underneath it", () => {
+    expect(inspected_subject(["beam-1" as ID], grab, MECHANISM)).toBeUndefined();
+  });
+
+  it("gives the grab up to a click elsewhere", () => {
+    expect(carried_focus(grab, selected("pivot-1"), ELEMENTS)).toBeNull();
   });
 });

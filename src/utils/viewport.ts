@@ -191,15 +191,21 @@ export interface ViewArea {
 /**
  * The viewport once the area in sight goes from `before` to `after` — the canvas resized, or a sheet raised over its bottom.
  * A view framed by `fit` is framed again in the new area; any other keeps the point at the area's centre where it was, at the same zoom.
+ * With `keepScale`, a framed view is kept at its zoom as well, the way any other is.
  */
 export function follow_view_area(
   viewport: ViewportState,
   before: ViewArea,
   after: ViewArea,
   fit: (area: ViewArea) => ViewportState,
+  keepScale = false,
 ): ViewportState {
   const framed = fit(before);
-  if (viewport.scale === framed.scale && viewport.pan.equals(framed.pan))
+  if (
+    !keepScale &&
+    viewport.scale === framed.scale &&
+    viewport.pan.equals(framed.pan)
+  )
     return fit(after);
   return {
     scale: viewport.scale,

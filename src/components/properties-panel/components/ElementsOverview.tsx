@@ -58,6 +58,11 @@ import { selection_metrics } from "../selection-metrics";
 import { LENGTH, MASS, format_quantity } from "../../../utils/quantity-format";
 import { PluralKey, t, tn } from "../../../i18n";
 import SectionTitle from "./SectionTitle";
+import {
+  activation_props,
+  focus_hover_props,
+} from "../../common/keyboard-activation";
+import { useRowArrows } from "../../common/keyboard-zones";
 
 const GROUP_LABEL_KEYS: Record<DisplayType, PluralKey> = {
   damper: "selection_damper",
@@ -162,6 +167,9 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
   );
   const listed = groups.flatMap((group) => group.elements);
   const listedIds = listed.map((el) => el.id);
+  // The up and down arrows run down the unfolded lists, a name to the next name.
+  const listsRef = React.useRef<HTMLDivElement>(null);
+  useRowArrows(listsRef, "li");
   const [expanded, setExpanded] = React.useState<ReadonlySet<DisplayType>>(
     new Set(),
   );
@@ -297,7 +305,8 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
             borderRadius: 3,
             cursor: groupIsClickable ? "pointer" : "default",
             ...(groupIsClickable && {
-              "&:hover": { backgroundColor: "action.hover" },
+              "&:hover, &:focus-visible": { backgroundColor: "action.hover" },
+              "&:focus-visible": { outline: "none" },
             }),
           }}
           onClick={groupIsClickable ? () => selectGroup(group) : undefined}
@@ -308,6 +317,20 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
             })
           }
           onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
+          {...activation_props(
+            groupIsClickable ? () => selectGroup(group) : undefined,
+          )}
+          {...(groupIsClickable &&
+            focus_hover_props((on) =>
+              setHighlight(
+                on
+                  ? {
+                      elements: new Set(group.elements.map((el) => el.id)),
+                      kind: "pick",
+                    }
+                  : NO_HIGHLIGHT,
+              ),
+            ))}
         >
           <Box
             component="img"
@@ -385,6 +408,11 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
         setHighlight({ elements: new Set(listedIds), kind: "pick" })
       }
       onMouseLeave={() => setHighlight(NO_HIGHLIGHT)}
+      {...focus_hover_props((on) =>
+        setHighlight(
+          on ? { elements: new Set(listedIds), kind: "pick" } : NO_HIGHLIGHT,
+        ),
+      )}
     >
       <IconButton
         sx={{
@@ -484,7 +512,10 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
     );
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", m: 2, gap: 1 }}>
+    <Box
+      ref={listsRef}
+      sx={{ display: "flex", flexDirection: "column", m: 2, gap: 1 }}
+    >
       {/* A single element's own row names it and carries its delete: a header above it would say all of that twice. */}
       {listed.length > 1 && (
         <>
@@ -498,8 +529,9 @@ export const ElementsOverview: React.FC<ElementsOverviewProps> = ({
         const { on, total } = collision_count(
           listed.map(
             (el) =>
-              analysedMechanism.mechanicalElements.find((e) => e.id === el.id) ??
-              el,
+              analysedMechanism.mechanicalElements.find(
+                (e) => e.id === el.id,
+              ) ?? el,
           ),
         );
         if (total === 0) return null;

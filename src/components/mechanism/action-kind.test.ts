@@ -62,7 +62,7 @@ describe("is_probes_only_bundle", () => {
 
 /**
  * What a running simulation can absorb.
- * The panel greys a control out from the same verdict that decides whether an edit exits to edition, so the two cannot drift apart.
+ * The panel greys a control out from the same verdict that decides whether an edit brings the simulation back to rest, so the two cannot drift apart.
  */
 describe("is_structure_action", () => {
   it("reads a creation from the element, not the action type", () => {

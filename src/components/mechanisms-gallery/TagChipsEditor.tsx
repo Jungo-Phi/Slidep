@@ -13,11 +13,14 @@ interface TagChipsEditorProps {
   onChange: (tags: string[]) => void;
   mechanismLength: number;
   modifiedAt?: number;
+  /** Whether Tab stops on its chips: a gallery card that is not the keyboard's keeps them out of the way. */
+  tabbable?: boolean;
 }
 
 /**
  * Tags rendered as chips, editable in place: hovering a chip swaps its label for a "×" (an absolutely-positioned overlay, so the chip never changes width) and a trailing "+" chip turns into a freeSolo autocomplete.
  * On a phone, each chip carries its "×" for good, and the whole editor is sized for a finger.
+ * From the keyboard, a focused tag shows its "×" as a hovered one does, and Enter, Delete or Backspace removes it.
  * Shared by the gallery card and the project panel so tags are edited the same way wherever they show up.
  */
 export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
@@ -26,7 +29,17 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
   onChange,
   mechanismLength,
   modifiedAt,
+  tabbable = true,
 }) => {
+  const tabIndex = tabbable ? 0 : -1;
+  // An entry closed from the keyboard hands the focus back to the "+" it came from.
+  const refocusAddRef = useRef(false);
+  const setAddChip = (element: HTMLDivElement | null) => {
+    if (element && refocusAddRef.current) {
+      refocusAddRef.current = false;
+      element.focus();
+    }
+  };
   // A finger needs a bigger pill to hit than a mouse does.
   const phone = usePhoneLayout();
   const chipHeight = phone ? 28 : 20;
@@ -52,6 +65,18 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
 
   const removeTag = (tag: string) =>
     onChange(tags.filter((existing) => existing !== tag));
+
+  /** Removed from the keyboard, a tag passes the focus on to the next chip, the "+" at worst. */
+  const removeFocusedTag = (event: React.KeyboardEvent<HTMLElement>, tag: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const chip = event.currentTarget;
+    const next =
+      (chip.nextElementSibling as HTMLElement | null) ??
+      (chip.previousElementSibling as HTMLElement | null);
+    removeTag(tag);
+    requestAnimationFrame(() => next?.focus());
+  };
 
   return (
     <Box
@@ -120,6 +145,17 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
             key={tag}
             size="small"
             variant="outlined"
+            role="button"
+            tabIndex={tabIndex}
+            aria-label={`${t("remove_tag")} ${tag}`}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" ||
+                event.key === "Delete" ||
+                event.key === "Backspace"
+              )
+                removeFocusedTag(event, tag);
+            }}
             label={
               <Box sx={{ position: "relative", display: "inline-flex" }}>
                 <Box
@@ -151,9 +187,13 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
               height: chipHeight,
               fontSize,
               transition: "color 0.1s, background-color 0.1s, border-color 0.1s",
-              "&:hover .tag-label-text": { opacity: 0 },
-              "&:hover .tag-delete-overlay": { opacity: 1 },
-              "&:hover": {
+              "&:hover .tag-label-text, &:focus-visible .tag-label-text": {
+                opacity: 0,
+              },
+              "&:hover .tag-delete-overlay, &:focus-visible .tag-delete-overlay":
+                { opacity: 1 },
+              "&:focus-visible": { outline: "none" },
+              "&:hover, &:focus-visible": {
                 color: "error.main",
                 backgroundColor: "errorSoft",
                 borderColor: "transparent",
@@ -182,8 +222,10 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
             e.stopPropagation();
             if (e.key === "Escape") {
               discardRef.current = true;
+              refocusAddRef.current = true;
               (e.target as HTMLElement).blur();
             } else if (e.key === "Enter") {
+              refocusAddRef.current = true;
               (e.target as HTMLElement).blur();
             }
           }}
@@ -226,9 +268,12 @@ export const TagChipsEditor: React.FC<TagChipsEditorProps> = ({
       ) : (
         <Tooltip title={t("add_tag")}>
           <Chip
+            ref={setAddChip}
             label={<Add sx={{ fontSize: iconSize, display: "block" }} />}
+            aria-label={t("add_tag")}
             size="small"
             variant="outlined"
+            tabIndex={tabIndex}
             onClick={() => setAdding(true)}
             sx={{
               height: chipHeight,

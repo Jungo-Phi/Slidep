@@ -158,8 +158,11 @@ function draw_overlay_readings(
     is_hovered(candidate) || names_focused(candidate);
 
   // Two passes so an emphasized reading always draws on top of the ones it overlaps, not just wherever it falls in the array.
+  // The grab's force is on screen for as long as the cursor holds the mechanism, its value with it.
+  const held = (arrow: OverlayArrow) => grabHeld && arrow.kind === "grab";
   for (const arrow of arrows)
-    if (!emphasized(arrow)) draw_overlay_arrow(ctx, viewport, arrow, false);
+    if (!emphasized(arrow))
+      draw_overlay_arrow(ctx, viewport, arrow, false, false, held(arrow));
   for (const arrow of arrows)
     if (emphasized(arrow))
       draw_overlay_arrow(
@@ -168,6 +171,7 @@ function draw_overlay_readings(
         arrow,
         is_hovered(arrow),
         names_focused(arrow),
+        held(arrow),
       );
   for (const moment of moments)
     if (!emphasized(moment)) draw_overlay_moment(ctx, viewport, moment, false);
@@ -188,7 +192,7 @@ function draw_overlay_readings(
   const labelledArrows = [
     ...arrows.filter(
       (a) =>
-        (names_focused(a) || (grabHeld && a.kind === "grab")) &&
+        (names_focused(a) || held(a)) &&
         !hovered.arrows.includes(a),
     ),
     ...hovered.arrows,

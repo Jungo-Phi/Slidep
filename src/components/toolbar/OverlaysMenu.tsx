@@ -91,6 +91,40 @@ interface OverlayMenuRowProps {
   children?: React.ReactNode;
 }
 
+/** Every control of the menu the keyboard stops on, in reading order. */
+const FOCUSABLE = 'button:not(:disabled), li[role="menuitem"]';
+
+/**
+ * Moves the focus through every control of the menu: the arrows and Tab alike, wrapping at the ends, the menu staying open.
+ * Taken over from `MenuList`, whose arrows only reach its direct children, and from `Menu`, which closes on Tab: here the rows hold several controls each, nested in blocks.
+ */
+function move_menu_focus(event: React.KeyboardEvent<HTMLElement>) {
+  const forward =
+    event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey);
+  const backward =
+    event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey);
+  if (!forward && !backward && event.key !== "Home" && event.key !== "End")
+    return;
+  const controls = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE),
+  );
+  if (controls.length === 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const at = controls.indexOf(document.activeElement as HTMLElement);
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? controls.length - 1
+        : forward
+          ? (at + 1) % controls.length
+          : at <= 0
+            ? controls.length - 1
+            : at - 1;
+  controls[next].focus();
+}
+
 /** One layer of the menu: the bulk pair, under the layer's own name. */
 const OverlayMenuRow: React.FC<OverlayMenuRowProps> = ({
   kind,
@@ -203,12 +237,19 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         transformOrigin={{ vertical: "top", horizontal: "center" }}
         // Leaving the list drops the preview, armed or showing, and puts the chosen lens back.
-        MenuListProps={{ onMouseLeave: () => onPreviewBeamStressLens(null) }}
+        // The list takes the focus on opening, not its first block: a block focused would be framed as a control at the first key.
+        disableAutoFocusItem
+        MenuListProps={{
+          onMouseLeave: () => onPreviewBeamStressLens(null),
+          onKeyDownCapture: move_menu_focus,
+        }}
       >
-        {/* Coming back up to the layers is leaving the lenses, the pointer never having left the list. */}
+        {/* Coming back up to the layers is leaving the lenses, the pointer or the focus never having left the list. */}
         <Box
           sx={{ py: 0.5 }}
+          tabIndex={-1}
           onMouseEnter={() => onPreviewBeamStressLens(null)}
+          onFocus={() => onPreviewBeamStressLens(null)}
         >
           {OVERLAY_KIND_ORDER.map((kind) => {
             const { shown, total } = overlay_count(mechanicalElements, kind);
@@ -277,7 +318,10 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
               cursor: "pointer",
               color: supportReactions ? "text.primary" : "text.secondary",
               backgroundColor: "transparent",
-              "&:hover": { backgroundColor: theme.palette.action.hover },
+              "&:hover, &:focus-visible": {
+                backgroundColor: theme.palette.action.hover,
+                outline: "none",
+              },
             })}
           >
             <Box sx={{ display: "flex", direction: "row", gap: 1 }}>
@@ -315,6 +359,8 @@ export const OverlaysMenu: React.FC<OverlaysMenuProps> = ({
                 onChangeBeamStressLens(lens);
               }}
               onMouseEnter={() => onPreviewBeamStressLens(lens)}
+              // The keyboard tries a lens on as the pointer does.
+              onFocus={() => onPreviewBeamStressLens(lens)}
             >
               <ListItemIcon>
                 {lens === beamStressLens && <Check sx={{ fontSize: 18 }} />}

@@ -6,12 +6,8 @@ import { useAmbient } from "../common/use-ambient";
 import { useTouchScrub } from "../common/use-touch-scrub";
 import { format_sim_time } from "../../utils";
 import { t } from "../../i18n";
-import { at_recording_end } from "../solver/dynamics/simulation-engine";
-import {
-  set_sim_clock as setRuntimeState,
-  sim_clock,
-  useSimClock,
-} from "../solver/dynamics/sim-clock";
+import { sim_clock, useSimClock } from "../solver/dynamics/sim-clock";
+import { seek_to } from "../solver/recording/seek";
 import {
   BeltEventScan,
   extend_belt_events,
@@ -51,6 +47,18 @@ const dominant_kind = (
 /** Share of the rail below which two marks would draw on top of one another. */
 const MARK_MERGE_RATIO = 0.012;
 
+/** How far the pointer must travel from a press on the rail for it to be a drag rather than a click, in px. */
+const DRAG_THRESHOLD_PX = 3;
+
+/**
+ * How close to either end of the rail a press lands exactly on it, in px.
+ * A press a hair short of the end would otherwise leave "go to end" enabled while the head looks already there.
+ */
+const EDGE_SNAP_PX = 10;
+
+/** How far the rail's hit area reaches past its drawn ends, in px, into the gaps on either side. */
+const EDGE_OVERHANG_PX = 8;
+
 interface SimulationTimelineProps {
   appMode: AppMode;
   timelineTrackRef: React.RefObject<HTMLDivElement | null>;
@@ -78,7 +86,7 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
     () => timeline_state(appMode, runtimeState),
     [appMode, runtimeState],
   );
-  const disabled = appMode === "edition";
+  const disabled = appMode === "static";
   const [timelineHovered, setTimelineHovered] = useState(false);
   const [timelineDragging, setTimelineDragging] = useState(false);
   /**
@@ -89,26 +97,23 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
   const [markHovered, setMarkHovered] = useState(false);
 
   /** Moves the instant on screen to the one under `clientX` on the rail. */
-  const seek_at = (clientX: number) => {
+  const seek_at = (clientX: number, animate = false) => {
     const track = timelineTrackRef.current;
     if (!track || disabled) return;
     const rect = track.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const x = clientX - rect.left;
+    const ratio =
+      x <= EDGE_SNAP_PX
+        ? 0
+        : x >= rect.width - EDGE_SNAP_PX
+          ? 1
+          : x / rect.width;
     const rs = sim_clock();
     const maxTime =
       is_simulating(appMode) && rs.simulationSnapshots.length > 0
         ? rs.simulationSnapshots[rs.simulationSnapshots.length - 1].t
         : 0;
-    setRuntimeState((prev) => {
-      const t = ratio * maxTime;
-      return {
-        ...prev,
-        time: t,
-        isPlaying: false,
-        // Dropped ON the end is not scrubbing: playing from there extends the recording instead of replaying nothing.
-        scrubbed: !at_recording_end(prev.simulationSnapshots, t),
-      };
-    });
+    seek_to(ratio * maxTime, animate);
   };
   const touchScrub = useTouchScrub<HTMLDivElement>(seek_at);
 
@@ -235,6 +240,12 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
           position: "relative",
           cursor: disabled ? "default" : "pointer",
           touchAction: "none",
+          // Its events land on the track itself, so a press just past either end seeks there.
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            inset: `0 -${EDGE_OVERHANG_PX}px`,
+          },
         }}
         onMouseEnter={() => setTimelineHovered(true)}
         onMouseLeave={() => {
@@ -247,10 +258,19 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
           if (disabled) return;
           e.preventDefault();
           setTimelineDragging(true);
-          seek_at(e.clientX);
-          const onMove = (ev: MouseEvent) => seek_at(ev.clientX);
+          // The pointer leaves the rail freely while scrubbing: see `body.scrubbing` in `index.css`.
+          document.body.classList.add("scrubbing");
+          // A click jumps, swept like the buttons' jumps; a drag follows the pointer, once it has really moved.
+          const pressX = e.clientX;
+          let dragged = false;
+          seek_at(pressX, true);
+          const onMove = (ev: MouseEvent) => {
+            dragged ||= Math.abs(ev.clientX - pressX) > DRAG_THRESHOLD_PX;
+            if (dragged) seek_at(ev.clientX);
+          };
           const onUp = () => {
             setTimelineDragging(false);
+            document.body.classList.remove("scrubbing");
             document.removeEventListener("mousemove", onMove);
             document.removeEventListener("mouseup", onUp);
           };
@@ -289,8 +309,6 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
             <Tooltip
               key={mark.t}
               placement="bottom"
-              // Held back while scrubbing: the pointer is then following the head, not pointing at what it happens to pass over.
-              disableHoverListener={timelineDragging}
               title={`${format_sim_time(mark.t)} · ${mark.labels.join(" · ")}`}
             >
               <Box
@@ -300,15 +318,7 @@ const SimulationTimelineView: React.FC<SimulationTimelineProps> = ({
                   // The rail seeks from the pointer's x; this knows the exact instant.
                   e.stopPropagation();
                   e.preventDefault();
-                  setRuntimeState((prev) => ({
-                    ...prev,
-                    time: mark.t,
-                    isPlaying: false,
-                    scrubbed: !at_recording_end(
-                      prev.simulationSnapshots,
-                      mark.t,
-                    ),
-                  }));
+                  seek_to(mark.t, true);
                 }}
                 sx={{
                   position: "absolute",

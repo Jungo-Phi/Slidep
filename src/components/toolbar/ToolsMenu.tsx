@@ -3,9 +3,7 @@ import { Box, Divider, IconButton, Tooltip } from "@mui/material";
 import {
   Add,
   Info,
-  Redo,
   Remove,
-  Undo,
 } from "@mui/icons-material";
 import { Lang } from "../../i18n";
 import { t } from "../../i18n";
@@ -120,7 +118,8 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
             borderRadius: 1,
             // Being framed on the mechanism is the neutral state: only a viewport one click away from it is worth the eye.
             color: "text.secondary",
-            "&:hover": {
+            // `all: unset` takes the focus outline with it: the keyboard gets the hover's ground instead.
+            "&:hover, &:focus-visible": {
               backgroundColor: framed ? "transparent" : "action.hover",
             },
           }}
@@ -151,8 +150,6 @@ interface ToolsMenuProps {
   mechanism: Mechanism;
   recenterTarget: ViewportState | null;
   onRecenter: (target: ViewportState) => void;
-  undoMechanism: () => void;
-  redoMechanism: () => void;
   onZoomTo: (scale: number) => void;
   language: Lang;
   onSelectLang: (lang: Lang) => void;
@@ -172,13 +169,11 @@ interface ToolsMenuProps {
   onOpenAbout: () => void;
 }
 
-/** The toolbar's right-hand cluster: viewport, undo/redo, language, settings and about. */
+/** The toolbar's right-hand cluster: viewport, language, settings and about. */
 export const ToolsMenu: React.FC<ToolsMenuProps> = ({
   mechanism,
   recenterTarget,
   onRecenter,
-  undoMechanism,
-  redoMechanism,
   onZoomTo,
   language,
   onSelectLang,
@@ -212,33 +207,6 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({
       onZoomTo={onZoomTo}
       onRecenter={onRecenter}
     />
-
-    <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
-
-    <Tooltip title={t("undo")}>
-      <span>
-        <IconButton
-          color="inherit"
-          size="small"
-          onClick={() => undoMechanism()}
-          disabled={mechanism.history.length === 0}
-        >
-          <Undo sx={{ fontSize: 20 }} />
-        </IconButton>
-      </span>
-    </Tooltip>
-    <Tooltip title={t("redo")}>
-      <span>
-        <IconButton
-          color="inherit"
-          size="small"
-          onClick={() => redoMechanism()}
-          disabled={mechanism.future.length === 0}
-        >
-          <Redo sx={{ fontSize: 20 }} />
-        </IconButton>
-      </span>
-    </Tooltip>
 
     <Divider orientation="vertical" flexItem sx={TOP_BAR_DIVIDER_SX} />
 

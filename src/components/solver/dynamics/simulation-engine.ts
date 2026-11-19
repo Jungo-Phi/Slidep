@@ -1010,8 +1010,8 @@ function grab_links(
  * That ceiling is what keeps a pull within what the contacts and the constraints can carry — past it, a mechanism held by contacts (an escapement) diverges.
  * It is set as a multiple of the weight of everything that can move, `GRAB_MAX_FORCE_WEIGHTS`, and the stiffness follows from the two.
  */
-const GRAB_MAX_FORCE_WEIGHTS = 10;
-const GRAB_MAX_STRETCH = 0.25;
+const GRAB_MAX_FORCE_WEIGHTS = 5;
+const GRAB_MAX_STRETCH = 1;
 const GRAB_DAMPING_RATIO = 1;
 
 const GRAB_STIFFNESS = new WeakMap<SimulationModel, number>();
@@ -1060,6 +1060,8 @@ function grab_spring_force(
   velocity: Point2,
   inverseMass: number,
 ): Point2 {
+  // An anchored point is a spring stretched against a wall: no motion to integrate, so nothing bounds the stiffness and nothing damps.
+  if (inverseMass === 0) return end.sub(point).mul(stiffness);
   const { k, b } = grab_gains(stiffness, subDt, 1 / inverseMass);
   return end.sub(point).mul(k).sub(velocity.mul(b));
 }
@@ -1083,7 +1085,7 @@ function pulled_at(elementID: ID, point: Point2, end: Point2, f: Point2): GrabFo
  *
  * Unlike `grab_links` (which turns the grab into transient `HandleGrab`/bridge links for the KINEMATIC sweep), this applies the pull directly at the grabbed material point and splits it onto the DOFs underneath: a body grab at ratio `t` splits the force (1−t)/t between the endpoints, a gear-tooth grab splits it into a centre force plus a rim torque, a belt grab becomes a torque on the reference pulley (only the tangential component can move the belt).
  *
- * A grabbed point with no mobility (anchored) gets nothing, exactly as `applyHandleGrabConstraint` refused to move a grounded node.
+ * A grabbed node or beam with no mobility (anchored) is pulled all the same: the force cannot move it, but it reaches the support reaction, as an anchored node's own weight does.
  */
 function grab_forces(
   model: SimulationModel,
@@ -1118,7 +1120,6 @@ function grab_forces(
     const p = positions.get(key);
     if (!p) return { forces, torques };
     const w = posMasses.get(key) ?? 1;
-    if (w === 0) return { forces, torques };
     const end = spring_end(p, grab.target, maxStretch);
     const f = grab_spring_force(stiffness, subDt, end, p, velocities.get(key) ?? ZERO, w);
     add_force(key, f);
@@ -1135,7 +1136,6 @@ function grab_forces(
     const t = grab.t;
     // Effective inverse mass of the material point on a rigid rod with lumped endpoint masses.
     const wEff = (1 - t) * (1 - t) * wStart + t * t * wEnd;
-    if (wEff === 0) return { forces, torques };
     const point = start.lerp(end, t);
     const velocity = (velocities.get(startKey) ?? ZERO).lerp(
       velocities.get(endKey) ?? ZERO,
@@ -3210,7 +3210,6 @@ export function apply_parameter_snapshot_to_mechanism(
   const shownByID = new Map(
     snapshot.mechanicalElements.map((el) => [el.id, el]),
   );
-  const loadByID = new Map(snapshot.loads.map((load) => [load.id, load]));
 
   const newElements = mechanism.mechanicalElements.map((el) => {
     const shown = shownByID.get(el.id);
@@ -3229,9 +3228,11 @@ export function apply_parameter_snapshot_to_mechanism(
     return current ? { ...shown, name: current.name } : shown;
   });
 
-  const newLoads = mechanism.loads.map((load) => {
-    const shown = loadByID.get(load.id);
-    if (!shown) return load;
+  // The loads are the ones applied at that instant: a load deleted mid-run, which going back to rest brings back into the stored mechanism, is not on screen past its deletion, and one deleted later is still there before it.
+  const currentLoads = new Map(mechanism.loads.map((load) => [load.id, load]));
+  const newLoads = snapshot.loads.map((shown) => {
+    const load = currentLoads.get(shown.id);
+    if (!load) return shown;
     if (load.type === "force" && shown.type === "force")
       return { ...load, vector: shown.vector, frame: shown.frame };
     if (load.type === "distributed-force" && shown.type === "distributed-force")

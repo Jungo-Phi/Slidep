@@ -20,8 +20,7 @@ import {
   element_reactions,
 } from "../solver/recording/probe-series";
 import { MaterialDef, ProfileDef } from "../../types/material";
-import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
-import type { HoveredReading } from "../../types/hovered-part";
+import type { HoveredReading, MeasuredReading } from "../../types/hovered-part";
 
 /** Every list that shows an overlay glyph draws it at this size, the one the "Afficher" menu sets. */
 export const OVERLAY_ICON_SIZE = 24;
@@ -64,7 +63,7 @@ export function overlay_icon(kind: OverlayKind): string {
  * `metrics` names what it measures the way a probe does, which is where each label, unit and layout comes from — two of them for a reaction, whose resultant and couple are one reading but two curves.
  */
 export interface Reading {
-  focus: FocusedOverlay;
+  focus: MeasuredReading;
   metrics: ProbeMetric[];
   icon: string;
   color: string;
@@ -112,7 +111,7 @@ function reaction_metrics(which: ReactionPoint): ProbeMetric[] {
  * A body that turns as a whole reads its inertia as a force and a couple together, the way a reaction does; a point mass has no couple to read.
  */
 export function reading_from_focus(
-  focus: FocusedOverlay,
+  focus: MeasuredReading,
   element: MechanicalElement,
 ): Reading {
   const metrics: ProbeMetric[] =
@@ -207,7 +206,7 @@ export function reading_quantities(
  * A belt reports at both ends of every strand, and reads as its most loaded one.
  * A gear's own internal reaction sits at its centre and keeps its point, having only ever had one.
  */
-export function merged_internal(focus: FocusedOverlay): boolean {
+export function merged_internal(focus: MeasuredReading): boolean {
   return focus.kind === "reaction-internal" && focus.which === undefined;
 }
 

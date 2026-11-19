@@ -1,5 +1,12 @@
 import React from "react";
-import { Box, Typography, Menu, MenuItem, Tooltip } from "@mui/material";
+import {
+  Box,
+  ButtonBase,
+  Typography,
+  Menu,
+  MenuItem,
+  Tooltip,
+} from "@mui/material";
 import { KeyboardArrowDown } from "@mui/icons-material";
 import { Action, CanvasState, ID, UnionElement } from "../../../types";
 import { HoveredPart } from "../../../types/hovered-part";
@@ -106,7 +113,12 @@ export function ElementPicker<T extends UnionElement>({
       }}
     >
       <Tooltip title={label}>
-        <Box
+        {/* A div rather than a button: the element shown inside is a button of its own. */}
+        <ButtonBase
+          component="div"
+          disableRipple
+          aria-haspopup="menu"
+          aria-label={label}
           onClick={(e) => {
             const field = e.currentTarget;
             setAnchorEl((current) => (current ? null : field));
@@ -120,7 +132,7 @@ export function ElementPicker<T extends UnionElement>({
             borderRadius: 3,
             border: 1,
             borderColor: "divider",
-            "&:hover": { backgroundColor: "action.hover" },
+            "&:hover, &.Mui-focusVisible": { backgroundColor: "action.hover" },
           }}
         >
           {selected ? (
@@ -146,13 +158,9 @@ export function ElementPicker<T extends UnionElement>({
             )
           )}
           <KeyboardArrowDown fontSize="small" sx={{ ml: -0.5 }} />
-        </Box>
+        </ButtonBase>
       </Tooltip>
-      <Menu
-        {...popup}
-        anchorEl={anchorEl}
-        open={!!anchorEl}
-      >
+      <Menu {...popup} anchorEl={anchorEl} open={!!anchorEl}>
         {extraOption && (
           <MenuItem
             dense

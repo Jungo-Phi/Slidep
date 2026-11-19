@@ -5,9 +5,9 @@
  */
 
 import { darken } from "@mui/material/styles";
-import { icon } from "./iconDataUris";
+import { icon, icon_inked } from "./iconDataUris";
 import { CanvasState, Mechanism } from "../../types";
-import { COLORS } from "../../theme/canvas-theme";
+import { COLORS, ICON_COLORS } from "../../theme/canvas-theme";
 import { ToolStateType } from "../../constants/shortcuts";
 import { get_constraint_element_from_id } from "../mechanism/connect-actions";
 import { StringKey } from "../../i18n";
@@ -23,6 +23,8 @@ export interface PaletteElement {
   hilightHoverColor: string;
   simHilightColor?: string;
   simHilightHoverColor?: string;
+  /** A tool that exists at rest only, which the simulation takes off the palette: the desktop bar gives it a slot of its own, out of the groups, so nothing shifts when it goes. */
+  restOnly?: true;
 }
 
 /**
@@ -39,7 +41,8 @@ export const edition_palette = (): {
       {
         nameKey: "tool_select",
         iconSrc: icon("select"),
-        simIconSrc: icon("select-sim"),
+        // In motion the same tool pulls on what it is dragged on: the hand says so.
+        simIconSrc: icon("grab"),
         goToStateType: "Selecting",
         hilightRule: (state) =>
           [
@@ -47,6 +50,10 @@ export const edition_palette = (): {
             "SelectingMultiple",
             "SelectedMultiple",
             "MovingSelectionMultiple",
+            "SimulationDragging",
+            "MovingTransformPivot",
+            "TransformingSelection",
+            "EditingSelectionTransform",
             "SelectedElement",
             "MovingNode",
             "MovingEdgeStartPoint",
@@ -58,7 +65,6 @@ export const edition_palette = (): {
             "MovingDistributedForce",
             "MovingMoment",
             "MovingConstraint",
-            "SimulationDragging",
             "DraggingFloorHeight",
             "DraggingFloorAngle",
             "EditingFloorValue",
@@ -85,6 +91,16 @@ export const edition_palette = (): {
           state.type === "Erasing" || state.type === "ErasingMultiple",
         hilightColor: COLORS.DELETION_BOX,
         hilightHoverColor: COLORS.DELETION_STROKE,
+      },
+      {
+        nameKey: "tool_grab",
+        // Drawn in the simulation's own accent: a drag with it sets the mechanism moving.
+        iconSrc: icon_inked("grab", ICON_COLORS.ACCENT),
+        goToStateType: "Grabbing",
+        hilightRule: (state) => state.type === "Grabbing",
+        restOnly: true,
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
       },
     ],
   },
@@ -126,6 +142,14 @@ export const edition_palette = (): {
         iconSrc: icon("pivot"),
         goToStateType: "PlacingPivot",
         hilightRule: (state) => state.type === "PlacingPivot",
+        hilightColor: COLORS.ACCENT,
+        hilightHoverColor: COLORS.ACCENT_DARK,
+      },
+      {
+        nameKey: "motor",
+        iconSrc: icon("motor"),
+        goToStateType: "PlacingMotor",
+        hilightRule: (state) => state.type === "PlacingMotor",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },
@@ -217,14 +241,6 @@ export const edition_palette = (): {
         hilightRule: (state) =>
           state.type === "PlacingMomentStart" ||
           state.type === "PlacingMomentEnd",
-        hilightColor: COLORS.ACCENT,
-        hilightHoverColor: COLORS.ACCENT_DARK,
-      },
-      {
-        nameKey: "motor",
-        iconSrc: icon("motor"),
-        goToStateType: "PlacingMotor",
-        hilightRule: (state) => state.type === "PlacingMotor",
         hilightColor: COLORS.ACCENT,
         hilightHoverColor: COLORS.ACCENT_DARK,
       },

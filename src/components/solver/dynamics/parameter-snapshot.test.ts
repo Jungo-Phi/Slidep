@@ -7,6 +7,7 @@ import {
 } from "../../../types/mechanism";
 import type {
   BeamElement,
+  ForceElement,
   ID,
   PivotElement,
   SpringElement,
@@ -176,5 +177,41 @@ describe("a spring's rest length through the parameter snapshot", () => {
 
   it("shows the recorded one when the run carries it", () => {
     expect(shownRestLength(0.7, 0.4)).toBe(0.7);
+  });
+});
+
+/** A load created or deleted mid-run is a parameter edit: the loads on screen at an instant are those the run applied then, whichever the stored mechanism holds. */
+describe("the loads through the parameter snapshot", () => {
+  const KEPT_ID = id();
+  const DELETED_ID = id();
+  const force = (fid: ID, x: number, name?: string): ForceElement => ({
+    type: "force",
+    id: fid,
+    targetID: PIVOT_ID,
+    vector: new Point2(x, 0),
+    frame: "world",
+    ...(name !== undefined ? { name } : {}),
+  });
+  const shownLoads = (applied: ForceElement[], stored: ForceElement[]) =>
+    apply_parameter_snapshot_to_mechanism(
+      mechanism({ loads: stored }),
+      parameter_snapshot(2, mechanism({ loads: applied })),
+    ).loads as ForceElement[];
+
+  it("drops a load already deleted at that instant, which going back to rest brings back", () => {
+    const loads = shownLoads([force(KEPT_ID, 1)], [force(KEPT_ID, 1), force(DELETED_ID, 5)]);
+    expect(loads.map((load) => load.id)).toEqual([KEPT_ID]);
+  });
+
+  it("shows a load deleted after that instant", () => {
+    const loads = shownLoads([force(KEPT_ID, 1), force(DELETED_ID, 5)], [force(KEPT_ID, 1)]);
+    expect(loads.map((load) => load.id)).toEqual([KEPT_ID, DELETED_ID]);
+    expect(loads[1].vector).toEqual(new Point2(5, 0));
+  });
+
+  it("shows a load's value at that instant, keeping what only reads the run current", () => {
+    const [load] = shownLoads([force(KEPT_ID, 1, "old")], [force(KEPT_ID, 3, "new")]);
+    expect(load.vector).toEqual(new Point2(1, 0));
+    expect(load.name).toBe("new");
   });
 });

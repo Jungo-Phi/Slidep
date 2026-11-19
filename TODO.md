@@ -19,72 +19,18 @@
 - 🔨 Terminer la physique
 - 🆕 Nouvelles fonctionnalités
 
-
 ---
-
-
-## Fusion statique / édition
-
-### Modes et t=0
-
-- Remplacer le sélecteur par `[ Statique | Cinématique | Dynamique ]` ; le bouton "Édition" disparaît.
-- **Statique** = au repos : état par défaut, c'est là qu'on dessine.
-- **Cinématique / Dynamique** = en mouvement : cliquer dessus lance, sans arrêt intermédiaire à t=0.
-- À t=0, on édite toujours, qu'un historique existe ou non.
-- La pause à t>0 reste, pour lire et parcourir la timeline.
-- Une édition à t=0 coupe l'historique : c'est la règle existante "une édition à t coupe l'enregistrement après t".
-- Échap ramène au repos **sans** effacer l'historique ; un seul palier au lieu de deux.
-- On supprime le bouton Reset, qui n'a plus que seule distinction avec Statique d'effacer l'historique.
-- Filet de sécurité : garder la prise coupée en mémoire pour qu'un undo de l'édition la restaure.
-- Animation du rembobinage quand un geste de structure à t>0 ramène au repos.
-- "Attraper" au repos : tirer lance le dernier mode utilisé.
-- Espace maintenu (simulation tant qu'on appuie) : option secondaire, non prioritaire.
-- 🔨 Raccourcis pour revenir au début de la simulation + Se déplacer dans le temps de la simu avec les flèches du clavier
-- 🔨 Ajouter des boutons pour changer "édition" / "simulation" dans le menu click-droit
-
-### Palette et outils
-
-- Ne plus griser les éléments mécaniques en simulation : en armer un ramène au repos.
-- Le retour au repos se fait dès que l'outil est armé, pas au premier clic.
-- Ajouter l'outil "Attraper" dans la palette.
-- L'outil sélectionné passe de "Sélectionner" à "Attraper" quand le temps coule.
-- Indice "attrape une pièce" au premier lancement, disparu pour de bon après la première saisie.
-- Indice "lancer la simulation" après 3 pièces placées et sans actions depuis 2s, disparu pour de bon après le premier lancement.
-
-### Disposition des panneaux
-
-- Palette en haut, sous la top-bar.
-- Nouveau panneau à gauche : l'analyse, toujours visible.
-- Panneau de droite : reste contextuel.
-- Supprimer le saut d'onglet à l'entrée et à la sortie de simulation.
-- Penser le panneau d'analyse sur petit écran comme gardant le verdict (mobilité, hyperstaticité, couleur), dépliable pour les détails.
-- 🤔 Faire apparaitre "un indice" qui pointe vers l'outil DDL quand il y a un blocage (ou au premier)
-
-
----
-
 
 ### Retours utilisateurs
 
 - 🔨 Ajouter la pop-up "Vous avez créé un slidep !"
-- 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
-- 🔨 Re-dessiner les icons en plus grand avec 2px de marge
-
-- 🔨 Attraper une cote
-- 🆕 Suivit caméra
 
 - 🔨 Solveur géométrique : Quand on change l'angle d'une barre, on devrait essayer de maintenir sa longueur.
 - 🔨 Le dessin de ressort+ammortisseur ne fonctionne pas bien si les 2 éléments ne sont pas dans le même sens (start -> end / end -> start)
 - 🔨 Le point de contact bouge dans "Coup de pied.slidep"
 - 🔨 Ne pourrait-on pas éviter les doubles points de contact ?
-- 🚨 On devrait ignorer le hover sur les DDL (et de toute l'app finalement) quand on change t de la timeline
-
-
-**Gogo**
-
-- 🔨🔨 Rendre la simu plus rapide (Test sur Walking jansen) !
-- 🔨 Visuel du moteur ancré sur une poutre
-- 🆕 Colorer les éléments
+- 🚨 Changer la vitesse moteur en cours de simulation fait traverser le sol !
+- 🆕 Il faut une option pour cropper la simu (ou zoomer sur les graphiques)
 
 **Hitbox**
 
@@ -104,7 +50,14 @@
 - 🤔 Masse sur plan incliné : difficile à placer et mauvais résultats -> Aligner un élément avec les contacts ?
 - 🤔 Sur mobile, après avoir posé un élément mal placé, on veut souvent le redéplacer juste derrière, mais actuellement ça crée un nouvel élément. L'outil Sélection est lui même parfois difficile à comprendre.
 - 🤔 Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
-
+- 🔨 Mettre les pièces sans collision en transparence même en édition.
+- 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
+- 🆕 Suivit caméra
+- 🆕 Ajouter des marqueurs pour les changements de valeurs en simulation
+- 🆕 Un (i) à côté de là on ou peux éditer les propriétés matériaux, pour expliquer "Module de Young" et "Limite élastique" avec un shéma.
+- 🔨 Rendre les noms des matériaux/priofilés visiblent éditables
+- 🔨 Visuel du moteur ancré sur une poutre
+- 🆕 Colorer les éléments
 
 **Découvrabilité et onboarding**
 
@@ -185,9 +138,7 @@
 - 🔨 Dans les diagrammes des efforts, la directions des flèches au hover doit suivre le graph
 - 🔨 Afficher les unités des efforts internes
 - 🔨 Mieux afficher les unités des graphs globaux
-- 🚨 En simulation, clicker sur l'icon force, puis esc, puis reprendre la simu nous remet sur l'icon force.
 - 🔨 Mettre en évidence (rouge?) les contraintes géométriques non respectées
-- 🔨 La barre de scroll devrait se cacher, ou au moins se réduire, si on n'a pas scrollé depuis un moment
 - 🔨 Afficher l'angle total ET modulo 360
 
 - 🔨 On devrait afficher T/N au lieu de x/y pour les mesures des forces internes
@@ -196,7 +147,9 @@
 - 🔨 Afficher les contraintes (ou juste "contrainte max") dans SelectionInspector des poutres
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
 - 🔨 Faire apparaitre les contraintes à l'écran même si on est zoomé
-- 🔨 Le ressort de grab n'est pas aligné sur la force de hover, son texte est mal placé, et le dessin n'est pas raccord entre proche et éloigné.
+
+- 🔨 Re-dessiner les icons en plus grand avec 2px de marge
+- 🔨 Attraper une cote
 
 **Qwick fixes :**
 
@@ -236,7 +189,6 @@
 
 **Panneau mesures**
 
-- 🔨 À la fermeture du menu ProbeMetricSelector, on voit un petit rectangle sur 1 frame
 - 🔨 Ajuster la position des sondes sur les courroies
 - 🔨 Sur de combo ressort+amortisseur, ajuster la position des sondes et overlays
 - 🔨 La transparence de deletion des probes est inconsistante
@@ -360,7 +312,6 @@
 
 **Visuel des éléments**
 
-- 🔨 Changer l'apparence des extrémités de spring et damper comme pour beam
 - 🆕 Afficher ground avec les 4 directions cardinales
 - 🆕 Afficher le sens de rotation du moteur sur une des 4 directions cardinales
 - 🆕 Prefered force direction : afficher les forces en 2 modes (toe to head / head to toe)

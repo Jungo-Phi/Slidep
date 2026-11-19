@@ -213,14 +213,14 @@ const SCHEMA_DIM_OFFSET = 20;
  */
 export const SECTION_SCHEMA = {
   /**
-   * Drawn size of the section's largest extent, in the materials library.
+   * Drawn height of the section, in the materials library — its width follows from its proportions, up to `MAX_WIDTH` times this.
    * Everything else is annotation around it, so this is what sets how big the schema reads.
    */
-  SECTION_SIZE: 72,
+  SECTION_SIZE: 64,
   /** The same on an element's page, where the drawing sits beside the material's values and only says which shape it is. */
-  PAGE_SECTION_SIZE: 40,
+  PAGE_SECTION_SIZE: 46,
   /** Uniform border kept around everything the drawing covers, labels included. */
-  PAD: 6,
+  PAD: 4,
   FONT: 10,
   /** Distance from the section's edge to the first dimension line on that side. */
   DIM_OFFSET: SCHEMA_DIM_OFFSET,
@@ -230,15 +230,20 @@ export const SECTION_SCHEMA = {
   /** How far an extension line runs past the dimension line it reaches. */
   EXT_OVERSHOOT: 3,
   ARROW: 5,
+  /** Half the width an arrowhead spreads to, across the dimension line it closes. */
+  ARROW_SPREAD: 2,
+  /** How far a dimension line runs on past the back of an arrowhead set outside its span. */
+  ARROW_TAIL: 3,
   /** The neutral axis pokes out of the section, but stops short of the dimension lines. */
   AXIS_OVERSHOOT: SCHEMA_DIM_OFFSET / 4,
-  /** Angle above the horizontal a round wall's cote is read along: off the horizontal so the
-   * cote does not sit on the neutral axis, off the vertical so it costs the schema no height. */
-  ROUND_WALL_ANGLE: 20,
+  /** Angle below the horizontal a round section's cotes are read along: off the horizontal so a cote does not sit on the neutral axis, near it so its label stays within the section's height. */
+  ROUND_COTE_ANGLE: 20,
 
   /** Beyond this width-to-height ratio the section is drawn stubbier than it is: a 200×5 flat
    * would otherwise come out as a hairline with nowhere to hang a cote. */
   MAX_ASPECT: 5,
+  /** The widest a section is drawn, in drawn heights: a flatter one gives up height instead, so the schema stays within the panel. */
+  MAX_WIDTH: 3,
   /** Walls are thickened until the thinnest of them reaches this fraction of the section's
    * short side — below it the two edges merge and the cote has nothing left to point at. */
   MIN_THICKNESS: 1 / 20,

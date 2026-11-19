@@ -14,7 +14,11 @@ import {
   DynamicSnapshot,
   KinematicSnapshot,
 } from "../../../types/runtime-state";
-import { HoveredAbscissaSource, HoveredPart } from "../../../types/hovered-part";
+import {
+  HoveredAbscissaSource,
+  HoveredPart,
+  is_measured_reading,
+} from "../../../types/hovered-part";
 import {
   MetricSample,
   get_dynamic_metric_at,
@@ -115,7 +119,7 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
   setHoveredPart,
   setHoveredAbscissa,
 }) => {
-  const simulating = appMode !== "edition";
+  const simulating = appMode !== "static";
   const dynamic = appMode === "dynamic";
   const snapshot =
     (dynamic &&
@@ -160,9 +164,11 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
       return sample && format_metric(sample);
     });
 
-  // Only one of this element's own readings unfolds here; one of another element's is that element's page's business.
+  // Only one of this element's own readings unfolds here; one of another element's is that element's page's business, and the grab has no page.
   const focused =
-    focusedOverlay && focusedOverlay.elementID === element.id
+    focusedOverlay &&
+    is_measured_reading(focusedOverlay) &&
+    focusedOverlay.elementID === element.id
       ? focusedOverlay
       : null;
 
