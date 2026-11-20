@@ -262,16 +262,16 @@ export interface SimulationSnapshot {
 }
 
 /**
- * A contact that touched, named by the snapshot slots (indices into `layout.keys`) its point is read from, so that point follows the pose actually drawn, interpolation included (see `contact_point`).
- * `id` is the contact's rank among the run's collision candidates: the same contact touching on several solved steps is one entry.
+ * A contact that touched: where (world, m), on the solved step it was measured at.
+ * `id` is the contact's rank among the run's collision candidates: the same contact touching on several solved steps is one entry, and an interpolated instant moves it between the two it lies between (see `interpolate_contacts`).
+ *
+ * Not read off the pose drawn: an instant interpolated across an impact passes the bodies through one another, or keeps them apart, and a point read there would slide along them.
  */
-export type ContactSample =
-  /** A point or a disc against a segment: touches at the foot of `point` on `start`–`end`. */
-  | { id: number; kind: "segment"; point: number; start: number; end: number }
-  /** A point or a disc against a disc of `radius` around `centre`: touches on that rim, towards `other`. */
-  | { id: number; kind: "circle"; centre: number; other: number; radius: number }
-  /** A point or a disc against the floor, through `anchor` and of unit normal `(nx, ny)`: touches at the foot of `point` on it. */
-  | { id: number; kind: "floor"; point: number; anchor: number; nx: number; ny: number };
+export interface ContactSample {
+  id: number;
+  x: number;
+  y: number;
+}
 
 export interface KinematicSnapshot extends SimulationSnapshot {
   /**

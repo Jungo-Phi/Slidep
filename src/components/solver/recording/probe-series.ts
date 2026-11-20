@@ -16,7 +16,7 @@ import {
   SnapshotLayout,
   StressScaleCache,
 } from "../../../types/runtime-state";
-import { hermite_value, same_belt_topology } from "../dynamics/simulation-engine";
+import { hermite_value, impact_between, same_belt_topology } from "../dynamics/simulation-engine";
 
 export type ProbeCurveKey = "x" | "y" | "norm" | "value";
 
@@ -867,7 +867,8 @@ function is_dynamic_snapshot(s: SimulationSnapshot): s is DynamicSnapshot {
 
 /**
  * `TRAJECTORY_SAMPLING.HERMITE_SUBSAMPLES` extra points between `prev` and `snap`, on the SAME Hermite curve `dynamic_snapshot_at` draws the live point on — so a trajectory reads as curved across one recorded interval instead of as the straight chord a plain lerp would cut across a fast rotation.
- * Guarded exactly like `dynamic_snapshot_at` itself (same layout, same belt topology): a topology change is not a curve to draw through, it is the earlier instant held — `advance` below just never receives the extra points, and falls back to the raw one-sample-per-snapshot path it always had.
+ * Guarded exactly like `dynamic_snapshot_at` itself (same layout, same belt topology, no impact): a topology change is not a curve to draw through, it is the earlier instant held — `advance` below just never receives the extra points, and falls back to the raw one-sample-per-snapshot path it always had.
+ * Across an impact that path is the straight line the playback moves the point along.
  */
 function sample_hermite_between(
   builds: PointBuild[],
@@ -875,7 +876,7 @@ function sample_hermite_between(
   prev: DynamicSnapshot,
   snap: DynamicSnapshot,
 ): void {
-  if (prev.layout !== snap.layout || !same_belt_topology(prev, snap)) return;
+  if (prev.layout !== snap.layout || !same_belt_topology(prev, snap) || impact_between(prev, snap)) return;
   const span = snap.t - prev.t;
   if (!(span > 0)) return;
   const n = TRAJECTORY_SAMPLING.HERMITE_SUBSAMPLES;

@@ -21,15 +21,42 @@
 
 ---
 
+### MCP
+
+- **Une vitrine lisible sans JavaScript :**
+  - Une page d’accueil en HTML statique qui dit ce que fait l’outil, pour qui, et ce qui le distingue
+  - Soigner la description pour la rechercher : "mechanism, linkage, kinematics, gears, physics simulation, CAD…"
+  - Des pages d’exemples (Jansen, Klann, came, engrenages) avec une image et un lien qui ouvre le mécanisme dans l’app
+  - Une documentation du format de fichier et, plus tard du MCP
+
+- Des noms et descriptions d’outils explicites sur le quand : par exemple create_mechanism, avec « À utiliser pour concevoir, simuler ou animer tout mécanisme articulé : bielles, engrenages, jambes marchantes… ». Je compare la demande à ces textes.
+- 🔨 Des primitives au bon niveau : un format déclaratif (« barre de 41,5 entre B et C, pivot fixe en (−38, −7,8) ») plutôt qu’une imitation des clics de l’interface.
+- Ajoute une bibliothèque de mécanismes classiques (Jansen, Klann, Tchebychev, Peaucellier, quadrilatère articulé) prêts à paramétrer. Moins j’ai d’appels à faire, plus je réussis.
+- Un connecteur seul donne des outils. Un plugin ou une compétence (skill) qui l’accompagne peut ajouter le savoir-faire : comment concevoir un mécanisme qui marche, quels modèles utiliser, comment vérifier.
+
+- **Données à renvoyer :**
+  - Une image du mécanisme et de la trajectoire
+  - Des diagnostics (degrés de liberté, positions impossibles, collisions, articulations bloquées)
+  - Des données (la courbe du pied, la vitesse)
+  - Un lien vers le mécanisme ouvert et éditable dans ton application
+- (Des messages d’erreur exploitables (« la barre g ne peut pas atteindre F pour θ = 140° ») valent de l’or.)
+
+- **Exister dans la connaissance des modèles (levier lent) :**
+  - Un format de fichier ouvert, textuel et documenté : les modèles futurs sauront l’écrire, même sans MCP, et le citeront comme option.
+  - Une galerie publique de mécanismes avec des liens partageables, des tutoriels et une documentation lisible par les machines (llms.txt, exemples complets).
+  - Des communautés qui en parlent : profs de techno et de physique, makers, fans de Strandbeest. Ce sont aussi elles qui finiront par dire « fais-le dans [ton outil] ».
+- Monter un jeu de tests avec des demandes réalistes.
+
+---
+
 ### Retours utilisateurs
 
 - 🔨 Ajouter la pop-up "Vous avez créé un slidep !"
 
+- 🚨 Visuel du grab en cinématique
+- 🚨 Intersection vitesse moteur dans les DDL
+- 🚨 Manque les contacts dans le bilan des forces
 - 🔨 Solveur géométrique : Quand on change l'angle d'une barre, on devrait essayer de maintenir sa longueur.
-- 🔨 Le dessin de ressort+ammortisseur ne fonctionne pas bien si les 2 éléments ne sont pas dans le même sens (start -> end / end -> start)
-- 🔨 Le point de contact bouge dans "Coup de pied.slidep"
-- 🔨 Ne pourrait-on pas éviter les doubles points de contact ?
-- 🚨 Changer la vitesse moteur en cours de simulation fait traverser le sol !
 - 🆕 Il faut une option pour cropper la simu (ou zoomer sur les graphiques)
 
 **Hitbox**
@@ -52,7 +79,8 @@
 - 🤔 Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
 - 🔨 Mettre les pièces sans collision en transparence même en édition.
 - 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
-- 🆕 Suivit caméra
+- 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
+- 🆕 Suivit caméra en simulation
 - 🆕 Ajouter des marqueurs pour les changements de valeurs en simulation
 - 🆕 Un (i) à côté de là on ou peux éditer les propriétés matériaux, pour expliquer "Module de Young" et "Limite élastique" avec un shéma.
 - 🔨 Rendre les noms des matériaux/priofilés visiblent éditables
@@ -61,6 +89,7 @@
 
 **Découvrabilité et onboarding**
 
+- 🆕 Mécanisme d'introduction "style Algodoo"
 - 🆕 Ajouter des tutos dans un deuxième onglet de la gallerie
 - 🤔 Utiliser les exemples comme tuto ?
 - 🆕 Ajouter des tutos au hover long sur les élément de la palette et premières utilisations de fonctionnalités
@@ -96,6 +125,7 @@
 
 **Terminer la physique**
 
+- 🚨 Changer la vitesse moteur en cours de simulation fait traverser le sol !
 - 🚨 Faire fonctionner les treuils "Treuil court.slidep"
 - 🚨 Régler le blocage/déblocage sur Poulie bloqueuse en dynamique
 - 🚨 Comment est-ce qu'on peut avoir des réactions d'appuis "moment" sur un pivot, wtf !?
@@ -103,8 +133,6 @@
 - 🤔 Pas plus fins près des points morts (ex. vilbrequin) ?
 - 🤔 Donner une élasticité aux courroies ?
 - 🤔 Passer la cinématique et édition en solver direct ?
-- 🆕 Ajouter les constantes de frottement / rebond des collisions (CONTACT_EPS ?)
-- 🔨 Réduire la bounciness par défaut (Pince)
 - 🔨 Vérifier que les contacts "émettent" des force dans les 2 sens
 - 🚨 Vérifier ce que fait la bande de contact (0.5 unité) des collisions (et l'enlever ?)
 - 🔨 Ajouter un filtre géométrique grossier (bounding box, grille spatiale) pour les collisions (recalculé peu souvent)
@@ -114,7 +142,6 @@
 
 - 🆕 Placer join à la jonction des Beams
 - 🆕 Ajouter un paramètre pour mettre des enroulements en édition (treuil)
-- 🆕 Copié-collé
 - 🆕 Ajouter contraintes de distance parallèle
 - 🆕 Ajouter contraintes de coincidence (point - ligne)
 - 🔨 Supprimer l'interdiction "une masse ne peut pas être ancrée"
@@ -145,7 +172,6 @@
 - 🔨 Afficher la masse des gears
 - 🔨 Afficher I avec les profilés
 - 🔨 Afficher les contraintes (ou juste "contrainte max") dans SelectionInspector des poutres
-- 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
 - 🔨 Faire apparaitre les contraintes à l'écran même si on est zoomé
 
 - 🔨 Re-dessiner les icons en plus grand avec 2px de marge
@@ -191,6 +217,7 @@
 
 - 🔨 Ajuster la position des sondes sur les courroies
 - 🔨 Sur de combo ressort+amortisseur, ajuster la position des sondes et overlays
+- 🤔 Faire apparaitre les sondes au hover de leur noeud parent (comme les contraintes) ?
 - 🔨 La transparence de deletion des probes est inconsistante
 - 🔨 Choisir x/y/norme pour les mesures superposées
 - 🔨 Possible de hover sur probe quand placingProbe (pareil pour gearRatio et Dimension)
@@ -206,7 +233,6 @@
 - 🆕 Afficher des syboles au hover des connexion (ex. beam end = anneau)
 - 🔨 Hover une probe devrait hover l'élément aussi
 - 🆕 Sélectionner les dimensions (sur la flèche)
-- 🤔 Caméra qui suit le mécanisme en simulation ?
 
 - 🔨 Afficher le point de contact pour placingGearRadius sur belt
 - ❇️ Wrap VS windings ?

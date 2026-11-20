@@ -73,6 +73,10 @@ export class Recorder {
    * A step that is dropped still shows the impacts it had: they are what a recorded instant's `contacts` stands for.
    */
   private pendingContacts = new Map<number, ContactSample>();
+  /** The contacts of the last step solved, kept or not: one absent from it is an impact starting. */
+  private previousContactIDs = new Set<number>();
+  /** The last instant kept, whose efforts an impact kept off the regular spacing borrows. */
+  private lastKept: SimulationSnapshot | null = null;
 
   /**
    * Adopt a mechanism, discarding whatever the previous one left.
@@ -90,6 +94,8 @@ export class Recorder {
     this.last = resumeFrom;
     this.journal = [];
     this.pendingContacts.clear();
+    this.previousContactIDs = contact_ids(resumeFrom);
+    this.lastKept = resumeFrom;
     // The compile reads the belt's whole pulley list from the mechanism; the run may have taken it off some of them.
     // Dynamic mode never disconnects a belt, so there is nothing to re-bake against.
     if (mode === "kinematic" && resumeFrom)
@@ -143,6 +149,8 @@ export class Recorder {
       restore_belt_state(this.model, resumeFrom as KinematicSnapshot);
     this.last = resumeFrom;
     this.pendingContacts.clear();
+    this.previousContactIDs = contact_ids(resumeFrom);
+    this.lastKept = resumeFrom;
   }
 
   /** The longest this load records, in simulated seconds. */
@@ -176,7 +184,7 @@ export class Recorder {
   }
 
   /**
-   * Solves instants spaced by `RECORD_DT` until the simulated clock reaches `targetTime`, or until the budget runs out, and hands back the ones worth keeping (`is_retained`).
+   * Solves instants spaced by `RECORD_DT` until the simulated clock reaches `targetTime`, or until the budget runs out, and hands back the ones worth keeping: those `is_retained` names, and the step an impact starts at.
    * Falling behind costs time, never fidelity: the recording simply ends short of the target and the next call picks it up.
    *
    * `solved` counts every step taken, kept or not — a call can advance the clock while returning nothing, so it is progress, not `snapshots.length`, that says whether there is more to do.
@@ -207,7 +215,7 @@ export class Recorder {
       const stepDt = latest === null ? 0 : RECORD_DT;
       // Every instant is kept while the user is holding the mechanism: the display sits on the frontier then, so an instant dropped there is one the grabbed part is drawn a step behind the mouse at.
       // A drag is short and the time axis is searched, never divided, so the denser stretch it leaves costs nothing beyond its own bytes.
-      const kept = this.grab !== null || is_retained(t);
+      const regular = this.grab !== null || is_retained(t);
       if (this.mode === "kinematic") {
         latest = step_simulation(
           this.model,
@@ -232,7 +240,7 @@ export class Recorder {
           gravity,
           this.grab ?? undefined,
           undefined,
-          kept,
+          regular,
           this.collisionsOn,
           this.floorOn,
         );
@@ -266,13 +274,23 @@ export class Recorder {
         }
         latest = dynamicSnapshot;
       }
-      for (const contact of latest.contacts ?? [])
+      // An impact between two regular instants would be drawn nowhere near touching: the interpolation between them cannot pass through a bounce it never saw.
+      // Its own step is kept too, its efforts borrowed from the instant before since it was solved without them.
+      const own = latest.contacts ?? [];
+      const impact = own.some((contact) => !this.previousContactIDs.has(contact.id));
+      this.previousContactIDs = new Set(own.map((contact) => contact.id));
+      const kept = regular || impact;
+      if (kept && !regular && this.mode === "dynamic")
+        latest = with_efforts_of(latest as DynamicSnapshot, this.lastKept as DynamicSnapshot | null);
+      for (const contact of own)
         if (!this.pendingContacts.has(contact.id)) this.pendingContacts.set(contact.id, contact);
       if (kept) {
-        // The pending set holds this step's own contacts too, so the same size means nothing was dropped to add.
-        if (this.pendingContacts.size > (latest.contacts?.length ?? 0))
+        // Where its own step measured a contact, at the instant it is shown at, rather than where it first touched since the last one kept.
+        for (const contact of own) this.pendingContacts.set(contact.id, contact);
+        if (this.pendingContacts.size > own.length)
           latest = { ...latest, contacts: [...this.pendingContacts.values()] };
         this.pendingContacts.clear();
+        this.lastKept = latest;
       }
       solved++;
       if (kept) snapshots.push(latest);
@@ -287,4 +305,27 @@ export class Recorder {
 
     return { snapshots, reached, solved };
   }
+}
+
+/** The ids of the contacts `snapshot` carries, none when there is no snapshot. */
+function contact_ids(snapshot: SimulationSnapshot | null): Set<number> {
+  return new Set((snapshot?.contacts ?? []).map((contact) => contact.id));
+}
+
+/**
+ * `snapshot`, solved without its efforts, given those of `from`, the instant kept just before it.
+ * They are a step old there, which no reading tells apart; left empty, every force drawn would blink off for that instant.
+ */
+function with_efforts_of(snapshot: DynamicSnapshot, from: DynamicSnapshot | null): DynamicSnapshot {
+  if (!from || from.layout !== snapshot.layout) return snapshot;
+  return {
+    ...snapshot,
+    reactions: from.reactions,
+    accelerations: from.accelerations,
+    angleAccelerations: from.angleAccelerations,
+    beamCohesion: from.beamCohesion,
+    beltStrands: from.beltStrands,
+    supports: from.supports,
+    balance: from.balance,
+  };
 }

@@ -1,9 +1,24 @@
 import { Point2 } from "../../../types";
-import type { ContactSample, SnapshotLayout } from "../../../types/runtime-state";
+import type { ContactSample } from "../../../types/runtime-state";
 import { CollisionCandidates, FLOOR_ANCHOR_KEY } from "./collision-candidates";
 import { contact_eps, floor_signed_distance, point_segment_within, within } from "./collision-detection";
 import { CONTACT_SLACK_RATIO } from "./collision-restitution";
 import { MIN_EXTENT_M } from "../nodes";
+
+/** The foot of `p` on the segment `a`–`b`, clamped to it. */
+function segment_foot(p: Point2, a: Point2, b: Point2): Point2 {
+  const d = b.sub(a);
+  const lengthSq = d.length_squared();
+  const t = lengthSq > 0 ? Math.max(0, Math.min(1, p.sub(a).dot(d) / lengthSq)) : 0;
+  return a.add(d.mul(t));
+}
+
+/** The point of the rim of `radius` around `centre` facing `other`, or `undefined` when the two coincide. */
+function rim_point(centre: Point2, other: Point2, radius: number): Point2 | undefined {
+  const d = other.sub(centre);
+  const length = d.length();
+  return length > 0 ? centre.add(d.mul(radius / length)) : undefined;
+}
 
 /**
  * Adds to `into` every candidate touching in `positions`, by the measure restitution judges a contact by: within `CONTACT_SLACK_RATIO` of its resting boundary.
@@ -18,14 +33,11 @@ export function collect_touching_contacts(
   collisionsOn: boolean,
   floorOn: boolean,
   floorNormal: Point2,
-  layout: SnapshotLayout,
   into: Map<number, ContactSample>,
   near?: Uint8Array | null,
 ): void {
   const eps = contact_eps(extent);
   const slack = CONTACT_SLACK_RATIO * (extent || MIN_EXTENT_M);
-  // A fused key writes to one slot per part, and any of them reads its position back.
-  const slot = (key: string) => layout.index.get(key.split(",")[0]);
 
   const { pointSegment, pointCircle, circleSegment, circleCircle, pointFloor, circleFloor } = candidates;
   const collisionCount = pointSegment.length + pointCircle.length + circleSegment.length + circleCircle.length;
@@ -46,11 +58,8 @@ export function collect_touching_contacts(
     const s1 = positions.get(key1);
     const s2 = positions.get(key2);
     if (!p || !s1 || !s2 || !point_segment_within(p.x, p.y, s1.x, s1.y, s2.x, s2.y, boundary + slack)) return;
-    const point = slot(pointKey);
-    const start = slot(key1);
-    const end = slot(key2);
-    if (point !== undefined && start !== undefined && end !== undefined)
-      into.set(rank, { id: rank, kind: "segment", point, start, end });
+    const { x, y } = segment_foot(p, s1, s2);
+    into.set(rank, { id: rank, x, y });
   };
   const circle = (centreKey: string, otherKey: string, radius: number, boundary: number) => {
     const rank = id++;
@@ -58,10 +67,8 @@ export function collect_touching_contacts(
     const c = positions.get(centreKey);
     const o = positions.get(otherKey);
     if (!c || !o || !within(o.x, o.y, c.x, c.y, boundary + slack)) return;
-    const centre = slot(centreKey);
-    const other = slot(otherKey);
-    if (centre !== undefined && other !== undefined)
-      into.set(rank, { id: rank, kind: "circle", centre, other, radius });
+    const touch = rim_point(c, o, radius);
+    if (touch) into.set(rank, { id: rank, x: touch.x, y: touch.y });
   };
   const floor = (pointKey: string, boundary: number) => {
     const rank = id++;
@@ -69,10 +76,8 @@ export function collect_touching_contacts(
     const p = positions.get(pointKey);
     const a = positions.get(FLOOR_ANCHOR_KEY);
     if (!p || !a || floor_signed_distance(p.x, p.y, a, floorNormal) >= boundary + slack) return;
-    const point = slot(pointKey);
-    const anchor = slot(FLOOR_ANCHOR_KEY);
-    if (point !== undefined && anchor !== undefined)
-      into.set(rank, { id: rank, kind: "floor", point, anchor, nx: floorNormal.x, ny: floorNormal.y });
+    const { x, y } = p.sub(floorNormal.mul(p.sub(a).dot(floorNormal)));
+    into.set(rank, { id: rank, x, y });
   };
 
   if (collisionsOn) {

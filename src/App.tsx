@@ -57,6 +57,7 @@ import { useThemeChoice } from "./theme/use-theme-choice";
 import { get_language, Lang, set_language, t } from "./i18n";
 import { LanguageContext } from "./i18n/language-context";
 import {
+  PANEL_SLIDE_MS,
   SNACKBAR_DURATION,
   VALUE_EDIT_COALESCE_MS,
 } from "./constants/interaction-specs";
@@ -278,11 +279,12 @@ const App: React.FC = () => {
   const [sidePanelOpen, setSidePanelOpenState] = useState<boolean>(
     getStorageItem<boolean>("sidePanelOpen", true),
   );
-  // Set when the canvas is about to change width for the panel folding or unfolding: that resize keeps the drawing's scale.
-  const panelToggledRef = useRef(false);
+  // Until when the canvas changes width for the panel folding or unfolding (`performance.now()` ms): every resize of that slide keeps the drawing's scale.
+  const panelSlidingUntilRef = useRef(0);
   const setSidePanelOpen = useCallback((open: boolean) => {
     setSidePanelOpenState((before) => {
-      if (before !== open) panelToggledRef.current = true;
+      // A frame of slack past the slide, for its last resize.
+      if (before !== open) panelSlidingUntilRef.current = performance.now() + PANEL_SLIDE_MS + 50;
       return open;
     });
     setStorageItem("sidePanelOpen", open);
@@ -1112,8 +1114,7 @@ const App: React.FC = () => {
       const before = canvasSizeRef.current;
       canvasSizeRef.current = { width, height };
       // A panel folded or unfolded by the user shows more or less of the drawing, at the same size: a drawing that zoomed with it would read as having changed.
-      const keepScale = panelToggledRef.current;
-      panelToggledRef.current = false;
+      const keepScale = performance.now() < panelSlidingUntilRef.current;
       if (before)
         followViewArea(
           view_area(before, coverRef.current),

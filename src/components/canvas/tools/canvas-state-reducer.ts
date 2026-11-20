@@ -306,7 +306,7 @@ function step_back(state: CanvasState): CanvasState {
  * The pull a drag on `hit` starts, held at the point of it under `worldMousePos`; `null` on a part nothing can pull on.
  * Read off the mechanism on screen: in simulation the pose being played, from rest the one the run is about to start from.
  */
-function simulation_grab(
+export function simulation_grab(
   hit: HoveredPart,
   mechanicalElements: MechanicalElement[],
   worldMousePos: Point2,
@@ -387,6 +387,8 @@ function simulation_grab(
         hit.id,
         mechanicalElements,
       ) as EdgeElement;
+      // A spring or a damper is a force between its two nodes, not a body: there is no material point along it to hold.
+      if (simEdge.type === "spring" || simEdge.type === "damper") return null;
       simKey = hit.id;
       bodyRatio = hit.position.parameter_on_segment(
         simEdge.positionStart,

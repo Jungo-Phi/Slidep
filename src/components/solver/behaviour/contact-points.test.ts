@@ -13,7 +13,7 @@ import {
 import { CONTACT_EPS_RATIO } from "../dynamics/collision-detection";
 import { CONTACT_SLACK_RATIO } from "../dynamics/collision-restitution";
 import { DynamicSnapshot } from "../../../types/runtime-state";
-import { contact_point, snapshot_point } from "../snapshot";
+import { interpolate_contacts, snapshot_point } from "../snapshot";
 import { Recorder } from "../recording/recorder";
 
 /** End-to-end: where a falling mass's contacts are recorded as touching, against the floor and against a beam. */
@@ -96,7 +96,7 @@ describe("points de contact", () => {
     const { snapshots } = run(mechanism([mass(MASS, new Point2(0.5, 0.002))], true), 120, false, true);
     const last = snapshots[snapshots.length - 1];
     expect(last.contacts).toHaveLength(1);
-    const point = contact_point(last, last.contacts![0])!;
+    const point = last.contacts![0];
     expect(point.x).toBeCloseTo(snapshot_point(last, MASS)!.x, 9);
     expect(point.y).toBeCloseTo(0, 9);
   });
@@ -118,7 +118,7 @@ describe("points de contact", () => {
     );
     const last = snapshots[snapshots.length - 1];
     expect(last.contacts).toHaveLength(1);
-    const point = contact_point(last, last.contacts![0])!;
+    const point = last.contacts![0];
     expect(point.x).toBeCloseTo(snapshot_point(last, MASS)!.x, 6);
     expect(point.y).toBeCloseTo(0, 6);
   });
@@ -134,7 +134,15 @@ describe("points de contact", () => {
     expect(leftWithinFrame.length).toBeGreaterThan(0);
   });
 
-  it("l'instant retenu porte aussi les contacts des pas qui ne le sont pas", () => {
+  it("un contact qui dure glisse d'un instant à l'autre, un choc reste où il a touché", () => {
+    const lasting = { id: 1, x: 0, y: 0 };
+    const impact = { id: 2, x: 5, y: 5 };
+    const [moved, stayed] = interpolate_contacts([lasting], [{ id: 1, x: 2, y: 4 }, impact], 0.25)!;
+    expect(moved).toEqual({ id: 1, x: 0.5, y: 1 });
+    expect(stayed).toEqual(impact);
+  });
+
+  it("garde le pas où commence un choc, et porte les contacts des pas qui ne le sont pas", () => {
     const MASS = id();
     const m = mechanism([mass(MASS, new Point2(0.5, 1))], true);
     const FRAMES = 400;
@@ -147,13 +155,16 @@ describe("points de contact", () => {
 
     // What each kept instant should carry: every contact of the steps solved since the previous one.
     let pending = new Set<number>();
-    let fromDropped = 0;
+    let previous = new Set<number>();
+    let impacts = 0;
     let k = 0;
     for (const step of solved) {
-      for (const c of step.contacts ?? []) pending.add(c.id);
-      if (!is_retained(step.t)) continue;
       const own = new Set((step.contacts ?? []).map((c) => c.id));
-      fromDropped += [...pending].filter((c) => !own.has(c)).length;
+      for (const c of own) pending.add(c);
+      const impact = [...own].some((c) => !previous.has(c));
+      previous = own;
+      if (!is_retained(step.t) && !impact) continue;
+      if (!is_retained(step.t)) impacts++;
       const recorded = new Set((kept[k].contacts ?? []).map((c) => c.id));
       expect(kept[k].t).toBeCloseTo(step.t, 12);
       expect(recorded).toEqual(pending);
@@ -161,7 +172,7 @@ describe("points de contact", () => {
       k++;
     }
     expect(k).toBe(kept.length);
-    // Some impact has to have fallen on a dropped step, or this checked nothing.
-    expect(fromDropped).toBeGreaterThan(0);
+    // Some impact has to have fallen between two regular instants, or this checked nothing.
+    expect(impacts).toBeGreaterThan(0);
   });
 });

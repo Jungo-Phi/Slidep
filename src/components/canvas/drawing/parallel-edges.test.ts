@@ -113,12 +113,30 @@ describe("parallel_edge_offsets", () => {
   });
 
   it("garde le côté d'une edge quelle que soit son orientation", () => {
+    const reversedSpring = {
+      ...spring,
+      positionStart: spring.positionEnd,
+      positionEnd: spring.positionStart,
+      fixedNodeStartID: RIGHT,
+      fixedNodeEndID: LEFT,
+    };
     const reversed = parallel_edge_offsets([
       ...PARALLEL.slice(0, 2),
-      { ...spring, fixedNodeStartID: RIGHT, fixedNodeEndID: LEFT },
+      reversedSpring,
       damper,
     ]);
-    expect(reversed.get(SPRING)).toBe(DIM.PARALLEL_EDGE_OFFSET);
+    // Each edge is offset along its own normal: what must hold is the drawn side, not the sign.
+    const drawn = (edge: MechanicalElement & { positionStart: Point2; positionEnd: Point2 }) => {
+      const { start, end } = offset_ends(
+        world2screen(edge.positionStart, VIEWPORT),
+        world2screen(edge.positionEnd, VIEWPORT),
+        reversed.get(edge.id) ?? 0,
+      );
+      return start.lerp(end, 0.5).y;
+    };
+    const [springSide, damperSide] = [drawn(reversedSpring), drawn(damper)];
+    expect(Math.sign(springSide)).toBe(-Math.sign(damperSide));
+    expect(springSide).not.toBe(0);
   });
 });
 

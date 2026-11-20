@@ -53,6 +53,7 @@ import {
 import { aims_until_lift } from "./tools/touch-press";
 import { names_element } from "../../types/hovered-part";
 import { COLORS } from "../../theme/canvas-theme";
+import { CANVAS_CONTEXT_SETTINGS, CANVAS_RASTER } from "./canvas-raster";
 import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION, SPACE_HOLD_MS } from "../../constants/interaction-specs";
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
@@ -84,7 +85,10 @@ import {
   anchored_moments,
   balance_term_anchor,
 } from "./drawing/overlay-anchor";
-import { canvasStateReducer } from "./tools/canvas-state-reducer";
+import {
+  canvasStateReducer,
+  simulation_grab,
+} from "./tools/canvas-state-reducer";
 import { measured_elements, ruler_is_out, shown_readout } from "./tools/measure";
 import { moment_balance_hover } from "./tools/moment-balance-picking";
 import { draw_center_of_mass } from "./drawing/draw-measure";
@@ -426,6 +430,8 @@ const MechanicalCanvasView = forwardRef<
       onElement: boolean;
       /** Opened from the keyboard, which gets the canvas back when the menu closes. */
       keyboard?: boolean;
+      /** Mid-run, the mechanism at the instant on screen as the menu opened: a load placed during the run is missing from the stored one, which stands at t=0 while a kept recording is replayed. */
+      shown?: Mechanism;
     } | null>(null);
     const pinchingRef = useRef(false);
     // A finger whose press is played when it lifts (see `aims_until_lift`).
@@ -632,6 +638,8 @@ const MechanicalCanvasView = forwardRef<
       };
     }, [measureCanvas]);
 
+    // The drawing, for a resize to repaint at once; set once `render` is defined below.
+    const renderRef = useRef<() => void>(() => {});
     useEffect(() => {
       const container = containerRef.current;
       if (!container) return;
@@ -639,6 +647,12 @@ const MechanicalCanvasView = forwardRef<
       const observer = new ResizeObserver(() => {
         const measured = measureCanvas();
         if (measured) onResizeRef.current?.(measured.width, measured.height);
+        // Drawn before this frame is painted: left to the next one, the old drawing would be shown stretched to the new size, on every frame of a panel's slide.
+        try {
+          renderRef.current();
+        } catch (error) {
+          report_render_failure(error);
+        }
       });
       observer.observe(container);
       return () => observer.disconnect();
@@ -721,7 +735,7 @@ const MechanicalCanvasView = forwardRef<
       const container = containerRef.current;
       if (!canvas || !container) return;
 
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", CANVAS_CONTEXT_SETTINGS);
       if (!ctx) return;
 
       // The simulated positions — and the pose a mode is being swung through — land here, not through a prop: hit-testing and hover read the same ref, so they stay on the mechanism that is actually drawn.
@@ -749,6 +763,14 @@ const MechanicalCanvasView = forwardRef<
       if (showGrid) draw_grid(ctx, viewport, canvas.width, canvas.height);
 
       draw_axes(ctx, viewport, canvas.width, canvas.height);
+      // Which rasterizer a forced diagnostic run is on, so a screen recording says so (see `canvas-raster.ts`).
+      if (CANVAS_RASTER !== "auto") {
+        ctx.save();
+        ctx.font = "bold 12px sans-serif";
+        ctx.fillStyle = COLORS.ACCENT;
+        ctx.fillText(CANVAS_RASTER.toUpperCase(), 8, 16);
+        ctx.restore();
+      }
       if (showGrid)
         draw_graduations(ctx, viewport, canvas.width, canvas.height);
 
@@ -1203,6 +1225,7 @@ const MechanicalCanvasView = forwardRef<
       modePreviewRef,
     ]);
 
+    renderRef.current = render;
     useEffect(() => {
       let rafId: number;
       const loop = () => {
@@ -1523,6 +1546,10 @@ const MechanicalCanvasView = forwardRef<
       else if (rightClick) handleEvent({ type: "MouseRightButtonDown" });
     };
 
+    /** Mid-run, the mechanism drawn at the instant on screen, which the menu acts on; at rest, none, the menu acting on the stored one. */
+    const shownMechanism = () =>
+      appModeRef.current === "static" ? undefined : mechanismRef.current;
+
     // A right click on something outside the selection selects it first, so that the menu is about what it was opened on.
     // Empty space leaves the selection alone: only Escape or a left click lets go of it.
     const openContextMenu = (left: number, top: number) => {
@@ -1531,7 +1558,13 @@ const MechanicalCanvasView = forwardRef<
       const onElement = names_element(hovered);
       if (onElement && !selected_ids(state).includes(hovered.id))
         setCanvasStateNow({ type: "SelectedElement", elementID: hovered.id });
-      setContextMenu({ left, top, world: worldMousePos, onElement });
+      setContextMenu({
+        left,
+        top,
+        world: worldMousePos,
+        onElement,
+        shown: shownMechanism(),
+      });
     };
 
     /** `world` on the page, for a menu opened at it. */
@@ -1699,6 +1732,7 @@ const MechanicalCanvasView = forwardRef<
         world,
         onElement: ids.length > 0,
         keyboard: true,
+        shown: shownMechanism(),
       });
     };
 
@@ -2447,9 +2481,15 @@ const MechanicalCanvasView = forwardRef<
       return () => canvas.removeEventListener("wheel", handleWheel);
     }, []);
 
-    const onContextMenuHandler = (
-      event: React.MouseEvent<HTMLCanvasElement>,
-    ) => {
+    // Held by the container rather than the canvas: the app's menu opens on the release of the button, and Windows fires the browser's own after it, on whatever is under the cursor by then — the app's menu itself, portalled but still a child here for React's events.
+    // A text field keeps the browser's menu, its copy and paste.
+    const onContextMenuHandler = (event: React.MouseEvent<HTMLElement>) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, [contenteditable='true']")
+      )
+        return;
       event.preventDefault();
     };
 
@@ -2471,6 +2511,7 @@ const MechanicalCanvasView = forwardRef<
     // The metric box is an overlay, not a mode: the cursor answers for the state under it.
     const cursorState = state_under_probe_metrics(canvasState);
     // In simulation the selection tool pulls on a part as the grab tool does at rest, and says so the same way.
+    // Only where a drag would start a pull: the cursor asks the very function the drag does.
     // A refusal outranks every tool: whatever is armed, this spot takes nothing.
     const cursor =
       hoveredPart.type === "Void" && hoveredPart.rejected
@@ -2482,12 +2523,11 @@ const MechanicalCanvasView = forwardRef<
                   (cursorState.type === "Selecting" ||
                     cursorState.type === "SelectedElement" ||
                     cursorState.type === "SelectedMultiple"))) &&
-              hoveredPart.type !== "Void" &&
-              hoveredPart.type !== "Probe" &&
-              hoveredPart.type !== "MotorArrow" &&
-              hoveredPart.type !== "Force" &&
-              hoveredPart.type !== "Moment" &&
-              hoveredPart.type !== "DistributedForce"
+              simulation_grab(
+                hoveredPart,
+                mechanism.mechanicalElements,
+                hoveredPart.position,
+              ) !== null
             ? "grab"
             : ["Erasing", "ErasingMultiple"].includes(cursorState.type)
               ? eraser_cursor()
@@ -2618,6 +2658,7 @@ const MechanicalCanvasView = forwardRef<
     return (
       <Box
         ref={containerRef}
+        onContextMenu={onContextMenuHandler}
         sx={{
           width: "100%",
           height: "100%",
@@ -2648,7 +2689,6 @@ const MechanicalCanvasView = forwardRef<
           onPointerUp={onPointerUpHandler}
           onPointerCancel={onPointerCancelHandler}
           onPointerLeave={onPointerLeaveHandler}
-          onContextMenu={onContextMenuHandler}
           onKeyDown={onCanvasKeyDown}
           onFocus={onCanvasFocus}
           onBlur={stopKeyboardPointing}
@@ -2668,13 +2708,13 @@ const MechanicalCanvasView = forwardRef<
               contextMenu.onElement
                 ? selection_entries(
                     selected_ids(canvasState),
-                    mechanism,
+                    contextMenu.shown ?? mechanism,
                     appMode !== "static",
                   )
                 : void_entries(mechanism, appMode !== "static")
             }
             host={{
-              mechanism,
+              mechanism: contextMenu.shown ?? mechanism,
               applyActions,
               setCanvasState: setCanvasStateNow,
               position: contextMenu.world,

@@ -33,8 +33,12 @@ export function parallel_edge_offsets(
     if (!edges_may_coexist(group)) continue;
     for (const edge of group) {
       const side = SIDE[edge.type];
-      if (side !== undefined)
-        offsets.set(edge.id, side * DIM.PARALLEL_EDGE_OFFSET);
+      if (side === undefined || !("fixedNodeStartID" in edge)) continue;
+      // The offset is applied along the edge's own normal, which flips with its orientation: measure it against the pair's lower id so two edges drawn in opposite senses still land on opposite sides.
+      const start = edge.fixedNodeStartID ?? "";
+      const end = edge.fixedNodeEndID ?? "";
+      const sense = start < end ? 1 : -1;
+      offsets.set(edge.id, sense * side * DIM.PARALLEL_EDGE_OFFSET);
     }
   }
   return offsets;

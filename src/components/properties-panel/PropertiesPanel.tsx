@@ -56,6 +56,8 @@ import type {
 } from "../solver/analysis/force-balance";
 import type { FocusedOverlay } from "../canvas/drawing/drawing-functions";
 import { zone_props } from "../common/keyboard-zones";
+import { CANVAS_CONTROL_SX } from "../canvas/canvas-control-sx";
+import { usePanelSlide } from "./use-panel-slide";
 
 interface PropertiesPanelViewProps {
   /** Names what the canvas should pick out, and why; empty clears the highlight. */
@@ -139,12 +141,12 @@ function PaletteGlyph({
   color,
 }: {
   name: string;
-  color: "primary" | "secondary";
+  color: "primary" | "ink";
 }) {
   const theme = useTheme();
   const { src, opacity } = icon_faded(
     name,
-    color === "primary" ? theme.palette.primary.main : theme.palette.text.secondary,
+    color === "primary" ? theme.palette.primary.main : theme.palette.text.primary,
   );
   return (
     <Box
@@ -255,30 +257,31 @@ const PanelRail = React.memo(function PanelRail({
                 tabIndex={tab.id === activeTab ? 0 : -1}
                 onClick={() => onTabClick(tab.id)}
                 sx={[
+                  // Dressed as the other controls standing on the canvas.
+                  CANVAS_CONTROL_SX,
                   {
                     width: 40,
                     height: 40,
                     // Square and flush on the panel's side, rounded on the canvas's: a tab coming out of the panel.
                     borderRadius: "8px 0 0 8px",
-                    // The same faint ground as the ruler's button, the other control standing on the canvas.
-                    backgroundColor: (theme) =>
-                      alpha(theme.palette.text.primary, 0.07),
-                    transition: "background-color 120ms",
-                    "&:hover, &.Mui-focusVisible": {
-                      backgroundColor: (theme) =>
-                        alpha(theme.palette.text.primary, 0.14),
-                    },
-                    color: selected || marked ? "primary.main" : "text.secondary",
+                    // The halo stops at the panel's edge, which it would otherwise blur.
+                    clipPath: "inset(-16px 0 -16px -16px)",
+                    color: selected || marked ? "primary.main" : "text.primary",
                   },
                   // The open tab is part of the panel: its ground and outline, run over the panel's own edge so nothing separates them.
                   selected && {
                     width: 41,
                     mr: "-1px",
+                    clipPath: "none",
                     bgcolor: "background.paper",
                     border: 1,
                     borderRight: 0,
                     borderColor: "divider",
-                    "&:hover": { bgcolor: "background.paper" },
+                    boxShadow: "none",
+                    "&:hover:not(.Mui-focusVisible)": {
+                      bgcolor: "background.paper",
+                      backgroundImage: "none",
+                    },
                     // The focus darkens its ground of paper as the other tabs' hover does theirs, a veil laid over the paper rather than in its place, which would let the canvas through.
                     "&.Mui-focusVisible": {
                       bgcolor: "background.paper",
@@ -293,7 +296,7 @@ const PanelRail = React.memo(function PanelRail({
                 {tab.icon === "dimension" ? (
                   <PaletteGlyph
                     name="dimension"
-                    color={selected || marked ? "primary" : "secondary"}
+                    color={selected || marked ? "primary" : "ink"}
                   />
                 ) : (
                   <tab.icon fontSize="small" />
@@ -414,10 +417,9 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
     [setActiveTab],
   );
 
-  // Folded, the contextual panel shows its tabs alone: what it would show is not built at all.
-  const shown = variant !== "side" || open;
-
-  const content = shown && (
+  // Folded, the contextual panel shows its tabs alone: once it has slid shut, what it would show is not built at all.
+  const slide = usePanelSlide(open, PANEL_WIDTH);
+  const content = (
     <Paper
       {...zone_props(variant === "analysis" ? "analysis" : "panel")}
       sx={{
@@ -587,7 +589,7 @@ const PropertiesPanelView: React.FC<PropertiesPanelViewProps> = ({
             onTabClick={handleRailClick}
             onTabSelect={handleRailSelect}
           />
-          {content}
+          <Box sx={slide.sx}>{slide.mounted && content}</Box>
         </Box>
       ) : (
         content

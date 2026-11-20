@@ -268,7 +268,7 @@ export interface PasteOptions {
   grid?: number;
   /** What the canvas shows, which the paste is kept in. */
   view?: WorldBox;
-  /** Ties the pasted dimensions to the originals, see `link_to_original`. */
+  /** Ties the pasted beams and gears to their originals, see `original_links`. */
   linked?: boolean;
 }
 
@@ -295,42 +295,100 @@ export function plan_paste(
   return paste_actions(content, delta, mechanism, linked);
 }
 
-/** The element `constraint` measures, when it is a dimension `link_to_original` can turn into an equality. */
+/** The element `constraint` measures, when it is a dimension a link to the original replaces. */
 function linkable_target(constraint: ConstraintElement): ID | null {
   if (constraint.type === "dimension-edge") return constraint.edgeID;
   if (constraint.type === "dimension-radius") return constraint.gearID;
   return null;
 }
 
+/** The two elements `constraint` makes equal in size, when it is an equality or a gear ratio. */
+function tied_pair(constraint: ConstraintElement): [ID, ID] | null {
+  if (constraint.type === "equal") return [constraint.startEdgeID, constraint.endEdgeID];
+  if (constraint.type === "gear-ratio") return [constraint.startGearID, constraint.endGearID];
+  return null;
+}
+
+/** Whether a linked paste ties `element` to its original even when it carries no dimension. */
+const LINKED_TYPES: ReadonlySet<MechanicalElement["type"]> = new Set(["beam", "gear"]);
+
+/** The constraint keeping `copy` the size of `original`: an equality of length between two edges, a 1:1 ratio between two gears. */
+function tie(original: MechanicalElement, copy: MechanicalElement): ConstraintElement | null {
+  const id = crypto.randomUUID() as ID;
+  if (original.type === "gear" && copy.type === "gear")
+    return {
+      type: "gear-ratio",
+      id,
+      position: original.position.lerp(copy.position, 0.5),
+      startGearID: original.id,
+      endGearID: copy.id,
+      value: 1,
+    };
+  if ("positionStart" in original && "positionStart" in copy)
+    return { type: "equal", id, startEdgeID: original.id, endEdgeID: copy.id };
+  return null;
+}
+
 /**
- * The constraint that ties a pasted dimension to the original of what it measures, or null when there is none to tie it to.
- * A length becomes an equality with the original edge, a radius a 1:1 ratio with the original gear: one constraint for another, so the paste stays exactly as constrained.
- * The other dimensions have no equality to become, and keep their own value.
+ * What ties the pasted elements to the originals they were copied from: the links to add, and the pasted dimensions they replace.
+ *
+ * A pasted dimension of a length or a radius becomes the link of what it measures, one constraint for another.
+ * A beam or a gear without one is linked all the same, which is what makes the paste follow the original.
+ * Pasted elements already held equal to one another by a pasted equality or ratio need one link between them, a second one would be redundant; so does one `mechanism` already ties to its original.
+ *
  * `find` looks up a mechanical element; an original it cannot find (cut, or copied from another mechanism) ties nothing.
  */
-function link_to_original(
-  dimension: ConstraintElement,
+function original_links(
+  pasted: readonly MechanicalElement[],
+  pastedConstraints: readonly ConstraintElement[],
   sources: ReadonlyMap<ID, ID>,
   find: (id: ID) => MechanicalElement | undefined,
-): ConstraintElement | null {
-  const target = linkable_target(dimension);
-  if (target === null) return null;
-  const source = sources.get(target);
-  const original = source === undefined ? undefined : find(source);
-  const copy = find(target);
-  if (!original || !copy) return null;
-  const id = crypto.randomUUID() as ID;
-  if (dimension.type === "dimension-edge")
-    return { type: "equal", id, startEdgeID: original.id, endEdgeID: copy.id };
-  if (!("position" in original) || !("position" in copy)) return null;
-  return {
-    type: "gear-ratio",
-    id,
-    position: original.position.lerp(copy.position, 0.5),
-    startGearID: original.id,
-    endGearID: copy.id,
-    value: 1,
+  existing: readonly ConstraintElement[] = [],
+): { links: ConstraintElement[]; replaced: ConstraintElement[] } {
+  // The pasted elements held equal to one another, by group.
+  const parent = new Map<ID, ID>();
+  const root = (id: ID): ID => {
+    const up = parent.get(id);
+    if (up === undefined || up === id) return id;
+    const top = root(up);
+    parent.set(id, top);
+    return top;
   };
+  for (const constraint of pastedConstraints) {
+    const pair = tied_pair(constraint);
+    if (pair) parent.set(root(pair[0]), root(pair[1]));
+  }
+  const linked = new Set<ID>();
+  for (const constraint of existing) {
+    const pair = tied_pair(constraint);
+    if (pair && sources.get(pair[1]) === pair[0]) linked.add(root(pair[1]));
+  }
+
+  const links: ConstraintElement[] = [];
+  const replaced: ConstraintElement[] = [];
+  const link = (copyID: ID): ConstraintElement | null => {
+    const source = sources.get(copyID);
+    const original = source === undefined ? undefined : find(source);
+    const copy = find(copyID);
+    return original && copy ? tie(original, copy) : null;
+  };
+  for (const dimension of pastedConstraints) {
+    const target = linkable_target(dimension);
+    if (target === null || linked.has(root(target))) continue;
+    const made = link(target);
+    if (!made) continue;
+    links.push(made);
+    replaced.push(dimension);
+    linked.add(root(target));
+  }
+  for (const copy of pasted) {
+    if (!LINKED_TYPES.has(copy.type) || linked.has(root(copy.id))) continue;
+    const made = link(copy.id);
+    if (!made) continue;
+    links.push(made);
+    linked.add(root(copy.id));
+  }
+  return { links, replaced };
 }
 
 /**
@@ -342,16 +400,18 @@ export function link_actions(
   mechanism: Mechanism,
 ): Action[] {
   const byID = new Map(mechanism.mechanicalElements.map((el) => [el.id, el]));
-  return mechanism.constraintElements.flatMap((constraint): Action[] => {
-    if (!sources.has(constraint.id)) return [];
-    const link = link_to_original(constraint, sources, (id) => byID.get(id));
-    if (!link) return [];
-    // The link first: `apply_actions` reads the bundle's first action as its master.
-    return [
-      { type: "CreateElement", element: link },
-      { type: "DeleteElement", element: constraint },
-    ];
-  });
+  const { links, replaced } = original_links(
+    mechanism.mechanicalElements.filter((el) => sources.has(el.id)),
+    mechanism.constraintElements.filter((c) => sources.has(c.id)),
+    sources,
+    (id) => byID.get(id),
+    mechanism.constraintElements,
+  );
+  // A link first: `apply_actions` reads the bundle's first action as its master.
+  return [
+    ...links.map((element): Action => ({ type: "CreateElement", element })),
+    ...replaced.map((element): Action => ({ type: "DeleteElement", element })),
+  ];
 }
 
 /** Whether a linked paste of `text` into `mechanism` would tie anything to an original. */
@@ -359,10 +419,15 @@ export function pastes_linked(text: string, mechanism: Mechanism): boolean {
   const content = parse_clipboard(text);
   if (!content) return false;
   const present = new Set(mechanism.mechanicalElements.map((el) => el.id));
-  return content.constraintElements.some((constraint) => {
-    const target = linkable_target(constraint);
-    return target !== null && present.has(target);
-  });
+  return (
+    content.mechanicalElements.some(
+      (el) => LINKED_TYPES.has(el.type) && present.has(el.id),
+    ) ||
+    content.constraintElements.some((constraint) => {
+      const target = linkable_target(constraint);
+      return target !== null && present.has(target);
+    })
+  );
 }
 
 /** Every string of `value` that `ids` knows, replaced; a `Point2` holds no reference and stays a `Point2`. */
@@ -407,7 +472,7 @@ function matching_entry<T extends { id: ID }>(
 /**
  * The bundle that pastes `content` into `mechanism`, moved by `delta`, under fresh IDs.
  * A name only changes if `mechanism` already uses it, so a cut element pasted back keeps its own.
- * `linked` ties the pasted dimensions to the originals, see `link_to_original`.
+ * `linked` ties the pasted beams and gears to their originals, see `original_links`.
  */
 export function paste_actions(
   content: ClipboardContent,
@@ -465,11 +530,19 @@ export function paste_actions(
       el,
     ]),
   );
-  const constraintElements = content.constraintElements.map((constraint) => {
-    const copy = pasted(constraint);
-    if (!linked) return copy;
-    return link_to_original(copy, sources, (id) => byID.get(id)) ?? copy;
-  });
+  let constraintElements = content.constraintElements.map(pasted);
+  if (linked) {
+    const { links, replaced } = original_links(
+      mechanicalElements,
+      constraintElements,
+      sources,
+      (id) => byID.get(id),
+    );
+    constraintElements = [
+      ...constraintElements.filter((c) => !replaced.includes(c)),
+      ...links,
+    ];
+  }
   return {
     // The elements first: `apply_actions` reads the bundle's first action as its master.
     actions: [

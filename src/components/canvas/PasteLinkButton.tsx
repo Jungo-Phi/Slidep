@@ -3,7 +3,7 @@ import { Button } from "@mui/material";
 import { Link } from "@mui/icons-material";
 
 import { t } from "../../i18n";
-import { INTERACTION_SPECS } from "../../constants/interaction-specs";
+import { CANVAS_CONTROL_SX } from "./canvas-control-sx";
 import { ID, Mechanism, Point2, ScreenPoint } from "../../types";
 import { world2screen } from "../../utils";
 import { link_actions, PastePlan } from "../mechanism/clipboard";
@@ -76,27 +76,20 @@ export function PasteLinkButton({ mechanism, plan, onLink }: PasteLinkButtonProp
       color="inherit"
       startIcon={<Link />}
       onClick={onLink}
-      sx={{
-        position: "absolute",
-        left: at.x,
-        top: at.y,
-        zIndex: 900,
-        textTransform: "none",
-        whiteSpace: "nowrap",
-        color: "text.primary",
-        // Dressed as the constraint badges drawn beside it: paper let slightly through, their outline, and their halo of the ground.
-        backgroundColor: "badge.fill",
-        border: 1,
-        borderColor: "badge.stroke",
-        boxShadow: (theme) =>
-          `0 0 ${INTERACTION_SPECS.ICON_HALO_SIZE}px ${theme.palette.background.default}`,
-        transition: "background-color 120ms",
-        "&:hover, &.Mui-focusVisible": {
-          backgroundColor: "badge.fill",
-          backgroundImage: (theme) =>
-            `linear-gradient(${theme.palette.action.hover}, ${theme.palette.action.hover})`,
+      sx={[
+        CANVAS_CONTROL_SX,
+        {
+          position: "absolute",
+          left: at.x,
+          top: at.y,
+          zIndex: 900,
+          textTransform: "none",
+          whiteSpace: "nowrap",
+          // Outlined as the constraint badges are: it offers to make one.
+          border: 1,
+          borderColor: "badge.stroke",
         },
-      }}
+      ]}
     >
       {t("link_to_original")}
     </Button>

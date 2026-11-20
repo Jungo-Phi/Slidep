@@ -206,14 +206,33 @@ describe("linked paste", () => {
     expect(radii).toBeGreaterThan(0);
   });
 
+  /** Whether every pasted beam and gear is held the size of its original, directly or through equalities and ratios. */
+  const all_tied = (m: Mechanism, sources: ReadonlyMap<ID, ID>) => {
+    const parent = new Map<ID, ID>();
+    const root = (id: ID): ID => {
+      const up = parent.get(id);
+      return up === undefined || up === id ? id : root(up);
+    };
+    for (const c of m.constraintElements) {
+      const pair =
+        c.type === "equal" ? [c.startEdgeID, c.endEdgeID]
+        : c.type === "gear-ratio" ? [c.startGearID, c.endGearID]
+        : null;
+      if (pair && root(pair[0]) !== root(pair[1])) parent.set(root(pair[0]), root(pair[1]));
+    }
+    return m.mechanicalElements
+      .filter((el) => sources.has(el.id) && (el.type === "beam" || el.type === "gear"))
+      .every((el) => root(el.id) === root(sources.get(el.id)!));
+  };
+
   it("turns each length into an equality with the original edge, and each radius into a 1:1 ratio with the original gear", () => {
     const plan = paste_actions(copied(allIDs, source), DELTA, source, true);
     const after = apply_actions(source, plan.actions);
-    expect(after.constraintElements).toHaveLength(2 * source.constraintElements.length);
     expect(count(after, "dimension-edge")).toBe(lengths);
     expect(count(after, "dimension-radius")).toBe(radii);
-    expect(count(after, "equal")).toBe(2 * count(source, "equal") + lengths);
-    expect(count(after, "gear-ratio")).toBe(2 * count(source, "gear-ratio") + radii);
+    expect(count(after, "equal")).toBeGreaterThanOrEqual(2 * count(source, "equal") + lengths);
+    expect(count(after, "gear-ratio")).toBeGreaterThanOrEqual(2 * count(source, "gear-ratio") + radii);
+    expect(all_tied(after, plan.sources)).toBe(true);
     expect(issues(after)).toEqual(issues(source));
 
     const links = after.constraintElements.flatMap((c) => {
@@ -231,14 +250,36 @@ describe("linked paste", () => {
     const plan = paste_actions(copied(allIDs, source), DELTA, source);
     const pasted = apply_actions(source, plan.actions);
     const tie = link_actions(plan.sources, pasted);
-    expect(tie).toHaveLength(2 * (lengths + radii));
+    expect(tie.filter((action) => action.type === "DeleteElement")).toHaveLength(lengths + radii);
     const tied = apply_actions(pasted, tie);
+    expect(all_tied(tied, plan.sources)).toBe(true);
     expect(tied.history.length).toBe(pasted.history.length + 1);
     for (const type of ["dimension-edge", "dimension-radius", "equal", "gear-ratio"] as const)
       expect(count(tied, type)).toBe(
         count(apply_actions(source, paste_actions(copied(allIDs, source), DELTA, source, true).actions), type),
       );
     expect(link_actions(plan.sources, tied)).toEqual([]);
+  });
+
+  it("ties a beam that carries no dimension to its original", () => {
+    const dimensioned = new Set(
+      source.constraintElements.flatMap((c) => (c.type === "dimension-edge" ? [c.edgeID] : [])),
+    );
+    const bare = source.mechanicalElements.find(
+      (el) => el.type === "beam" && !dimensioned.has(el.id),
+    )!;
+    expect(bare).toBeDefined();
+    const text = serialize_clipboard(copied_selection([bare.id], source)!);
+    expect(pastes_linked(text, source)).toBe(true);
+
+    const plan = paste_actions(copied([bare.id], source), DELTA, source, true);
+    const after = apply_actions(source, plan.actions);
+    const copy = plan.pastedIDs.find((id) => plan.sources.get(id) === bare.id)!;
+    expect(
+      after.constraintElements.some(
+        (c) => c.type === "equal" && c.startEdgeID === bare.id && c.endEdgeID === copy,
+      ),
+    ).toBe(true);
   });
 
   it("ties nothing to originals the destination does not hold", () => {

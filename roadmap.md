@@ -9,6 +9,15 @@
 - Afficher juste : unités des efforts internes, T/N au lieu de x/y. _Fini quand les bugs d'affichage prioritaires sont fermés._
 **Projet témoin** : les mécanismes de la galerie 2D donnent des résultats justes et vérifiés.
 
+## Le mode Statique
+
+**Objectif : que le dessin montre ce qui le tient, sans clic.** Détails et questions ouvertes dans `docs/plan-statique.md`.
+
+- Trancher l'affichage : ce qui s'affiche par défaut sur le canvas (réactions, inconnues) et ce qui attend le survol ou la sélection, le comportement pendant un geste, le cas sans appui ou inachevé. _Fini quand chaque choix est écrit dans le plan._
+- Lire les DDL dans le panneau d'analyse : une ligne par mobilité (ce qui la pilote, où elle part, ce qu'il faudrait pour la tenir). _Fini quand un mécanisme sous-contraint dit quoi ajouter._
+- Efforts inconnus : une force « ? » se résout en direct, comme une réaction, avec le décompte « n inconnues, n conditions ». _Fini quand une force inconnue s'affiche résolue sans bouton._
+**Projet témoin** : les mécanismes de la galerie montrent leurs réactions et leurs DDL dès l'ouverture.
+
 ## Partage et galerie
 
 **Objectif : qu'un mécanisme puisse circuler, la priorité exprimée par les testeurs.**
@@ -49,6 +58,7 @@
 ## L'école par le jeu (trouver un meilleur nom)
 - Tutos dans un second onglet de la galerie, tutos au survol de la palette. _Fini quand un débutant construit son premier mécanisme seul._
 - Trois premiers niveaux : des mécanismes avec un objectif (« équilibre cette charge », « trouve le DDL qui bloque ») et des indices. _Fini quand un débutant termine les trois niveaux sans aide._
+- Le dessin qui montre son avenir : balayage cinématique (trajectoires, plage de mouvement, blocages), recalculé à chaque édition dans un worker annulable. _Fini quand une bielle-manivelle montre sa course et son point mort sans lancer la simulation._
 - Montrer les niveaux à 2 ou 3 enseignants. _Fini quand on sait si le parcours sert en classe._
 - Un parcours RDM : statique, efforts internes, flèche, choix de profilé. _Fini quand le parcours va du levier à l'ossature dimensionnée._
 
@@ -65,7 +75,9 @@
 
 ## Version pro
 
-**Études paramétriques** : faire varier une longueur et tracer l'effort maxi.
+**Études paramétriques** : faire varier une longueur et tracer l'effort maxi. Même moteur pour les valeurs de conception inconnues (géométrie, section, matériau) : une cote « ? » est cherchée à partir du dessin, et le résultat est proposé puis appliqué.
+
+**Déformations en 2D** : une fois le solveur statique sorti en paquet (voir « Slidep 3D, les ossatures »).
 
 **Exports pro** : CSV des graphiques, animation .gif/.mp4, échange avec la CAO.
 

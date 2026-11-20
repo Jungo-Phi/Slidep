@@ -49,7 +49,6 @@ import {
   snapshot_index_at,
 } from "../dynamics/simulation-engine";
 import { motors_blocked_at } from "../kinematics/dead-points";
-import { contact_point } from "../snapshot";
 import { RecorderClient } from "./recorder-client";
 import { RecorderMode } from "./recorder-protocol";
 import {
@@ -1141,9 +1140,9 @@ export function useSimulationPlayback({
         overlayArrows,
         overlayMoments,
         cohesionFields,
-        contactPoints: (snapshot.contacts ?? [])
-          .map((contact) => contact_point(snapshot, contact))
-          .filter((point): point is Point2 => point !== undefined),
+        contactPoints: (snapshot.contacts ?? []).map(
+          (contact) => new Point2(contact.x, contact.y),
+        ),
 
         // One frame behind whatever the recording loop last published, exactly like `rs.negligibilityPool` above: a running maximum that lags by one instant cannot move a ramp visibly.
         stressScale: Math.max(rs.stressScale.maxStress, negligibleStress),

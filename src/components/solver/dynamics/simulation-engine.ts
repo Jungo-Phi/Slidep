@@ -81,6 +81,7 @@ import {
   GRAB_KEYS,
   GRAB_PERIMETER_KEY,
   angles_length,
+  interpolate_contacts,
   make_snapshot_layout,
   snapshot_angle,
   snapshot_belt_arrivals,
@@ -1470,7 +1471,6 @@ export function step_simulation(
       collisionsOn,
       floorOn,
       model.floorNormal,
-      model.layout,
       touching,
     );
 
@@ -2047,7 +2047,6 @@ function solve_dynamic_frame(
         collisionsOn,
         floorOn,
         model.floorNormal,
-        model.layout,
         touching,
         contacts.near,
       );
@@ -2358,7 +2357,7 @@ export function snapshot_at(
     unsatisfied: a.unsatisfied,
     stalledMotors: a.stalledMotors,
     // `b`'s are the ones that touched on the way to it, which is the stretch `t` is in.
-    contacts: b.contacts,
+    contacts: interpolate_contacts(a.contacts, b.contacts, u),
   };
 }
 
@@ -2725,11 +2724,22 @@ function hermite_rate(
 }
 
 /**
+ * Whether a contact `b` carries had not touched at `a`: an impact somewhere between the two.
+ * Across one, everything that interpolates a motion between the two instants goes straight from one to the other rather than along their velocities — the pose drawn, the trajectories, the belts — so they all agree.
+ */
+export function impact_between(a: SimulationSnapshot, b: SimulationSnapshot): boolean {
+  if (!b.contacts) return false;
+  const before = new Set((a.contacts ?? []).map((contact) => contact.id));
+  return b.contacts.some((contact) => !before.has(contact.id));
+}
+
+/**
  * `snapshot_at`'s dynamic-mode counterpart: same belt-topology guard, but a Hermite curve rather than a straight lerp for position/angle/velocity — `KinematicSnapshot` has no velocity to build a tangent from (motors drive position directly there, see `DynamicSnapshot`'s own doc), which is exactly why `snapshot_at` stays a plain lerp and this does not.
  * Kept separate rather than folded into one generic function: the two snapshot kinds differ in exactly the extra fields this interpolates, and forcing them through a shared body would cost more in indirection than the duplicated lines below are worth.
  * `snapshot_index_at` is the part that IS shared, being purely a search over `.t`.
  *
- * The gear-angle prefix of `angles` (`layout.wrapBase` entries, matching `angleVelocities`' own length) rides the same Hermite curve as position; the belt wrap/detach/arrival block AFTER it has no velocity counterpart at all and stays a plain lerp, same as ever.
+ * Across an impact (`impact_between`) both go straight from one instant to the other instead.
+ * The gear-angle prefix of `angles` (`layout.wrapBase` entries, matching `angleVelocities`' own length) rides the same curve as position; the belt wrap/detach/arrival block AFTER it has no velocity counterpart at all and stays a plain lerp, same as ever.
  * `accelerations`/`angleAccelerations` stay a plain lerp too, deliberately NOT the Hermite curve's own second derivative: that second derivative is only linear in `u` and kinks at every recorded instant, no better a model of the true curve than the solver's own measured `(v_after − v_before)/subDt` already lerped here — and unlike position/velocity, nothing downstream needs it to be the FIRST curve's exact derivative.
  * Their own sign turns over in perfectly ordinary motion, so — same reasoning as before — neither is gated the way an effort is gated below.
  * Everything downstream of an equilibrium solve — reactions, beam torsors, belt tensions, motor samples — blends too, but only where nothing marks the two instants as different states: see `interpolate_reactions`/`interpolate_beam_cohesion`/`interpolate_belt_strands`/`interpolate_motor` for what each reads as that marker (a `determined`/`determinate`/`saturated` flag already computed by the statics pass, or a reading crossing sign between the two instants).
@@ -2756,16 +2766,23 @@ export function dynamic_snapshot_at(
     for (let i = 0; i < out.length; i++) out[i] = from[i] + (to[i] - from[i]) * u;
     return out;
   };
-  const positions = hermite_value(a.positions, b.positions, a.velocities, b.velocities, span, u);
   const wrapBase = a.layout.wrapBase;
-  const gearAngles = hermite_value(
-    a.angles.subarray(0, wrapBase),
-    b.angles.subarray(0, wrapBase),
-    a.angleVelocities,
-    b.angleVelocities,
-    span,
-    u,
-  );
+  const aGear = a.angles.subarray(0, wrapBase);
+  const bGear = b.angles.subarray(0, wrapBase);
+  // An impact between the two changes the velocities at once, somewhere inside the span: a curve held to both would set off backwards to arrive at the speed the impact gave, as a bar at rest kicked into a spin does, so the motion goes straight from one pose to the other instead.
+  const smooth = !impact_between(a, b);
+  const positions = smooth
+    ? hermite_value(a.positions, b.positions, a.velocities, b.velocities, span, u)
+    : lerp(a.positions, b.positions);
+  const velocities = smooth
+    ? hermite_rate(a.positions, b.positions, a.velocities, b.velocities, span, u)
+    : lerp(a.velocities, b.velocities);
+  const gearAngles = smooth
+    ? hermite_value(aGear, bGear, a.angleVelocities, b.angleVelocities, span, u)
+    : lerp(aGear, bGear);
+  const angleVelocities = smooth
+    ? hermite_rate(aGear, bGear, a.angleVelocities, b.angleVelocities, span, u)
+    : lerp(a.angleVelocities, b.angleVelocities);
   const angles = new Float64Array(a.angles.length);
   angles.set(gearAngles, 0);
   const nearest = u <= 0.5 ? a : b;
@@ -2780,18 +2797,11 @@ export function dynamic_snapshot_at(
       t,
       positions,
       angles,
-      velocities: hermite_rate(a.positions, b.positions, a.velocities, b.velocities, span, u),
-      angleVelocities: hermite_rate(
-        a.angles.subarray(0, wrapBase),
-        b.angles.subarray(0, wrapBase),
-        a.angleVelocities,
-        b.angleVelocities,
-        span,
-        u,
-      ),
+      velocities,
+      angleVelocities,
       accelerations: lerp(a.accelerations, b.accelerations),
       angleAccelerations: lerp(a.angleAccelerations, b.angleAccelerations),
-      contacts: b.contacts,
+      contacts: interpolate_contacts(a.contacts, b.contacts, u),
     };
   }
 
@@ -2801,15 +2811,8 @@ export function dynamic_snapshot_at(
     layout: a.layout,
     positions,
     angles,
-    velocities: hermite_rate(a.positions, b.positions, a.velocities, b.velocities, span, u),
-    angleVelocities: hermite_rate(
-      a.angles.subarray(0, wrapBase),
-      b.angles.subarray(0, wrapBase),
-      a.angleVelocities,
-      b.angleVelocities,
-      span,
-      u,
-    ),
+    velocities,
+    angleVelocities,
     accelerations: lerp(a.accelerations, b.accelerations),
     angleAccelerations: lerp(a.angleAccelerations, b.angleAccelerations),
     unsatisfied: nearest.unsatisfied,
@@ -2831,7 +2834,7 @@ export function dynamic_snapshot_at(
     supports: interpolate_supports(a.supports, b.supports, u),
     grab: interpolate_grab(a.grab, b.grab, u),
     // Same reading as `snapshot_at`'s.
-    contacts: b.contacts,
+    contacts: interpolate_contacts(a.contacts, b.contacts, u),
   };
 }
 
@@ -2914,7 +2917,7 @@ export function parameter_snapshot_at(
 }
 
 /**
- * A position between two recorded instants, interpolated as the playback draws it: on the Hermite curve when both carry velocities (dynamic), on a straight line otherwise (kinematic).
+ * A position between two recorded instants, interpolated as the playback draws it: on the Hermite curve when both carry velocities (dynamic) and no impact lies between them, on a straight line otherwise.
  * `undefined` where the key has no slot or no value.
  */
 function interpolated_point<S extends SimulationSnapshot>(a: S, b: S, key: string, u: number): Point2 | undefined {
@@ -2928,7 +2931,7 @@ function interpolated_point<S extends SimulationSnapshot>(a: S, b: S, key: strin
   const va = (a as Partial<DynamicSnapshot>).velocities;
   const vb = (b as Partial<DynamicSnapshot>).velocities;
   const span = b.t - a.t;
-  if (!va || !vb || !(span > 0) || Number.isNaN(va[2 * slot]) || Number.isNaN(vb[2 * slot]))
+  if (!va || !vb || !(span > 0) || Number.isNaN(va[2 * slot]) || Number.isNaN(vb[2 * slot]) || impact_between(a, b))
     return new Point2(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u);
   const { h00, h10, h01, h11 } = hermite_weights(u);
   return new Point2(

@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import {
-  alpha,
   Box,
   ButtonBase,
   IconButton,
   Menu,
   MenuItem,
 } from "@mui/material";
-import { Pause, PlayArrow } from "@mui/icons-material";
+import { Pause, PlayArrow, Stop } from "@mui/icons-material";
 import { AppMode } from "../../types";
 import { t } from "../../i18n";
 import {
@@ -21,6 +20,7 @@ import {
 import { CLOCK_MIRROR_MS } from "../solver/recording/use-simulation-playback";
 import { SimulationTimeline } from "../toolbar/SimulationTimeline";
 import { SPEEDS } from "../toolbar/playback-actions";
+import { CANVAS_CONTROL_SX } from "../canvas/canvas-control-sx";
 
 /** The ×1 chip: the speed, opening the steps to pick another. */
 const SpeedPill: React.FC = () => {
@@ -71,7 +71,7 @@ const SpeedPill: React.FC = () => {
 
 /**
  * The simulation's transport, a row above the bottom bar: play/pause, the timeline, the speed.
- * Shown in simulation only; in edition, play is the floating `PlayFab` instead.
+ * Shown in simulation only; in edition, play is the floating `RunFab` instead.
  */
 export const PhoneTransport: React.FC<{
   appMode: AppMode;
@@ -118,26 +118,29 @@ export const PhoneTransport: React.FC<{
 };
 
 /**
- * Play, floating in the canvas' bottom-left corner while editing: starts the simulation in the last mode used, as Space does on desktop.
- * The same discreet button as the ruler's in the opposite corner.
+ * The button floating in the canvas' bottom-left corner, the same discreet one as the ruler's in the opposite corner: play while editing, starting the simulation in the last mode used as Space does on desktop, and stop while it runs.
+ * One place for both, so the thumb finds the way back where it found the way in.
  */
-export const PlayFab: React.FC<{ onPlay: () => void }> = ({ onPlay }) => (
+export const RunFab: React.FC<{
+  simulating: boolean;
+  onPlay: () => void;
+  onStop: () => void;
+}> = ({ simulating, onPlay, onStop }) => (
   <IconButton
-    aria-label={t("play")}
-    onClick={onPlay}
-    data-hint-anchor="play"
-    sx={{
-      position: "absolute",
-      left: 12,
-      bottom: CANVAS_CORNER_BOTTOM,
-      zIndex: 1,
-      color: "primary.main",
-      backgroundColor: (theme) => alpha(theme.palette.text.primary, 0.07),
-      "&:hover": {
-        backgroundColor: (theme) => alpha(theme.palette.text.primary, 0.14),
+    aria-label={t(simulating ? "stop_simulation" : "play")}
+    onClick={simulating ? onStop : onPlay}
+    data-hint-anchor={simulating ? undefined : "play"}
+    sx={[
+      CANVAS_CONTROL_SX,
+      {
+        position: "absolute",
+        left: 12,
+        bottom: CANVAS_CORNER_BOTTOM,
+        zIndex: 1,
+        color: "primary.main",
       },
-    }}
+    ]}
   >
-    <PlayArrow />
+    {simulating ? <Stop /> : <PlayArrow />}
   </IconButton>
 );

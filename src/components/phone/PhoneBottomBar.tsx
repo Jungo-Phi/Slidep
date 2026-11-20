@@ -5,7 +5,6 @@ import {
   Build,
   Category,
   Layers,
-  Stop,
   Straighten,
 } from "@mui/icons-material";
 import { AppMode, CanvasState, Mechanism, PropertiesPanelTab } from "../../types";
@@ -30,20 +29,19 @@ const TAB_LABEL_KEYS = {
   analysis: "analysis",
 } as const;
 
-/** One slot of the bar: an icon over its name, lit when `active` — or always, for an `accent` action. */
+/** One slot of the bar: an icon over its name, lit when `active`. */
 const BarButton: React.FC<{
   label: string;
   active: boolean;
-  accent?: boolean;
   /** What a hint pointing at this slot looks for (see `hints.ts`). */
   hintAnchor?: string;
   onClick: () => void;
   children: React.ReactNode;
-}> = ({ label, active, accent = false, hintAnchor, onClick, children }) => (
+}> = ({ label, active, hintAnchor, onClick, children }) => (
   <ButtonBase
     aria-label={label}
     data-hint-anchor={hintAnchor}
-    aria-pressed={accent ? undefined : active}
+    aria-pressed={active}
     onClick={onClick}
     sx={{
       flex: 1,
@@ -52,7 +50,7 @@ const BarButton: React.FC<{
       display: "flex",
       flexDirection: "column",
       gap: 0.25,
-      color: active || accent ? "primary.main" : "text.primary",
+      color: active ? "primary.main" : "text.primary",
     }}
   >
     {children}
@@ -78,13 +76,11 @@ interface PhoneBottomBarProps {
   /** The tab whose sheet is up, `null` while the sheet is down. */
   sheetTab: SheetTab | null;
   onTab: (tab: SheetTab) => void;
-  /** Ends the simulation, back to rest. */
-  onStop: () => void;
 }
 
 /**
  * The phone's bottom bar — the work: palette, elements, constraints, materials, analysis.
- * In simulation, stop takes the place of constraints.
+ * Stopping a simulation is the canvas corner's button, where play was (see `RunFab`).
  *
  * Only the tab whose sheet is up is lit: the selection reads in the quick-access bar, and the armed tool in the palette tab's own icon.
  */
@@ -94,7 +90,6 @@ export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
   mechanism,
   sheetTab,
   onTab,
-  onStop,
 }) => {
   const simulating = appMode !== "static";
   const armed = armed_palette_element(canvasState, mechanism);
@@ -140,19 +135,6 @@ export const PhoneBottomBar: React.FC<PhoneBottomBarProps> = ({
         )}
       </BarButton>
       {tabs.map((tab) => {
-        // Stop takes the middle slot, the one of constraints — nothing is dimensioned while simulating — so no tab moves when a run starts.
-        if (simulating && tab === "constraints")
-          return (
-            <BarButton
-              key="stop"
-              label={t("stop_simulation")}
-              active={false}
-              accent
-              onClick={onStop}
-            >
-              <Stop />
-            </BarButton>
-          );
         const Icon = TAB_ICONS[tab];
         return (
           <BarButton

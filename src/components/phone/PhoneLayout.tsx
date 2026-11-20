@@ -6,7 +6,7 @@ import {
   PropertiesPanelProps,
 } from "../properties-panel/PropertiesPanel";
 import { PhoneSheet, SheetHeight } from "./PhoneSheet";
-import { PhoneTransport, PlayFab } from "./PhoneTransport";
+import { PhoneTransport, RunFab } from "./PhoneTransport";
 import { change_app_mode } from "../toolbar/playback-actions";
 import { PhonePalette } from "./PhonePalette";
 import { PhoneTopBar, PhoneTopBarProps } from "./PhoneTopBar";
@@ -69,6 +69,8 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
     if (!sheet) return;
     if (!onElement || sheet.tab === "palette") close();
   };
+  const stop = () =>
+    change_app_mode("static", topBar.setAppMode, mechanism, topBar.updateMetadata);
 
   return (
     <Box
@@ -100,7 +102,7 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
         <Box sx={{ position: "absolute", inset: 0, zIndex: 0 }}>
           {renderCanvas(onCanvasTap)}
         </Box>
-        {appMode === "static" && <PlayFab onPlay={onPlayPause} />}
+        <RunFab simulating={appMode !== "static"} onPlay={onPlayPause} onStop={stop} />
         <PhoneSheet
           open={!!sheet}
           height={sheet?.height ?? "half"}
@@ -147,14 +149,6 @@ export const PhoneLayout: React.FC<PhoneLayoutProps> = ({
         mechanism={mechanism}
         sheetTab={sheet?.tab ?? null}
         onTab={onTab}
-        onStop={() =>
-          change_app_mode(
-            "static",
-            topBar.setAppMode,
-            mechanism,
-            topBar.updateMetadata,
-          )
-        }
       />
     </Box>
   );

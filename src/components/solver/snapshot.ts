@@ -152,42 +152,26 @@ export function snapshot_point<S extends SimulationSnapshot>(
   return Number.isNaN(x) ? undefined : new Point2(x, snapshot.positions[2 * i + 1]);
 }
 
-/** Where `contact` touches in this snapshot's pose, or `undefined` where a slot it reads holds no position. */
-export function contact_point<S extends SimulationSnapshot>(
-  snapshot: S,
-  contact: ContactSample,
-): Point2 | undefined {
-  const at = (slot: number): Point2 | undefined => {
-    const x = snapshot.positions[2 * slot];
-    return Number.isNaN(x) ? undefined : new Point2(x, snapshot.positions[2 * slot + 1]);
-  };
-  switch (contact.kind) {
-    case "segment": {
-      const p = at(contact.point);
-      const a = at(contact.start);
-      const b = at(contact.end);
-      if (!p || !a || !b) return undefined;
-      const d = b.sub(a);
-      const lengthSq = d.length_squared();
-      const t = lengthSq > 0 ? Math.max(0, Math.min(1, p.sub(a).dot(d) / lengthSq)) : 0;
-      return a.add(d.mul(t));
-    }
-    case "circle": {
-      const c = at(contact.centre);
-      const o = at(contact.other);
-      if (!c || !o) return undefined;
-      const d = o.sub(c);
-      const length = d.length();
-      return length > 0 ? c.add(d.mul(contact.radius / length)) : undefined;
-    }
-    case "floor": {
-      const p = at(contact.point);
-      const a = at(contact.anchor);
-      if (!p || !a) return undefined;
-      const n = new Point2(contact.nx, contact.ny);
-      return p.sub(n.mul(p.sub(a).dot(n)));
-    }
-  }
+/**
+ * The contacts `b` carries, met at `u` of the way from `a` to it: one `a` carries too has moved between the points the two recorded, as a contact that lasts slides along with the bodies; one new in `b` stays where it touched.
+ */
+export function interpolate_contacts(
+  a: ContactSample[] | undefined,
+  b: ContactSample[] | undefined,
+  u: number,
+): ContactSample[] | undefined {
+  if (!a || !b) return b;
+  const before = new Map(a.map((contact) => [contact.id, contact]));
+  return b.map((contact) => {
+    const from = before.get(contact.id);
+    return from
+      ? {
+          id: contact.id,
+          x: from.x + (contact.x - from.x) * u,
+          y: from.y + (contact.y - from.y) * u,
+        }
+      : contact;
+  });
 }
 
 /** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none.

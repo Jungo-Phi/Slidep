@@ -181,6 +181,9 @@ export const SNACKBAR_DURATION = {
   REPORT: 12000,
 };
 
+/** How long (ms) the contextual panel takes to slide open or shut. */
+export const PANEL_SLIDE_MS = 150;
+
 /** How long Space must be held for its release to bring the run back to rest: shorter, the press was a tap, which only plays or pauses (ms). */
 export const SPACE_HOLD_MS = 300;
 

@@ -7,7 +7,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { CANVAS_CONTROL_SX } from "./canvas-control-sx";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import { Vector } from "../common/Vector";
@@ -170,32 +170,21 @@ const MeasureWidget = forwardRef<MeasureReadoutHandle, MeasureWidgetProps>(
           <IconButton
             aria-label={label}
             onClick={onArm}
-            sx={{
-              position: "absolute",
-              right: 12,
-              bottom: CANVAS_CORNER_BOTTOM,
-              zIndex: 900,
-              backgroundColor: (theme) =>
-                alpha(theme.palette.text.primary, 0.07),
-              transition: "background-color 120ms",
-              "&:hover": {
-                backgroundColor: (theme) =>
-                  alpha(theme.palette.text.primary, 0.14),
+            sx={[
+              CANVAS_CONTROL_SX,
+              {
+                position: "absolute",
+                right: 12,
+                bottom: CANVAS_CORNER_BOTTOM,
+                zIndex: 900,
               },
-            }}
+            ]}
           >
             <Box
               component="img"
               src={icon("ruler")}
               alt=""
-              sx={{
-                width: 24,
-                height: 24,
-                display: "block",
-                // The fade is on the glyph alone: the ground under it is what makes the button findable, and fading both together hid it altogether.
-                opacity: 0.5,
-                transition: "opacity 120ms",
-              }}
+              sx={{ width: 24, height: 24, display: "block" }}
             />
           </IconButton>
         </Tooltip>
