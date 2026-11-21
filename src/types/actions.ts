@@ -411,6 +411,7 @@ export type Action =
       oldValue: BeamStressLens;
     }
   | { type: "SetSupportReactions"; enabled: boolean }
+  | { type: "SetContactComponents"; enabled: boolean }
   | {
       type: "SetMotorConfig";
       id: ID;

@@ -18,6 +18,7 @@ import {
   DynamicSnapshot,
   EnergySample,
   GrabForceSample,
+  GrabTether,
   KinematicSnapshot,
   LinkReaction,
   MotorSample,
@@ -68,6 +69,7 @@ import {
   CollisionCandidates,
   FLOOR_ANCHOR_KEY,
   build_collision_candidates,
+  contact_bodies,
 } from "./collision-candidates";
 import { floor_anchor_and_normal } from "../../../utils/floor-geometry";
 import { ContactSet, collision_links, contact_set, prune_initial_penetrations } from "./collision-detection";
@@ -1002,6 +1004,34 @@ function grab_links(
   return model.links;
 }
 
+/** Where a kinematic grab holds the mechanism once `solved`: the grabbed point, read from the node `grab_links` pulled, and the cursor. */
+function grab_tether(
+  model: SimulationModel,
+  grab: SimGrab | undefined,
+  solved: Map<string, Point2>,
+): GrabTether | undefined {
+  if (!grab) return undefined;
+  const [elementID, key] =
+    "edgeID" in grab
+      ? [grab.edgeID, GRAB_BRIDGE_KEY]
+      : "gearID" in grab
+        ? [grab.gearID, GRAB_PERIMETER_KEY]
+        : "beltPin" in grab
+          ? [grab.beltPin.beltID, grab.beltPin.nodeKey]
+          : // A node key is the element's id, an endpoint's is `<id>:start`/`<id>:end`.
+            [grab.key.replace(/:(start|end)$/, ""), model.keyMap.get(grab.key) ?? grab.key];
+  const point = solved.get(key);
+  if (!point || ![point.x, point.y, grab.target.x, grab.target.y].every(Number.isFinite))
+    return undefined;
+  return {
+    elementID: elementID as ID,
+    x: point.x,
+    y: point.y,
+    tx: grab.target.x,
+    ty: grab.target.y,
+  };
+}
+
 /**
  * How a dynamic-mode grab pulls: a real spring from the grabbed point to the cursor, `F = k·d` in world metres.
  *
@@ -1566,6 +1596,7 @@ export function step_simulation(
     unsatisfied: result.unsatisfied?.length ? result.unsatisfied : undefined,
     stalledMotors: stalledMotors.length > 0 ? stalledMotors : undefined,
     contacts: touching.size > 0 ? [...touching.values()] : undefined,
+    grab: grab_tether(model, grab, result.positions),
   };
 }
 
@@ -1585,7 +1616,7 @@ const DYNAMIC_SWEEPS = 200;
  *
  * Position/velocity carry over between substeps like any other warm start; only the LAST substep's reactions and `unsatisfied` diagnostics are kept, since earlier ones read an intermediate, not-yet-converged state.
  */
-const DYNAMIC_SUBSTEPS = 16;
+export const DYNAMIC_SUBSTEPS = 16;
 
 /** Each model's contact sets, one per combination of the collision and floor switches, which can change from frame to frame. */
 const CONTACT_SETS = new WeakMap<SimulationModel, Map<string, ContactSet>>();
@@ -1809,6 +1840,8 @@ function solve_dynamic_frame(
   let grabWork = 0;
   /** Every contact that touched at the end of one of this frame's substeps: an impact over within the frame is still one it had. */
   const touching = new Map<number, ContactSample>();
+  /** What each contact transmitted on the last substep, by contact link (`contact_forces`); measured only when the frame's efforts are. */
+  let contactForces: Float64Array | undefined;
 
   for (let sub = 0; sub < substeps; sub++) {
     const isLastSubstep = sub === substeps - 1;
@@ -1985,6 +2018,10 @@ function solve_dynamic_frame(
       settle: collectDiagnostics,
       restitution,
       friction,
+      contactForces:
+        isLastSubstep && collectDiagnostics && contacts
+          ? (contactForces = new Float64Array(4 * contacts.links.length))
+          : undefined,
     };
     result = PBD_kinematic_solver(
       positions,
@@ -2231,8 +2268,34 @@ function solve_dynamic_frame(
     beltStrands: collectDiagnostics ? belt_strands_from_statics(statics) : undefined,
     supports: collectDiagnostics ? supports_from_statics(statics, groundFriction) : undefined,
     grab: grabDisplay,
-    contacts: touching.size > 0 ? [...touching.values()] : undefined,
+    contacts: touching.size > 0 ? with_contact_forces(model, touching, contactForces, collisionsOn) : undefined,
   };
+}
+
+/**
+ * The contacts touching, each given what it transmitted on the last substep where it pushed or rubbed.
+ * `forces` runs over the contact links, which leave out the collision families when collisions are off, while a contact's `id` counts them always.
+ */
+function with_contact_forces(
+  model: SimulationModel,
+  touching: Map<number, ContactSample>,
+  forces: Float64Array | undefined,
+  collisionsOn: boolean,
+): ContactSample[] {
+  const samples = [...touching.values()];
+  if (!forces) return samples;
+  const { pointSegment, pointCircle, circleSegment, circleCircle } = model.collisionCandidates;
+  const skipped = collisionsOn ? 0 : pointSegment.length + pointCircle.length + circleSegment.length + circleCircle.length;
+  return samples.map((sample) => {
+    const i = 4 * (sample.id - skipped);
+    if (i < 0 || i + 3 >= forces.length) return sample;
+    const normal = forces[i + 2];
+    const friction = forces[i + 3];
+    if (normal === 0 && friction === 0) return sample;
+    const bodies = contact_bodies(model.collisionCandidates, sample.id);
+    if (!bodies) return sample;
+    return { ...sample, force: { bodies, nx: forces[i], ny: forces[i + 1], normal, friction } };
+  });
 }
 
 /**
@@ -2358,6 +2421,23 @@ export function snapshot_at(
     stalledMotors: a.stalledMotors,
     // `b`'s are the ones that touched on the way to it, which is the stretch `t` is in.
     contacts: interpolate_contacts(a.contacts, b.contacts, u),
+    grab: interpolate_tether(a.grab, b.grab, u),
+  };
+}
+
+/** Blend two frames' grab tethers so its foot rides the interpolated pose; at the edge of a grab, only one side has one and the nearer frame decides. */
+function interpolate_tether(
+  a: GrabTether | undefined,
+  b: GrabTether | undefined,
+  u: number,
+): GrabTether | undefined {
+  if (!a || !b) return u <= 0.5 ? a : b;
+  return {
+    elementID: a.elementID,
+    x: lerp_num(a.x, b.x, u),
+    y: lerp_num(a.y, b.y, u),
+    tx: lerp_num(a.tx, b.tx, u),
+    ty: lerp_num(a.ty, b.ty, u),
   };
 }
 
@@ -2725,7 +2805,7 @@ function hermite_rate(
 
 /**
  * Whether a contact `b` carries had not touched at `a`: an impact somewhere between the two.
- * Across one, everything that interpolates a motion between the two instants goes straight from one to the other rather than along their velocities — the pose drawn, the trajectories, the belts — so they all agree.
+ * Across one, everything that interpolates a motion between the two instants goes through `impact_instants` rather than along a single curve — the pose drawn, the trajectories, the belts, the probe curves — so they all agree.
  */
 export function impact_between(a: SimulationSnapshot, b: SimulationSnapshot): boolean {
   if (!b.contacts) return false;
@@ -2733,12 +2813,92 @@ export function impact_between(a: SimulationSnapshot, b: SimulationSnapshot): bo
   return b.contacts.some((contact) => !before.has(contact.id));
 }
 
+/** `impact_instants`' result per impact snapshot: the same pair is asked for by every frame drawn and every belt probe across the interval. */
+const impactInstantsCache = new WeakMap<DynamicSnapshot, { a: DynamicSnapshot; instants: [DynamicSnapshot, DynamicSnapshot] }>();
+
+/**
+ * The instant of the impact between `a` and `b`, twice: just before it, with the velocities and contacts of `a`, and just after it, with those of `b` — `null` when no impact lies between them.
+ * Interpolating `a` → before and after → `b` follows each side's own motion up to the shock, instead of blending the velocities from before the bounce with those after it across the whole interval.
+ *
+ * The solver resolves an impact within a step and never says when it struck: it is the instant where the motion extrapolated forward from `a` and the one extrapolated backward from `b` come closest, both under the accelerations of `a`, the ones `b` measures carrying the impulse itself.
+ * Both instants share one pose, the one `a` was heading to: up to the impact nothing but `a`'s own motion is under way, and what the backward extrapolation misses is made up after it.
+ * The drawn position stays continuous and only the velocity jumps.
+ */
+export function impact_instants(a: DynamicSnapshot, b: DynamicSnapshot): [DynamicSnapshot, DynamicSnapshot] | null {
+  const span = b.t - a.t;
+  if (!(span > 0) || a.layout !== b.layout || !impact_between(a, b)) return null;
+  const cached = impactInstantsCache.get(b);
+  if (cached?.a === a) return cached.instants;
+
+  const wrapBase = a.layout.wrapBase;
+  // Gap between the two extrapolations at `s` after `a`: `offset + s·drift`, per coordinate, since the shared acceleration cancels from their difference.
+  const fit = (p0: Float64Array, p1: Float64Array, v0: Float64Array, v1: Float64Array, acc: Float64Array, n: number) => {
+    let along = 0;
+    let norm = 0;
+    for (let i = 0; i < n; i++) {
+      const g = Number.isFinite(acc[i]) ? acc[i] : 0;
+      const offset = p0[i] - p1[i] + span * v1[i] - 0.5 * g * span * span;
+      const drift = v0[i] - v1[i] + g * span;
+      if (!Number.isFinite(offset) || !Number.isFinite(drift)) continue;
+      along += offset * drift;
+      norm += drift * drift;
+    }
+    return { along, norm };
+  };
+  // Positions alone set the instant when they jump: a length and an angle do not add up, and every body that bounces carries a node that does.
+  let { along, norm } = fit(a.positions, b.positions, a.velocities, b.velocities, a.accelerations, a.positions.length);
+  if (norm < 1e-12) ({ along, norm } = fit(a.angles, b.angles, a.angleVelocities, b.angleVelocities, a.angleAccelerations, wrapBase));
+  const s = norm < 1e-12 ? span / 2 : Math.min(span, Math.max(0, -along / norm));
+
+  /** Where `a` is at `s`, with each side's velocity there. */
+  const meet = (p0: Float64Array, v0: Float64Array, v1: Float64Array, acc: Float64Array, n: number) => {
+    const pose = new Float64Array(n);
+    const before = new Float64Array(n);
+    const after = new Float64Array(n);
+    const back = s - span;
+    for (let i = 0; i < n; i++) {
+      const g = Number.isFinite(acc[i]) ? acc[i] : 0;
+      pose[i] = p0[i] + v0[i] * s + 0.5 * g * s * s;
+      before[i] = v0[i] + g * s;
+      after[i] = v1[i] + g * back;
+    }
+    return { pose, before, after };
+  };
+  const nodes = meet(a.positions, a.velocities, b.velocities, a.accelerations, a.positions.length);
+  const gears = meet(a.angles, a.angleVelocities, b.angleVelocities, a.angleAccelerations, wrapBase);
+  // The belt blocks have no velocity to extrapolate with: each side keeps its own, so a belt's topology switches at the impact too.
+  const angles_with = (block: DynamicSnapshot) => {
+    const angles = new Float64Array(block.angles);
+    angles.set(gears.pose, 0);
+    return angles;
+  };
+  const t = a.t + s;
+  const instants: [DynamicSnapshot, DynamicSnapshot] = [
+    { ...a, t, positions: nodes.pose, angles: angles_with(a), velocities: nodes.before, angleVelocities: gears.before },
+    { ...b, t, positions: nodes.pose, angles: angles_with(b), velocities: nodes.after, angleVelocities: gears.after },
+  ];
+  impactInstantsCache.set(b, { a, instants });
+  return instants;
+}
+
+function is_dynamic(snapshot: SimulationSnapshot): snapshot is DynamicSnapshot {
+  return "velocities" in snapshot;
+}
+
+/** The two instants `t` is interpolated between: `a` and `b` themselves, or the side of `impact_instants` that `t` falls on when an impact lies between them. */
+function motion_pair(a: DynamicSnapshot, b: DynamicSnapshot, t: number): [DynamicSnapshot, DynamicSnapshot] {
+  const instants = impact_instants(a, b);
+  if (!instants) return [a, b];
+  const [before, after] = instants;
+  return t < before.t ? [a, before] : [after, b];
+}
+
 /**
  * `snapshot_at`'s dynamic-mode counterpart: same belt-topology guard, but a Hermite curve rather than a straight lerp for position/angle/velocity — `KinematicSnapshot` has no velocity to build a tangent from (motors drive position directly there, see `DynamicSnapshot`'s own doc), which is exactly why `snapshot_at` stays a plain lerp and this does not.
  * Kept separate rather than folded into one generic function: the two snapshot kinds differ in exactly the extra fields this interpolates, and forcing them through a shared body would cost more in indirection than the duplicated lines below are worth.
  * `snapshot_index_at` is the part that IS shared, being purely a search over `.t`.
  *
- * Across an impact (`impact_between`) both go straight from one instant to the other instead.
+ * Across an impact (`impact_between`) the curve breaks at the instant `impact_instants` places it at, and each side follows its own velocities up to it.
  * The gear-angle prefix of `angles` (`layout.wrapBase` entries, matching `angleVelocities`' own length) rides the same curve as position; the belt wrap/detach/arrival block AFTER it has no velocity counterpart at all and stays a plain lerp, same as ever.
  * `accelerations`/`angleAccelerations` stay a plain lerp too, deliberately NOT the Hermite curve's own second derivative: that second derivative is only linear in `u` and kinks at every recorded instant, no better a model of the true curve than the solver's own measured `(v_after − v_before)/subDt` already lerped here — and unlike position/velocity, nothing downstream needs it to be the FIRST curve's exact derivative.
  * Their own sign turns over in perfectly ordinary motion, so — same reasoning as before — neither is gated the way an effort is gated below.
@@ -2753,13 +2913,12 @@ export function dynamic_snapshot_at(
   if (snapshots.length === 0) return null;
   const i = snapshot_index_at(snapshots, t);
   if (i >= snapshots.length - 1) return snapshots[snapshots.length - 1];
-  const a = snapshots[i];
-  const b = snapshots[i + 1];
+  // Slot i means one thing on each side of an edit, so two layouts never average.
+  if (snapshots[i].layout !== snapshots[i + 1].layout) return snapshots[i];
+  const [a, b] = motion_pair(snapshots[i], snapshots[i + 1], t);
   const span = b.t - a.t;
   const u = span > 0 ? (t - a.t) / span : 0;
   if (u <= 0) return a;
-  // Slot i means one thing on each side of an edit, so two layouts never average.
-  if (a.layout !== b.layout) return a;
 
   const lerp = (from: Float64Array, to: Float64Array) => {
     const out = new Float64Array(from.length);
@@ -2769,20 +2928,10 @@ export function dynamic_snapshot_at(
   const wrapBase = a.layout.wrapBase;
   const aGear = a.angles.subarray(0, wrapBase);
   const bGear = b.angles.subarray(0, wrapBase);
-  // An impact between the two changes the velocities at once, somewhere inside the span: a curve held to both would set off backwards to arrive at the speed the impact gave, as a bar at rest kicked into a spin does, so the motion goes straight from one pose to the other instead.
-  const smooth = !impact_between(a, b);
-  const positions = smooth
-    ? hermite_value(a.positions, b.positions, a.velocities, b.velocities, span, u)
-    : lerp(a.positions, b.positions);
-  const velocities = smooth
-    ? hermite_rate(a.positions, b.positions, a.velocities, b.velocities, span, u)
-    : lerp(a.velocities, b.velocities);
-  const gearAngles = smooth
-    ? hermite_value(aGear, bGear, a.angleVelocities, b.angleVelocities, span, u)
-    : lerp(aGear, bGear);
-  const angleVelocities = smooth
-    ? hermite_rate(aGear, bGear, a.angleVelocities, b.angleVelocities, span, u)
-    : lerp(a.angleVelocities, b.angleVelocities);
+  const positions = hermite_value(a.positions, b.positions, a.velocities, b.velocities, span, u);
+  const velocities = hermite_rate(a.positions, b.positions, a.velocities, b.velocities, span, u);
+  const gearAngles = hermite_value(aGear, bGear, a.angleVelocities, b.angleVelocities, span, u);
+  const angleVelocities = hermite_rate(aGear, bGear, a.angleVelocities, b.angleVelocities, span, u);
   const angles = new Float64Array(a.angles.length);
   angles.set(gearAngles, 0);
   const nearest = u <= 0.5 ? a : b;
@@ -2917,10 +3066,18 @@ export function parameter_snapshot_at(
 }
 
 /**
- * A position between two recorded instants, interpolated as the playback draws it: on the Hermite curve when both carry velocities (dynamic) and no impact lies between them, on a straight line otherwise.
+ * A position between two recorded instants, interpolated as the playback draws it: on the Hermite curve when both carry velocities (dynamic), broken at the impact when one lies between them (`motion_pair`), on a straight line otherwise.
  * `undefined` where the key has no slot or no value.
  */
-function interpolated_point<S extends SimulationSnapshot>(a: S, b: S, key: string, u: number): Point2 | undefined {
+function interpolated_point<S extends SimulationSnapshot>(from: S, to: S, key: string, at: number): Point2 | undefined {
+  let a = from;
+  let b = to;
+  let u = at;
+  if (is_dynamic(from) && is_dynamic(to) && from.layout === to.layout) {
+    const t = from.t + at * (to.t - from.t);
+    [a, b] = motion_pair(from, to, t) as unknown as [S, S];
+    u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
+  }
   const slot = a.layout.index.get(key);
   if (slot === undefined) return undefined;
   const x0 = a.positions[2 * slot];
@@ -2931,7 +3088,7 @@ function interpolated_point<S extends SimulationSnapshot>(a: S, b: S, key: strin
   const va = (a as Partial<DynamicSnapshot>).velocities;
   const vb = (b as Partial<DynamicSnapshot>).velocities;
   const span = b.t - a.t;
-  if (!va || !vb || !(span > 0) || Number.isNaN(va[2 * slot]) || Number.isNaN(vb[2 * slot]) || impact_between(a, b))
+  if (!va || !vb || !(span > 0) || Number.isNaN(va[2 * slot]) || Number.isNaN(vb[2 * slot]))
     return new Point2(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u);
   const { h00, h10, h01, h11 } = hermite_weights(u);
   return new Point2(

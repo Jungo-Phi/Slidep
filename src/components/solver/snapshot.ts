@@ -2,6 +2,7 @@ import { ID } from "../../types/element";
 import { Point2 } from "../../types/point2";
 import {
   BeltGeometry,
+  ContactForce,
   ContactSample,
   DynamicSnapshot,
   SimulationSnapshot,
@@ -152,26 +153,52 @@ export function snapshot_point<S extends SimulationSnapshot>(
   return Number.isNaN(x) ? undefined : new Point2(x, snapshot.positions[2 * i + 1]);
 }
 
+/** The force a lasting contact carries at `u` between two measures of it — see `interpolate_contacts`. */
+function interpolate_contact_force(
+  a: ContactForce | undefined,
+  b: ContactForce | undefined,
+  u: number,
+): ContactForce | undefined {
+  if (!a || !b) return u <= 0.5 ? a : b;
+  const nx = a.nx + (b.nx - a.nx) * u;
+  const ny = a.ny + (b.ny - a.ny) * u;
+  const length = Math.hypot(nx, ny) || 1;
+  return {
+    bodies: b.bodies,
+    nx: nx / length,
+    ny: ny / length,
+    normal: a.normal + (b.normal - a.normal) * u,
+    friction: a.friction + (b.friction - a.friction) * u,
+  };
+}
+
 /**
- * The contacts `b` carries, met at `u` of the way from `a` to it: one `a` carries too has moved between the points the two recorded, as a contact that lasts slides along with the bodies; one new in `b` stays where it touched.
+ * The contacts met at `u` of the way from `a` to `b`: one both carry has moved between the points the two recorded, as a contact that lasts slides along with the bodies; one new in `b` stays where it touched.
+ * A force both measured blends like the point; one measured on a single side holds on the half of the interval nearer to it.
+ * One `a` carries and `b` does not stays where `a` recorded it until `b`: an impact over within a single step starts at the instant `impact_instants` places it at, often just short of `b`, and would otherwise show for no time at all.
  */
 export function interpolate_contacts(
   a: ContactSample[] | undefined,
   b: ContactSample[] | undefined,
   u: number,
 ): ContactSample[] | undefined {
-  if (!a || !b) return b;
+  if (!a) return b;
+  const after = new Set((b ?? []).map((contact) => contact.id));
+  const ending = a.filter((contact) => !after.has(contact.id));
+  if (!b) return ending.length > 0 ? ending : undefined;
   const before = new Map(a.map((contact) => [contact.id, contact]));
-  return b.map((contact) => {
+  const met = b.map((contact) => {
     const from = before.get(contact.id);
-    return from
-      ? {
-          id: contact.id,
-          x: from.x + (contact.x - from.x) * u,
-          y: from.y + (contact.y - from.y) * u,
-        }
-      : contact;
+    if (!from) return contact;
+    const force = interpolate_contact_force(from.force, contact.force, u);
+    return {
+      id: contact.id,
+      x: from.x + (contact.x - from.x) * u,
+      y: from.y + (contact.y - from.y) * u,
+      ...(force && { force }),
+    };
   });
+  return [...met, ...ending];
 }
 
 /** The angle (rad) recorded for `key`, or `undefined` when this snapshot has none.

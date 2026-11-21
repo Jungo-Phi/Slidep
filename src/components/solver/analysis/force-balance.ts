@@ -22,7 +22,15 @@ import { element_reactions } from "../recording/probe-series";
  */
 
 /** Which family a line belongs to — what it is, and what a reader can expect to see of it on the canvas. */
-export type BalanceTermKind = "load" | "grab" | "weight" | "support";
+export type BalanceTermKind = "load" | "grab" | "weight" | "support" | "contact";
+
+/** Which contact a `"contact"` term is, and which of its components when they are read apart (`SimulationSettings.contactComponents`). */
+export interface ContactTermOf {
+  id: number;
+  /** Between two parts of the mechanism, rather than against the floor: its two terms cancel out in the sums. */
+  internal: boolean;
+  part?: "normal" | "friction";
+}
 
 export interface BalanceTerm {
   /** Stable while the mechanism is, so a hovered line stays hovered as the clock moves. */
@@ -37,6 +45,7 @@ export interface BalanceTerm {
   couple: number;
   /** `r × F + couple`, about the world origin — the point every moment here is reduced to. */
   moment: number;
+  contact?: ContactTermOf;
 }
 
 /** What the cursor rests on in the balance, and which of its two quantities that reading is about — a force points at a vector, a moment at a couple, and the two are not shown the same way.
@@ -49,7 +58,7 @@ export interface HoveredBalanceTerm {
 }
 
 export interface ForceBalance {
-  /** Every action on the free body: applied loads, the grab, weights, support reactions. */
+  /** Every action on the free body: applied loads, the grab, weights, support reactions, contacts. */
   actions: BalanceTerm[];
   /** Σ of `actions`. */
   sum: WorldPoint;
@@ -218,6 +227,49 @@ export function load_terms(
 }
 
 /**
+ * What every lasting contact applies, one term per element it touches: one against the floor, two opposite ones between two parts, which cancel out in the sums as any internal effort does.
+ * Read apart as normal and friction when `components` asks for it, the two adding up to the same resultant.
+ * Ids are shared with the arrows the canvas draws for them (`contact_arrows`).
+ */
+export function contact_terms(snapshot: DynamicSnapshot, components: boolean): BalanceTerm[] {
+  const terms: BalanceTerm[] = [];
+  for (const sample of snapshot.contacts ?? []) {
+    const force = sample.force;
+    if (!force) continue;
+    const at = new Point2(sample.x, sample.y) as WorldPoint;
+    const normal = new Point2(force.nx, force.ny).mul(force.normal);
+    const friction = new Point2(-force.ny, force.nx).mul(force.friction);
+    const parts: { part?: "normal" | "friction"; vector: Point2 }[] = components
+      ? [
+          { part: "normal", vector: normal },
+          { part: "friction", vector: friction },
+        ]
+      : [{ vector: normal.add(friction) }];
+    const internal = force.bodies[1] !== undefined;
+    force.bodies.forEach((body, side) => {
+      if (body === undefined) return;
+      for (const { part, vector } of parts) {
+        const line = term(
+          contact_term_id(sample.id, side, part),
+          "contact",
+          body,
+          at,
+          (side === 0 ? vector : vector.mul(-1)) as WorldPoint,
+          0,
+        );
+        terms.push({ ...line, contact: { id: sample.id, internal, part } });
+      }
+    });
+  }
+  return terms;
+}
+
+/** How a contact's term and its arrow are named: by contact, side and component, so two parts touching each other twice still tell their contacts apart. */
+export function contact_term_id(id: number, side: number, part?: "normal" | "friction"): string {
+  return `contact:${id}:${side}${part ? `:${part}` : ""}`;
+}
+
+/**
  * Every action on the free body at one instant, and what is left over once the solver's own `m·a` is taken off.
  * `mechanism` must be the pose on screen (`analysedMechanism`), not the edited one: a moment arm is read where the body actually is.
  * `referencePoint` is where every moment here is taken about — every term still builds about the origin first (`term`, `load_terms`'s own closed form), then shifts by `cross(referencePoint, force)`, the one identity that holds for a couple built out of any force however it was arrived at.
@@ -279,6 +331,8 @@ export function compute_force_balance(
           ),
         );
   }
+
+  actions.push(...contact_terms(snapshot, mechanism.simulation.contactComponents));
 
   let sum = new Point2(0, 0) as WorldPoint;
   let sumMoment = 0;

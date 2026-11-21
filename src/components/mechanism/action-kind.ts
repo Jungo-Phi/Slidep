@@ -14,6 +14,7 @@ export const OBSERVATION_ACTIONS: Action["type"][] = [
   "SetShowOverlay",
   "SetBeamStressLens",
   "SetSupportReactions",
+  "SetContactComponents",
   // A name is not a value: nothing the solver reads, and nothing already recorded, depends on one — so a rename mid-run costs neither a recompile nor the instants ahead.
   "UpdateElementName",
   "RenameMaterial",
@@ -33,6 +34,7 @@ export const DISPLAY_ACTIONS: Action["type"][] = [
   "SetShowOverlay",
   "SetBeamStressLens",
   "SetSupportReactions",
+  "SetContactComponents",
 ];
 
 export const PARAMETER_ACTIONS: Action["type"][] = [

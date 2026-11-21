@@ -1179,6 +1179,12 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     }
     if (term.kind === "load")
       setCanvasState({ type: "SelectedElement", elementID: term.elementID });
+    else if (term.contact)
+      setFocusedOverlay({
+        elementID: term.elementID,
+        kind: term.contact.internal ? "reaction-internal" : "reaction-support",
+        contact: term.contact.id,
+      });
     else
       setFocusedOverlay({
         elementID: term.elementID,

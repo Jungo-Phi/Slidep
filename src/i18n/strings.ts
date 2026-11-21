@@ -243,6 +243,12 @@ export const STRINGS = {
     de: "Nichts kann sich bewegen (FG = 0).\nEntferne oder ändere eine Verbindung, damit es sich bewegt.",
     es: "Nada puede moverse (GDL = 0).\nQuita o cambia una unión para devolverle movimiento.",
   },
+  slidep_birth: {
+    fr: "Vous avez créé un Slidep !",
+    en: "You created a Slidep!",
+    de: "Du hast einen Slidep erstellt!",
+    es: "¡Has creado un Slidep!",
+  },
   hint_grab: {
     fr: "Attrape une pièce pour la tirer",
     en: "Grab a part to pull on it",
@@ -2945,6 +2951,30 @@ export const STRINGS = {
     en: "Support reaction",
     de: "Auflagerreaktion",
     es: "Reacción en el apoyo",
+  },
+  contact_reading: {
+    fr: "Contact",
+    en: "Contact",
+    de: "Kontakt",
+    es: "Contacto",
+  },
+  contact_normal: {
+    fr: "Normale",
+    en: "Normal",
+    de: "Normalkraft",
+    es: "Normal",
+  },
+  contact_friction: {
+    fr: "Frottement",
+    en: "Friction",
+    de: "Reibung",
+    es: "Rozamiento",
+  },
+  contact_components: {
+    fr: "Normale et frottement",
+    en: "Normal and friction",
+    de: "Normal- und Reibkraft",
+    es: "Normal y rozamiento",
   },
   support_reactions: {
     fr: "Réactions aux appuis",

@@ -14,7 +14,7 @@ import {
 import { DEFAULT_SIMULATION, SerializedMechanism } from "../types";
 
 /** The format `serialize_mechanism` writes today. */
-export const CURRENT_FORMAT_VERSION = 16;
+export const CURRENT_FORMAT_VERSION = 17;
 
 /** A document mid-migration: its shape belongs to no version in particular. */
 type RawDocument = Record<string, unknown>;
@@ -217,6 +217,18 @@ const MIGRATIONS: MigrationStep[] = [
         gravityStrength: DEFAULT_SIMULATION.gravityStrength,
         restitution: DEFAULT_SIMULATION.restitution,
         contactFriction: { ...DEFAULT_SIMULATION.contactFriction },
+        ...(is_record(doc.simulation) ? doc.simulation : {}),
+      },
+    }),
+  },
+  {
+    to: 17,
+    // How a contact's effort reads becomes a setting of the mechanism, like the support reactions at v13: a document from before gets the resultant.
+    preservesHistory: true,
+    apply: (doc) => ({
+      ...doc,
+      simulation: {
+        contactComponents: false,
         ...(is_record(doc.simulation) ? doc.simulation : {}),
       },
     }),

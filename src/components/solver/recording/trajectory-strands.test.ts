@@ -196,6 +196,20 @@ describe("brins de trajectoire", () => {
     expect(drawn[1].points.map(([, y]) => y)).toEqual(Array(5).fill(-0.1));
   });
 
+  it("un engrenage qui tourne d'un coup ne relie pas ses bords d'avant et d'après", () => {
+    const layout = make_snapshot_layout(["A", "G"], ["G"]);
+    const path = [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]] as [number, number][];
+    const snaps = path.map((p, t) => snapshot(layout, t, { A: p, G: p }));
+    const drawn = strands([axle("A", ["G"]), gear("G", 0.1, "A")], snaps);
+    // Along +x the rims sit above and below; once it heads +y they sit left and right, each pair starting from the corner on its own.
+    expect(drawn.map((strand) => strand.points)).toEqual([
+      [[0, 0.1], [1, 0.1], [2, 0.1]],
+      [[0, -0.1], [1, -0.1], [2, -0.1]],
+      [[1.9, 0], [1.9, 1], [1.9, 2]],
+      [[2.1, 0], [2.1, 1], [2.1, 2]],
+    ]);
+  });
+
   it("un engrenage dont l'axe est fixe ne trace rien", () => {
     const layout = make_snapshot_layout(["A", "G"], ["G"]);
     const snaps = [0, 1, 2].map((t) => snapshot(layout, t, { A: [0, 0], G: [0, 0] }));

@@ -1,0 +1,359 @@
+{
+  "formatVersion": 16,
+  "metadata": {
+    "name": "Rebond",
+    "description": "",
+    "author": "",
+    "createdAt": 1795266039945,
+    "modifiedAt": 1795266147481,
+    "tags": [],
+    "lastSimulationMode": "dynamic"
+  },
+  "viewport": {
+    "scale": 1000,
+    "pan": {
+      "x": 302.5,
+      "y": 355
+    }
+  },
+  "simulation": {
+    "gravity": true,
+    "gravityStrength": 9.81,
+    "collisions": false,
+    "restitution": 0.8,
+    "contactFriction": {
+      "static": 0.5,
+      "dynamic": 0.4
+    },
+    "floor": {
+      "enabled": true,
+      "height": 0,
+      "angle": -0.3490658503988659
+    },
+    "beamStressLens": "none",
+    "supportReactions": false
+  },
+  "mechanicalElements": [
+    {
+      "type": "pivot",
+      "id": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+      "probes": [
+        {
+          "metric": "velocity",
+          "components": {
+            "x": true,
+            "y": true,
+            "norm": false
+          }
+        }
+      ],
+      "overlays": {
+        "trajectory": true
+      },
+      "position": {
+        "x": -0.1,
+        "y": 0.30000000000000004
+      },
+      "isGrounded": false,
+      "rotatingEdgesIDs": [],
+      "fixedGearsIDs": [
+        "32698cde-20e2-4f31-8b50-5d9e98e21190"
+      ],
+      "rotationalFriction": 0.001
+    },
+    {
+      "type": "gear",
+      "id": "32698cde-20e2-4f31-8b50-5d9e98e21190",
+      "probes": [],
+      "overlays": {
+        "trajectory": true
+      },
+      "position": {
+        "x": -0.1,
+        "y": 0.30000000000000004
+      },
+      "angle": 0,
+      "radius": 0.05000000000000002,
+      "parentAxleID": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+      "fixedNodesBodyIDs": [],
+      "meshedGearsIDs": [],
+      "surfaceMass": 10
+    }
+  ],
+  "constraintElements": [],
+  "loads": [],
+  "materials": [
+    {
+      "id": "04df3155-daf1-4657-b5e8-49713acd5193",
+      "name": "Acier",
+      "E": 210000000000,
+      "Re": 235000000,
+      "rho": 7850
+    },
+    {
+      "id": "37644f08-dbfd-42ef-89d9-a67b02d6d250",
+      "name": "Aluminium",
+      "E": 70000000000,
+      "Re": 195000000,
+      "rho": 2700
+    },
+    {
+      "id": "bc5494ac-c201-4e7e-b8e0-179e3f7bdca2",
+      "name": "Inox",
+      "E": 200000000000,
+      "Re": 215000000,
+      "rho": 8000
+    },
+    {
+      "id": "728a08c4-2547-47eb-b5b6-ffb279225564",
+      "name": "Bois",
+      "E": 11000000000,
+      "Re": 24000000,
+      "rho": 450
+    }
+  ],
+  "profiles": [
+    {
+      "id": "267792bb-cedc-49f2-925d-d65167096c5c",
+      "name": "Profilé 1",
+      "shape": {
+        "kind": "rect",
+        "b": 0.02,
+        "h": 0.02
+      }
+    }
+  ],
+  "history": [
+    [
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "pivot",
+          "id": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": -0.1,
+            "y": 0.30000000000000004
+          },
+          "isGrounded": false,
+          "rotatingEdgesIDs": [],
+          "fixedGearsIDs": [
+            "32698cde-20e2-4f31-8b50-5d9e98e21190"
+          ],
+          "rotationalFriction": 0.001
+        }
+      },
+      {
+        "type": "CreateElement",
+        "element": {
+          "type": "gear",
+          "id": "32698cde-20e2-4f31-8b50-5d9e98e21190",
+          "probes": [],
+          "overlays": {},
+          "position": {
+            "x": -0.1,
+            "y": 0.30000000000000004
+          },
+          "angle": 0,
+          "radius": 0.05000000000000002,
+          "parentAxleID": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+          "fixedNodesBodyIDs": [],
+          "meshedGearsIDs": [],
+          "surfaceMass": 10
+        }
+      },
+      {
+        "type": "UpdatePositionsToValidState",
+        "masterActionType": "CreateElement",
+        "newNodes": {
+          "positions": [
+            [
+              "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+              {
+                "x": -0.1,
+                "y": 0.30000000000000004
+              }
+            ],
+            [
+              "32698cde-20e2-4f31-8b50-5d9e98e21190",
+              {
+                "x": -0.1,
+                "y": 0.30000000000000004
+              }
+            ]
+          ],
+          "radii": [
+            [
+              "32698cde-20e2-4f31-8b50-5d9e98e21190",
+              0.05000000000000002
+            ]
+          ],
+          "posMasses": [
+            [
+              "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+              1
+            ],
+            [
+              "32698cde-20e2-4f31-8b50-5d9e98e21190",
+              1
+            ]
+          ],
+          "radMasses": [
+            [
+              "32698cde-20e2-4f31-8b50-5d9e98e21190",
+              1
+            ]
+          ]
+        },
+        "oldNodes": {
+          "positions": [],
+          "radii": [],
+          "posMasses": [],
+          "radMasses": []
+        }
+      }
+    ],
+    [
+      {
+        "type": "SetFloorEnabled",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "32698cde-20e2-4f31-8b50-5d9e98e21190",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "SetShowOverlay",
+        "elementID": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+        "kind": "trajectory",
+        "newValue": true,
+        "oldValue": false
+      }
+    ],
+    [
+      {
+        "type": "ChangeFloorAngle",
+        "newValue": -0.17453292519943295,
+        "oldValue": 0
+      },
+      {
+        "type": "Blank"
+      }
+    ],
+    [
+      {
+        "type": "ChangeFloorAngle",
+        "newValue": -0.3490658503988659,
+        "oldValue": -0.17453292519943295,
+        "committed": true
+      },
+      {
+        "type": "Blank"
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+        "newProbes": [
+          {
+            "metric": "velocity",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": []
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+        "newProbes": [
+          {
+            "metric": "velocity",
+            "components": {
+              "x": true,
+              "y": false,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "velocity",
+            "components": {
+              "x": false,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+        "newProbes": [
+          {
+            "metric": "velocity",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": true
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "velocity",
+            "components": {
+              "x": true,
+              "y": false,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "type": "SetProbes",
+        "elementID": "409ccb64-d87f-4594-ab82-3acb5375fdfb",
+        "newProbes": [
+          {
+            "metric": "velocity",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": false
+            }
+          }
+        ],
+        "oldProbes": [
+          {
+            "metric": "velocity",
+            "components": {
+              "x": true,
+              "y": true,
+              "norm": true
+            }
+          }
+        ]
+      }
+    ]
+  ],
+  "future": []
+}

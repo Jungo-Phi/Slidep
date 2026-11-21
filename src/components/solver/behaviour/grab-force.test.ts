@@ -16,6 +16,7 @@ import type {
 import type { MaterialDef, ProfileDef } from "../../../types/material";
 import { DynamicSnapshot } from "../../../types/runtime-state";
 import {
+  DYNAMIC_SUBSTEPS,
   RECORD_DT,
   SimGrab,
   compile_simulation_model,
@@ -106,8 +107,13 @@ describe("grab dynamique = force (plus une contrainte de position)", () => {
     expect(Math.abs(p.y)).toBeLessThan(1e-6);
     // The pull is recorded as a spring, its foot the grabbed point as it stands now (to within the last substep's travel).
     expect(snapshot.grab).toBeDefined();
-    expect(snapshot.grab!.x).toBeCloseTo(p.x, 4);
-    expect(snapshot.grab!.y).toBeCloseTo(p.y, 4);
+    const slot = snapshot.layout.index.get(MASS)!;
+    const speed = Math.hypot(snapshot.velocities[2 * slot], snapshot.velocities[2 * slot + 1]);
+    const lastSubstepTravel = (speed * RECORD_DT) / DYNAMIC_SUBSTEPS;
+    expect(lastSubstepTravel).toBeGreaterThan(0);
+    expect(Math.hypot(snapshot.grab!.x - p.x, snapshot.grab!.y - p.y)).toBeLessThanOrEqual(
+      lastSubstepTravel * (1 + 1e-6),
+    );
     expect(Math.hypot(snapshot.grab!.fx, snapshot.grab!.fy)).toBeGreaterThan(0);
   });
 

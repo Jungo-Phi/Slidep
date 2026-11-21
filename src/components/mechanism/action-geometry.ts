@@ -122,6 +122,7 @@ const ACTION_GEOMETRY: Record<
   SetElementCollides: NONE,
   SetBeamStressLens: NONE,
   SetSupportReactions: NONE,
+  SetContactComponents: NONE,
 };
 
 const LOAD_TYPES: ReadonlySet<LoadElementType> = new Set([

@@ -325,6 +325,8 @@ describe("ce qu'un membre et une glissière mesurent d'eux-mêmes", () => {
     }
     return {
       ...still,
+      // A kinematic tether is no pull: a dynamic frame carries its grab as a force, and these have none.
+      grab: undefined,
       velocities: v,
       accelerations: new Float64Array(layout.keys.length * 2),
       angleVelocities: new Float64Array(0),

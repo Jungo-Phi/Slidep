@@ -798,10 +798,12 @@ export function draw_slider(
   ctx.restore();
 }
 
+/** The slidep's sliding body, under its pivot. `outerWidth` departs from the slidep's own only while its first fusion is greeted (`slidep_birth_pose`). */
 export function draw_slidep_bottom(
   ctx: CanvasRenderingContext2D,
   position: ScreenPoint,
   angle: number,
+  outerWidth: number = DIM.SLIDEP_OUTER_WIDTH,
 ) {
   ctx.save();
   ctx.translate(position.x, position.y);
@@ -809,9 +811,9 @@ export function draw_slidep_bottom(
 
   ctx.beginPath();
   ctx.roundRect(
-    -DIM.SLIDEP_OUTER_WIDTH / 2,
+    -outerWidth / 2,
     -DIM.SLIDER_OUTER_HEIGHT / 2,
-    DIM.SLIDEP_OUTER_WIDTH,
+    outerWidth,
     DIM.SLIDER_OUTER_HEIGHT,
     DIM.SLIDER_RADIUS,
   );
@@ -825,9 +827,9 @@ export function draw_slidep_bottom(
   ctx.fill("evenodd");
   ctx.beginPath();
   ctx.roundRect(
-    -DIM.SLIDEP_OUTER_WIDTH / 2,
+    -outerWidth / 2,
     -DIM.SLIDER_OUTER_HEIGHT / 2,
-    DIM.SLIDEP_OUTER_WIDTH,
+    outerWidth,
     DIM.SLIDER_OUTER_HEIGHT,
     DIM.SLIDER_RADIUS,
   );
@@ -2362,10 +2364,22 @@ export function draw_dimension_text(
   kind?: QuantityKind,
   precision?: number,
 ) {
+  draw_label_pill(
+    ctx,
+    position,
+    dimension_text(value, extension, kind, precision),
+  );
+}
+
+/** `text` in the stroke colour, on the pill a dimension's value sits on: how the canvas labels a point. */
+export function draw_label_pill(
+  ctx: CanvasRenderingContext2D,
+  position: ScreenPoint,
+  text: string,
+) {
   ctx.font = TEXT_SPECS.TEXT_FONT;
   ctx.textAlign = TEXT_SPECS.TEXT_ALIGN;
   ctx.textBaseline = TEXT_SPECS.TEXT_BASELINE;
-  const text = dimension_text(value, extension, kind, precision);
   const metrics = ctx.measureText(text);
 
   ctx.save();
@@ -2829,8 +2843,12 @@ export interface OverlayArrow {
   which?: ReactionPoint;
   /** Set on a belt strand's reaction, so the arrow can be carried onto the belt as it lies on screen (`overlay-anchor.ts`). */
   strand?: StrandReading;
+  /** Set on what a contact transmits, by its `ContactSample.id`: the reading a click on it names (`HoveredReading.contact`). */
+  contact?: number;
   /** A grab is drawn as the spring it is, from `at` to here; `vector` stays the force it gives, drawn as an arrow only while the reading is hovered. */
   springTo?: WorldPoint;
+  /** A kinematic grab is drawn as a guide line from `at` to here, the cursor: it pulls with no force, so there is neither spring nor arrow to draw, and nothing to hover. */
+  tetherTo?: WorldPoint;
 }
 
 /**
@@ -2907,6 +2925,10 @@ export function draw_overlay_arrow(
   /** A grab's force is drawn whatever the cursor does: it is held, or its value is on screen. */
   forceShown: boolean = false,
 ) {
+  if (arrow.tetherTo) {
+    draw_grab_tether(ctx, world2screen(arrow.at, viewport), world2screen(arrow.tetherTo, viewport));
+    return;
+  }
   // A grab is its spring, whose force reads as an arrow only while it is pointed at, selected or held.
   const spring = grab_spring_screen_geometry(viewport, arrow);
   if (arrow.springTo && !spring) return;
@@ -2943,6 +2965,22 @@ export function draw_overlay_arrow(
       undefined,
       arrow.kind === "velocity" ? "open" : "filled",
     );
+  ctx.restore();
+}
+
+/** The kinematic grab, from the grabbed point to the cursor, with the dot the spring ends on where the cursor holds it: once the mechanism has caught up, the dot alone. */
+function draw_grab_tether(ctx: CanvasRenderingContext2D, base: ScreenPoint, tip: ScreenPoint) {
+  ctx.save();
+  ctx.strokeStyle = overlay_arrow_color("grab");
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = DIM.BEAM_WIDTH - 2 * STROKE_WIDTHS.STANDARD;
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(tip.x, tip.y, DIM.EDGE_ENDPOINT_RADIUS, 0, TAU);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -3035,6 +3073,8 @@ export interface OverlayMoment {
   elementID?: ID;
   /** See `OverlayArrow.which` — the same disambiguator, on the rotation half of one reading. */
   which?: ReactionPoint;
+  /** See `OverlayArrow.contact`: a contact transmits no couple, so this is never set, but a reading is matched on it all the same. */
+  contact?: undefined;
   /**
    * World-space, the side of `at` the half-arc of `draw_overlay_moment` lands on: along the owning beam for a reaction at its end, away from the paired arrow otherwise.
    * Keeps two glyphs meeting at one point from stacking.

@@ -87,6 +87,7 @@ describe("load_mechanism", () => {
         floor: { enabled: true, height: 2.5, angle: 0.3 },
         beamStressLens: "none",
         supportReactions: false,
+        contactComponents: true,
       },
     };
     const stored = JSON.parse(JSON.stringify(serialize_mechanism(withFloor)));

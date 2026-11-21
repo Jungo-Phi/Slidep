@@ -10,10 +10,8 @@
 
 **Roadmap**
 
-- 🤔 Répondre aux questions
 - 🔨 Lisibilité
 - 🔨 Tutos et onboarding
-- 🔨 Solveur géométrique
 - 🔨 DDL & hyperstatique
 - 🔨 Graphiques
 - 🔨 Terminer la physique
@@ -21,43 +19,7 @@
 
 ---
 
-### MCP
-
-- **Une vitrine lisible sans JavaScript :**
-  - Une page d’accueil en HTML statique qui dit ce que fait l’outil, pour qui, et ce qui le distingue
-  - Soigner la description pour la rechercher : "mechanism, linkage, kinematics, gears, physics simulation, CAD…"
-  - Des pages d’exemples (Jansen, Klann, came, engrenages) avec une image et un lien qui ouvre le mécanisme dans l’app
-  - Une documentation du format de fichier et, plus tard du MCP
-
-- Des noms et descriptions d’outils explicites sur le quand : par exemple create_mechanism, avec « À utiliser pour concevoir, simuler ou animer tout mécanisme articulé : bielles, engrenages, jambes marchantes… ». Je compare la demande à ces textes.
-- 🔨 Des primitives au bon niveau : un format déclaratif (« barre de 41,5 entre B et C, pivot fixe en (−38, −7,8) ») plutôt qu’une imitation des clics de l’interface.
-- Ajoute une bibliothèque de mécanismes classiques (Jansen, Klann, Tchebychev, Peaucellier, quadrilatère articulé) prêts à paramétrer. Moins j’ai d’appels à faire, plus je réussis.
-- Un connecteur seul donne des outils. Un plugin ou une compétence (skill) qui l’accompagne peut ajouter le savoir-faire : comment concevoir un mécanisme qui marche, quels modèles utiliser, comment vérifier.
-
-- **Données à renvoyer :**
-  - Une image du mécanisme et de la trajectoire
-  - Des diagnostics (degrés de liberté, positions impossibles, collisions, articulations bloquées)
-  - Des données (la courbe du pied, la vitesse)
-  - Un lien vers le mécanisme ouvert et éditable dans ton application
-- (Des messages d’erreur exploitables (« la barre g ne peut pas atteindre F pour θ = 140° ») valent de l’or.)
-
-- **Exister dans la connaissance des modèles (levier lent) :**
-  - Un format de fichier ouvert, textuel et documenté : les modèles futurs sauront l’écrire, même sans MCP, et le citeront comme option.
-  - Une galerie publique de mécanismes avec des liens partageables, des tutoriels et une documentation lisible par les machines (llms.txt, exemples complets).
-  - Des communautés qui en parlent : profs de techno et de physique, makers, fans de Strandbeest. Ce sont aussi elles qui finiront par dire « fais-le dans [ton outil] ».
-- Monter un jeu de tests avec des demandes réalistes.
-
----
-
 ### Retours utilisateurs
-
-- 🔨 Ajouter la pop-up "Vous avez créé un slidep !"
-
-- 🚨 Visuel du grab en cinématique
-- 🚨 Intersection vitesse moteur dans les DDL
-- 🚨 Manque les contacts dans le bilan des forces
-- 🔨 Solveur géométrique : Quand on change l'angle d'une barre, on devrait essayer de maintenir sa longueur.
-- 🆕 Il faut une option pour cropper la simu (ou zoomer sur les graphiques)
 
 **Hitbox**
 
@@ -78,6 +40,7 @@
 - 🤔 Sur mobile, après avoir posé un élément mal placé, on veut souvent le redéplacer juste derrière, mais actuellement ça crée un nouvel élément. L'outil Sélection est lui même parfois difficile à comprendre.
 - 🤔 Sur mobile, afficher l'outil sélectionné en bas à gauche porte parfois à confusion
 - 🔨 Mettre les pièces sans collision en transparence même en édition.
+- 🔨 Solveur géométrique : Quand on change l'angle d'une barre, on devrait essayer de maintenir sa longueur.
 - 🔨 Clarifier ce que fait "Déconnecter" : séparation géométrique ou visuelle ? (à décider, mais la réponse est à appliquer partout)
 - 🔨 La distance d'écartement à la séparation d'éléments devrait dépendre du zoom
 - 🆕 Suivit caméra en simulation
@@ -100,6 +63,7 @@
 
 - 🔨 N'afficher un moteur qu'une seul fois au maximum dans les DDL
 - 🔨 afficher en priorité les éléments avec une masse (ex. Mass-ressort) dans les DDL
+- 🚨 Intersection vitesse moteur dans les DDL
 - 🤔 Pour "débuger" un mécanisme, les DDL sont plus utiles que les hyperstatismes. L'indication visuelle et le message d'hyperstatisme actuel sont confusants. Voir comment MSC Adams affiche les mobilité et signale les liaisons redondantes.
 - 🔨 Le ra-mappage des contraintes "angle -> longueur -> angle" ne met pas en évidence les bons éléments
 - 🔨 Symboles angles vers l'intérieur
@@ -201,7 +165,6 @@
 
 **Physique**
 
-- ❇️ Dessiner les forces de réaction de gears au point de contact.
 - 🆕 Ajouter ressort de couple
 
 **Feedback et cas d'erreur**
@@ -228,6 +191,7 @@
 - 🆕 Ajouter un nouvel élément "Commentaire" sur le canvas
 - 🔨 Ajouter un délais (2s) avant d'afficher "mécanisme(s) exporté(s)"
 - 🔨 Dessiner un join avec le ground à PlacingGround (quand c'est approprié)
+- 🔨 Ajouter un outil de ground+pivot
 - 🆕 Cacher les joins qui ne sont connectés qu'à un segment
 - 🆕 Afficher des syboles au hover des numberInput start, end, longueur et angle
 - 🆕 Afficher des syboles au hover des connexion (ex. beam end = anneau)

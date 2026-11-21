@@ -210,7 +210,7 @@ const TermsRow: React.FC<TermsRowProps> = ({
   const { palette } = useTheme();
   const color_of = (term: BalanceTerm) =>
     readable_on(
-      balance_term_color(term.kind, palette.primary.main, palette.overlay),
+      balance_term_color(term, palette.primary.main, palette.overlay),
       palette.background.paper,
     );
   return (

@@ -54,6 +54,7 @@ import {
   ContactFrictionInput,
   ContactPushes,
   friction_acts,
+  contact_forces,
   hold_contacts,
   slide_contacts,
 } from "../dynamics/contact-friction";
@@ -132,6 +133,11 @@ export type DynamicsInput = {
   restitution?: { coefficient: number; lost: number };
   /** Coulomb friction at the collision contacts, and where the kinetic energy (J) their slip took is added up — see `contact-friction.ts`. */
   friction?: ContactFrictionInput;
+  /**
+   * Output: an array to fill with what each contact transmitted this step, four numbers per contact from `contactsFrom` on — see `contact_forces`.
+   * Sized `4 × (links.length − contactsFrom)`; omitted, nothing is measured.
+   */
+  contactForces?: Float64Array;
   /** This step belongs to a frame whose accelerations someone reads: the direct solve closes its rows to that level rather than the velocity's — see `DIRECT_SETTLE_RATIO`. */
   settle?: boolean;
 };
@@ -490,6 +496,7 @@ export function PBD_kinematic_solver(
       settle: dynamics.settle,
       restitution: dynamics.restitution,
       friction: dynamics.friction,
+      contactForces: dynamics.contactForces,
     },
     referenceExtent,
     direct,
@@ -516,7 +523,7 @@ export function PBD_solve(
   collectDiagnostics: boolean = false,
   exitOn: ExitCriterion = "motion",
   /** Present only for a dynamics step — see `DynamicsInput`; edition and the kinematic simulation leave it out. */
-  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom" | "contacts" | "direct" | "settle" | "restitution" | "friction">,
+  dynamics?: Pick<DynamicsInput, "dt" | "gx" | "gy" | "reactions" | "drives" | "contactsFrom" | "contacts" | "direct" | "settle" | "restitution" | "friction" | "contactForces">,
   /**
    * The scale every tolerance below is a fraction of.
    * A simulation passes the mechanism's size at t = 0: measured live, a body that has come loose and fallen away would stretch it without bound, and loosen every tolerance with it.
@@ -764,7 +771,11 @@ export function PBD_solve(
   const direct = directHandled ? create_direct_state(nodes, links, drives) : null;
   // The contacts' friction, bounded by the normal impulse each one took this substep, from the sweep and from the direct solve alike.
   const friction = dynamics && dynamics.dt > 0 && friction_acts(dynamics.friction) ? dynamics.friction : null;
-  const pushes = friction && contactsFrom < links.length ? new ContactPushes(links, slots, contactsFrom) : null;
+  // Also kept without friction when the contact forces are read: the normal impulses are what they are measured from.
+  const pushes =
+    (friction || (dynamics?.contactForces && dynamics.dt > 0)) && contactsFrom < links.length
+      ? new ContactPushes(links, slots, contactsFrom)
+      : null;
   if (pushes && direct) {
     const first = row_slots(links).first;
     pushes.direct = (k) => direct.lambda[first[k]];
@@ -1199,7 +1210,7 @@ export function PBD_solve(
       }
     }
     // The direct solve holds its contacts once it has settled, below the loop: its multipliers mean nothing before.
-    if (pushes && !direct && frameStartX && frameStartY && frameStartA)
+    if (pushes && friction && !direct && frameStartX && frameStartY && frameStartA)
       hold_contacts(friction!, pushes, nodes, frameStartX, frameStartY, frameStartA);
     if (direct && directHandled) {
       const left = direct_iterate(direct, nodes, links, slots, directHandled!, invDtSq, directTolerance, DIRECT_ITERATIONS);
@@ -1253,7 +1264,7 @@ export function PBD_solve(
   // ── Dynamics: the frame's velocity, from the whole displacement since `frameStart` ──
   // `dt = 0` marks a re-projection step (see `Recorder.advance`'s first instant): no time elapsed, so there is no velocity to derive — dividing by it would give every already-satisfied dof (`Δx = 0`, common on a freshly imported, exactly-constrained mechanism) a `0 × Infinity = NaN` instead of the `0` it actually is.
   // The direct solve's contacts held where they stick, then the mechanism solved again around them.
-  if (pushes && direct && directHandled && frameStartX && frameStartY && frameStartA) {
+  if (pushes && friction && direct && directHandled && frameStartX && frameStartY && frameStartA) {
     hold_contacts(friction!, pushes, nodes, frameStartX, frameStartY, frameStartA);
     direct_iterate(direct, nodes, links, slots, directHandled, invDtSq, directTolerance, DIRECT_ITERATIONS);
   }
@@ -1276,7 +1287,8 @@ export function PBD_solve(
     }
     for (let a = 0; a < nodes.angle.length; a++)
       nodes.vAngle[a] = (nodes.angle[a] - frameStartA[a]) * invDt;
-    if (pushes) slide_contacts(friction!, pushes, nodes, dynamics.dt);
+    if (pushes && friction) slide_contacts(friction, pushes, nodes, dynamics.dt);
+    if (pushes && dynamics.contactForces) contact_forces(pushes, nodes, dynamics.dt, dynamics.contactForces);
     if (direct && dynamics.restitution && startVX && startVY && startVA)
       dynamics.restitution.lost += direct_bounce(direct, nodes, startVX, startVY, startVA, dynamics.restitution.coefficient, dynamics.dt);
   }

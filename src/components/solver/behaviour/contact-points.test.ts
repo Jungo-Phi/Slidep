@@ -142,6 +142,22 @@ describe("points de contact", () => {
     expect(stayed).toEqual(impact);
   });
 
+  it("l'effort d'un contact qui dure se mélange d'un instant à l'autre, celui d'un seul instant tient sa moitié", () => {
+    const force = (normal: number) => ({ bodies: ["a" as ID, undefined] as [ID, undefined], nx: 0, ny: 1, normal, friction: 0 });
+    const [blended] = interpolate_contacts([{ id: 1, x: 0, y: 0, force: force(2) }], [{ id: 1, x: 0, y: 0, force: force(4) }], 0.25)!;
+    expect(blended.force!.normal).toBeCloseTo(2.5, 12);
+    expect(interpolate_contacts([{ id: 1, x: 0, y: 0, force: force(2) }], [{ id: 1, x: 0, y: 0 }], 0.75)![0].force).toBeUndefined();
+  });
+
+  it("un contact qui finit reste où il a été relevé jusqu'à l'instant suivant", () => {
+    const ended = { id: 3, x: 1, y: 2 };
+    expect(interpolate_contacts([ended], undefined, 0.75)).toEqual([ended]);
+    expect(interpolate_contacts([ended, { id: 1, x: 0, y: 0 }], [{ id: 1, x: 4, y: 0 }], 0.5)).toEqual([
+      { id: 1, x: 2, y: 0 },
+      ended,
+    ]);
+  });
+
   it("garde le pas où commence un choc, et porte les contacts des pas qui ne le sont pas", () => {
     const MASS = id();
     const m = mechanism([mass(MASS, new Point2(0.5, 1))], true);

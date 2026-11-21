@@ -119,6 +119,26 @@ export const MODE_ANIMATION = {
 } as const;
 
 /**
+ * The greeting for the first slidep a browser sees fused: the slider's body widens under the pivot as the two click together, then a message names what was made.
+ */
+export const SLIDEP_BIRTH = {
+  /** How long the two parts take to click together. */
+  CLICK_MS: 400,
+  /** How far the symbol swells as they do: the hint bubble's own swell, so the app celebrates one way. */
+  POP_SCALE: 1.15,
+  /** The fraction of the click spent swelling, the rest settling: the hint bubble's keyframes. */
+  POP_PEAK: 0.35,
+  /** When the message comes in, once the click has had a moment to read. */
+  MESSAGE_DELAY_MS: 150,
+  /** How long the message stays, fades included. */
+  MESSAGE_MS: 2400,
+  /** The hint bubble's fade. */
+  MESSAGE_FADE_MS: 250,
+  /** How far the message rises over its life, px. */
+  MESSAGE_RISE_PX: 8,
+} as const;
+
+/**
  * Same swing, for a gallery card on hover: evocative rather than a precise DDL reading, so it runs wider and quicker than MODE_ANIMATION's.
  */
 export const THUMBNAIL_MODE_ANIMATION = {

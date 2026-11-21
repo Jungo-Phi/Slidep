@@ -129,6 +129,7 @@ import {
   stress_utilization_stops,
 } from "../../solver/recording/cohesion-field";
 import { beam_strength } from "../../../utils/section-properties";
+import { slidep_birth_pose, type SlidepBirth } from "../slidep-birth";
 
 
 /** Shared empty set, so a frame with nothing doomed allocates none. */
@@ -552,6 +553,8 @@ export type CanvasDrawing = {
   /** `performance.now()`, ms — drives the symbols' pulse. Passed in rather than read here so a
    * test can call this function with a fixed value. */
   now?: number;
+  /** The first slidep this browser fuses, while it is greeted: drawn clicking together, its message over it. */
+  slidepBirth?: SlidepBirth | null;
   /**
    * The library panel's own tinting — present only while a library section is hovered, undefined the rest of the time (edition's normal colors apply).
    * Every beam is colored by index into whichever list `section` names; `hoveredEntryID` (a row the panel itself is pointing at, not the canvas — see `draw_mechanism`'s own `hoveredPart`) thickens its beams, the same way any other hover does — it does not fade the rest, which would hide the very tint it is a legend for.
@@ -627,6 +630,7 @@ export function draw_mechanism(
     collisionsInPlay = false,
     redundancySymbols = EMPTY_SYMBOLS,
     now = 0,
+    slidepBirth = null,
     libraryTint,
     materials = EMPTY_LIBRARY,
     profiles = EMPTY_LIBRARY,
@@ -1292,10 +1296,25 @@ export function draw_mechanism(
               break;
             }
             case "slidep": {
+              const at = world2screen(element.position, viewport);
+              const pose =
+                slidepBirth?.id === element.id
+                  ? slidep_birth_pose(now - slidepBirth.start)
+                  : null;
+              if (pose) {
+                ctx.save();
+                ctx.translate(at.x, at.y);
+                ctx.scale(pose.scale, pose.scale);
+                ctx.translate(-at.x, -at.y);
+                if (typeof ctx.strokeStyle === "string")
+                  ctx.shadowColor = ctx.strokeStyle;
+                ctx.shadowBlur = Math.max(ctx.shadowBlur, pose.halo);
+              }
               draw_slidep_bottom(
                 ctx,
-                world2screen(element.position, viewport),
+                at,
                 parent_beam_screen_angle(element, mechanicalElements),
+                pose?.outerWidth,
               );
               [...element.rotatingEdgesIDs].reverse().forEach((edgeID) => {
                 const edge = get_mechanical_element_from_id(
@@ -1335,6 +1354,7 @@ export function draw_mechanism(
                   ...element.rotatingEdgesIDs,
                 ]),
               );
+              if (pose) ctx.restore();
               break;
             }
             case "join":

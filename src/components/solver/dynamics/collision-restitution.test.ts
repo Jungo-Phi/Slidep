@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Point2 } from "../../../types/point2";
+import type { ID } from "../../../types";
 import { CollisionCandidates } from "./collision-candidates";
 import { apply_collision_restitution } from "./collision-restitution";
 import { contact_eps } from "./collision-detection";
@@ -26,7 +27,7 @@ describe("apply_collision_restitution", () => {
     const candidates: CollisionCandidates = {
       ...EMPTY_CANDIDATES,
       // The resting position sits `contact_eps(EXTENT)` past the raw radius — mirror it here.
-      pointCircle: [{ pointKey: "ball", centerKey: "anchor", radius: boundary - EPS }],
+      pointCircle: [{ pointKey: "ball", pointID: "ball" as ID, centerKey: "anchor", radius: boundary - EPS }],
     };
     // Resting exactly at the boundary (anchor at the origin, ball straight above), the plain (inelastic) solve already stopped it — this is what "after" looks like BEFORE restitution.
     const positions = new Map([["ball", P(0, boundary)], ["anchor", P(0, 0)]]);
@@ -44,7 +45,7 @@ describe("apply_collision_restitution", () => {
   it("ne fait rien avec restitution = 0 (le solve inélastique suffit déjà)", () => {
     const candidates: CollisionCandidates = {
       ...EMPTY_CANDIDATES,
-      pointCircle: [{ pointKey: "ball", centerKey: "anchor", radius: 9.5 }],
+      pointCircle: [{ pointKey: "ball", pointID: "ball" as ID, centerKey: "anchor", radius: 9.5 }],
     };
     const positions = new Map([["ball", P(0, 10)], ["anchor", P(0, 0)]]);
     const posMasses = new Map([["ball", 1], ["anchor", 0]]);
@@ -59,7 +60,7 @@ describe("apply_collision_restitution", () => {
   it("ignore un contact qui n'a pas eu lieu cette frame (loin de la borne)", () => {
     const candidates: CollisionCandidates = {
       ...EMPTY_CANDIDATES,
-      pointCircle: [{ pointKey: "ball", centerKey: "anchor", radius: 5 }],
+      pointCircle: [{ pointKey: "ball", pointID: "ball" as ID, centerKey: "anchor", radius: 5 }],
     };
     const positions = new Map([["ball", P(0, 100)], ["anchor", P(0, 0)]]);
     const posMasses = new Map([["ball", 1], ["anchor", 0]]);
@@ -74,7 +75,7 @@ describe("apply_collision_restitution", () => {
   it("ignore un contact déjà en train de se séparer", () => {
     const candidates: CollisionCandidates = {
       ...EMPTY_CANDIDATES,
-      pointCircle: [{ pointKey: "ball", centerKey: "anchor", radius: 9.5 }],
+      pointCircle: [{ pointKey: "ball", pointID: "ball" as ID, centerKey: "anchor", radius: 9.5 }],
     };
     const positions = new Map([["ball", P(0, 10)], ["anchor", P(0, 0)]]);
     const posMasses = new Map([["ball", 1], ["anchor", 0]]);
@@ -91,7 +92,7 @@ describe("apply_collision_restitution", () => {
     const boundary = EPS; // the point-segment contact boundary at EXTENT
     const candidates: CollisionCandidates = {
       ...EMPTY_CANDIDATES,
-      pointSegment: [{ pointKey: "ball", segKey1: "s1", segKey2: "s2" }],
+      pointSegment: [{ pointKey: "ball", pointID: "ball" as ID, segKey1: "s1", segKey2: "s2", segID: "s" as ID }],
     };
     // Segment from (0,0) to (100,0), ball resting at the boundary above its midpoint.
     const positions = new Map([

@@ -77,6 +77,8 @@ export interface SimulationSettings {
   beamStressLens: BeamStressLens;
   /** Whether the canvas marks the whole system's free body: applied loads and support reactions together, wherever they are, with no per-element flag to set. Mechanism-wide for the same reason as `beamStressLens` — whether the supports are the interesting part is a property of the structure. */
   supportReactions: boolean;
+  /** Whether a contact's effort is drawn and balanced as its normal and friction components rather than as their resultant — a way of reading every contact, mechanism-wide like `supportReactions`. */
+  contactComponents: boolean;
 }
 
 export const DEFAULT_FLOOR: FloorConfig = { enabled: false, height: 0, angle: 0 };
@@ -91,6 +93,7 @@ export const DEFAULT_SIMULATION: SimulationSettings = {
   floor: DEFAULT_FLOOR,
   beamStressLens: "none",
   supportReactions: false,
+  contactComponents: false,
 };
 
 export interface Mechanism {

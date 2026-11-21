@@ -41,13 +41,13 @@ function direction_on(
 /**
  * Where a term of the force balance is drawn: its own element's centre on the pose on screen.
  * The balance is read off the pose the panel last rendered, which trails the canvas by a mirror tick and parts from it entirely wherever the panel stops being handed new instants — so the point comes from the drawing rather than from the term, and a term whose element is gone keeps its own.
- * Terms that are not read at a body (a load, applied where it was placed; the grab, where the cursor holds) have no such anchor.
+ * Terms that are not read at a body (a load, applied where it was placed; the grab, where the cursor holds; a contact, where the two touch) have no such anchor.
  */
 export function balance_term_anchor(
   term: { kind: string; elementID: ID },
   elements: MechanicalElement[],
 ): WorldPoint | undefined {
-  if (term.kind === "load" || term.kind === "grab") return undefined;
+  if (term.kind === "load" || term.kind === "grab" || term.kind === "contact") return undefined;
   const element = elements.find((el) => el.id === term.elementID);
   return element ? body_centre(element) : undefined;
 }
@@ -100,7 +100,8 @@ function anchored<T extends OverlayArrow | OverlayMoment>(
   const carried = readings.map((reading) => {
     const element = elements.find((el) => el.id === reading.elementID);
     // A belt's readings sit at its strands' ends, which the element holds no point for: `strand_arrow` carries them instead.
-    if (!element || element.type === "belt") return reading;
+    // A contact's sit where two surfaces touch, which no point of either element marks.
+    if (!element || element.type === "belt" || reading.contact !== undefined) return reading;
     const at = anchor_on(reading, element);
     if (!at || (at.x === reading.at.x && at.y === reading.at.y)) return reading;
     changed = true;

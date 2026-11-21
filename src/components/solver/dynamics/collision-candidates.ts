@@ -12,15 +12,17 @@ export const FLOOR_ANCHOR_KEY = "floor_anchor";
  * Bare point-vs-point contact (two nodes with no segment/circle of their own) is out of scope: nothing in Slidep's element set needs it today, and it would reuse `MinDistance` unchanged if it ever does.
  */
 export type CollisionCandidates = {
-  pointSegment: { pointKey: string; segKey1: string; segKey2: string }[];
+  /** `pointID`, here and below, is the element the point belongs to (a node, or the beam whose end it is), and `segID` the beam a segment is: who receives what the contact transmits. */
+  pointSegment: { pointKey: string; pointID: ID; segKey1: string; segKey2: string; segID: ID }[];
   /** `angleKey`, here and below, is the gear's own angle dof, which contact friction turns; absent, the circle does not spin. */
-  pointCircle: { pointKey: string; centerKey: string; radius: number; angleKey?: string }[];
+  pointCircle: { pointKey: string; pointID: ID; centerKey: string; radius: number; angleKey?: string }[];
   circleSegment: {
     centerKey: string;
     radius: number;
     angleKey?: string;
     segKey1: string;
     segKey2: string;
+    segID: ID;
   }[];
   circleCircle: {
     key1: string;
@@ -32,7 +34,7 @@ export type CollisionCandidates = {
   }[];
   /** Every colliding node/gear against the floor's line — always built, independently of `mechanism.simulation.floor.enabled`: the live flag gates their use at runtime (see `collision_links`), the same way ordinary candidates are always built regardless of `collisions`.
    * A height/angle change only takes effect on the next compile. */
-  pointFloor: { pointKey: string }[];
+  pointFloor: { pointKey: string; pointID: ID }[];
   circleFloor: { centerKey: string; radius: number; angleKey?: string }[];
 };
 
@@ -41,6 +43,11 @@ export type CollisionCandidates = {
  * More than one when a grounded node and a beam's coincident endpoint land on the same key (fusion merges them): a weld naming either raw id has to exclude the whole fused point, not just whichever one is checked, so the two are merged here rather than kept as separate candidates that share a key.
  */
 type CandidatePoint = { key: string; rawIds: ID[] };
+
+/** The element a fused point stands for: a node fused into it rather than a beam whose end lands there. */
+function point_owner(point: CandidatePoint, nodes: Set<ID>): ID {
+  return point.rawIds.find((id) => nodes.has(id)) ?? point.rawIds[0];
+}
 
 function dedupe_points(raw: { key: string; rawId: ID }[]): CandidatePoint[] {
   const byKey = new Map<string, ID[]>();
@@ -78,6 +85,7 @@ export function build_collision_candidates(
     }
   }
   const points = dedupe_points(rawPoints);
+  const nodeIDs = new Set(elements.filter((e) => NODE_TYPES.has(e.type)).map((e) => e.id));
 
   const ignoring = new Set<ID>();
   for (const element of elements)
@@ -111,7 +119,7 @@ export function build_collision_candidates(
       for (const p of collidingPoints) {
         if (p.key === segKey1 || p.key === segKey2) continue; // the beam's own ends
         if (p.rawIds.some((id) => welded.has(id))) continue; // welded to this beam's span
-        pointSegment.push({ pointKey: p.key, segKey1, segKey2 });
+        pointSegment.push({ pointKey: p.key, pointID: point_owner(p, nodeIDs), segKey1, segKey2, segID: element.id });
       }
       for (const gear of gears) {
         if (isWeldedGear(welded, gear)) continue;
@@ -121,6 +129,7 @@ export function build_collision_candidates(
           angleKey: gear.id,
           segKey1,
           segKey2,
+          segID: element.id,
         });
       }
     } else if (element.type === "gear") {
@@ -130,7 +139,7 @@ export function build_collision_candidates(
       for (const p of collidingPoints) {
         if (p.key === centerKey) continue; // fused with its own axle
         if (p.rawIds.some((id) => welded.has(id))) continue; // welded to this gear (rim, e.g.)
-        pointCircle.push({ pointKey: p.key, centerKey, radius, angleKey: element.id });
+        pointCircle.push({ pointKey: p.key, pointID: point_owner(p, nodeIDs), centerKey, radius, angleKey: element.id });
       }
     }
   }
@@ -155,6 +164,7 @@ export function build_collision_candidates(
   // Not pairwise like the rest — there is only ever one floor, so every colliding point/gear is a candidate against it (see `CollisionCandidates.pointFloor`).
   const pointFloor: CollisionCandidates["pointFloor"] = collidingPoints.map((p) => ({
     pointKey: p.key,
+    pointID: point_owner(p, nodeIDs),
   }));
   const circleFloor: CollisionCandidates["circleFloor"] = gears.map((g) => ({
     centerKey: remap(g.id),
@@ -170,4 +180,25 @@ export function build_collision_candidates(
     pointFloor,
     circleFloor,
   };
+}
+
+/**
+ * The elements on either side of contact `id` (its rank across every family, as `collect_touching_contacts` numbers them), in the order `contact_forces` reads them: the first is the one its normal points into.
+ * `undefined` for the floor, which is no element.
+ */
+export function contact_bodies(candidates: CollisionCandidates, id: number): [ID, ID | undefined] | undefined {
+  let rank = id;
+  const { pointSegment, pointCircle, circleSegment, circleCircle, pointFloor, circleFloor } = candidates;
+  if (rank < pointSegment.length) return [pointSegment[rank].pointID, pointSegment[rank].segID];
+  rank -= pointSegment.length;
+  if (rank < pointCircle.length) return [pointCircle[rank].pointID, pointCircle[rank].angleKey as ID | undefined];
+  rank -= pointCircle.length;
+  if (rank < circleSegment.length) return circleSegment[rank].angleKey === undefined ? undefined : [circleSegment[rank].angleKey as ID, circleSegment[rank].segID];
+  rank -= circleSegment.length;
+  if (rank < circleCircle.length) return circleCircle[rank].angleKey1 === undefined ? undefined : [circleCircle[rank].angleKey1 as ID, circleCircle[rank].angleKey2 as ID | undefined];
+  rank -= circleCircle.length;
+  if (rank < pointFloor.length) return [pointFloor[rank].pointID, undefined];
+  rank -= pointFloor.length;
+  if (rank < circleFloor.length) return circleFloor[rank].angleKey === undefined ? undefined : [circleFloor[rank].angleKey as ID, undefined];
+  return undefined;
 }

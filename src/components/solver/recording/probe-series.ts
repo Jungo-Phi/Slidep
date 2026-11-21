@@ -16,7 +16,7 @@ import {
   SnapshotLayout,
   StressScaleCache,
 } from "../../../types/runtime-state";
-import { hermite_value, impact_between, same_belt_topology } from "../dynamics/simulation-engine";
+import { hermite_value, impact_instants, same_belt_topology } from "../dynamics/simulation-engine";
 
 export type ProbeCurveKey = "x" | "y" | "norm" | "value";
 
@@ -674,6 +674,7 @@ interface PointBuild {
   radius: number;
   /** Displacement (m) that starts the point drawing, and that its envelope takes a new direction over. */
   floor: number;
+  /** Every strand drawn so far: one for a point, a pair for an envelope, and one more pair each time it breaks off at a sharp turn — the last pair is the one being extended. */
   strands: StrandBuild[];
   /** Position the next displacement is measured from: where the point was first seen until it starts drawing, then wherever the envelope last took its direction. */
   anchorX: number;
@@ -686,6 +687,10 @@ interface PointBuild {
   /** Unit normal to the travel — envelope only. */
   normalX: number;
   normalY: number;
+  /** Last position emitted, where an envelope that breaks off starts again from. */
+  lastX: number;
+  lastY: number;
+  lastT: number;
 }
 
 /** See `PointBuild.floor`. */
@@ -696,19 +701,23 @@ function travel_floor(radius: number): number {
   );
 }
 
-/** Pushes one sample onto every strand of `build`: the point itself, or both offsets of its envelope. */
+/** Pushes one sample onto the strands `build` is extending: the point itself, or both offsets of its envelope. */
 function emit(build: PointBuild, x: number, y: number, t: number): void {
+  build.lastX = x;
+  build.lastY = y;
+  build.lastT = t;
+  const n = build.strands.length;
   if (build.radius === 0) {
-    build.strands[0].points.push(new Point2(x, y));
-    build.strands[0].times.push(t);
+    build.strands[n - 1].points.push(new Point2(x, y));
+    build.strands[n - 1].times.push(t);
     return;
   }
   const ox = build.normalX * build.radius;
   const oy = build.normalY * build.radius;
-  build.strands[0].points.push(new Point2(x + ox, y + oy));
-  build.strands[0].times.push(t);
-  build.strands[1].points.push(new Point2(x - ox, y - oy));
-  build.strands[1].times.push(t);
+  build.strands[n - 2].points.push(new Point2(x + ox, y + oy));
+  build.strands[n - 2].times.push(t);
+  build.strands[n - 1].points.push(new Point2(x - ox, y - oy));
+  build.strands[n - 1].times.push(t);
 }
 
 /** Takes one sampled position into the strands `build` draws. */
@@ -724,6 +733,7 @@ function advance(build: PointBuild, x: number, y: number, t: number): void {
   const dy = y - build.anchorY;
   const travel = Math.sqrt(dx * dx + dy * dy);
   const stepped = travel > build.floor;
+  let broken = false;
   if (stepped && build.radius > 0) {
     let nx = -dy / travel;
     let ny = dx / travel;
@@ -732,8 +742,13 @@ function advance(build: PointBuild, x: number, y: number, t: number): void {
       nx = -nx;
       ny = -ny;
     }
+    broken = build.moving && nx * build.normalX + ny * build.normalY < Math.cos(TRAJECTORY_SAMPLING.ENVELOPE_BREAK_ANGLE);
     build.normalX = nx;
     build.normalY = ny;
+  }
+  if (broken) {
+    build.strands.push({ points: [], times: [] }, { points: [], times: [] });
+    emit(build, build.lastX, build.lastY, build.lastT);
   }
   if (!build.moving) {
     if (!stepped) return;
@@ -854,6 +869,9 @@ function trajectory_builds(elements: MechanicalElement[]): PointBuild[] {
           moving: false,
           normalX: 0,
           normalY: 0,
+          lastX: 0,
+          lastY: 0,
+          lastT: 0,
         });
       }
     }
@@ -867,8 +885,8 @@ function is_dynamic_snapshot(s: SimulationSnapshot): s is DynamicSnapshot {
 
 /**
  * `TRAJECTORY_SAMPLING.HERMITE_SUBSAMPLES` extra points between `prev` and `snap`, on the SAME Hermite curve `dynamic_snapshot_at` draws the live point on — so a trajectory reads as curved across one recorded interval instead of as the straight chord a plain lerp would cut across a fast rotation.
- * Guarded exactly like `dynamic_snapshot_at` itself (same layout, same belt topology, no impact): a topology change is not a curve to draw through, it is the earlier instant held — `advance` below just never receives the extra points, and falls back to the raw one-sample-per-snapshot path it always had.
- * Across an impact that path is the straight line the playback moves the point along.
+ * Guarded exactly like `dynamic_snapshot_at` itself (same layout, same belt topology): a topology change is not a curve to draw through, it is the earlier instant held — `advance` below just never receives the extra points, and falls back to the raw one-sample-per-snapshot path it always had.
+ * Across an impact the curve breaks at the point the impact struck at, as the playback's does (`impact_instants`).
  */
 function sample_hermite_between(
   builds: PointBuild[],
@@ -876,7 +894,25 @@ function sample_hermite_between(
   prev: DynamicSnapshot,
   snap: DynamicSnapshot,
 ): void {
-  if (prev.layout !== snap.layout || !same_belt_topology(prev, snap) || impact_between(prev, snap)) return;
+  if (prev.layout !== snap.layout || !same_belt_topology(prev, snap)) return;
+  const instants = impact_instants(prev, snap);
+  if (!instants) return sample_hermite_span(builds, slots, prev, snap);
+  const [before, after] = instants;
+  sample_hermite_span(builds, slots, prev, before);
+  for (let k = 0; k < builds.length; k++) {
+    const slot = slots[k];
+    if (slot < 0 || Number.isNaN(before.positions[2 * slot])) continue;
+    advance(builds[k], before.positions[2 * slot], before.positions[2 * slot + 1], before.t);
+  }
+  sample_hermite_span(builds, slots, after, snap);
+}
+
+function sample_hermite_span(
+  builds: PointBuild[],
+  slots: number[],
+  prev: DynamicSnapshot,
+  snap: DynamicSnapshot,
+): void {
   const span = snap.t - prev.t;
   if (!(span > 0)) return;
   const n = TRAJECTORY_SAMPLING.HERMITE_SUBSAMPLES;
@@ -1460,6 +1496,19 @@ const REACTION_POINT: Record<
 };
 
 /**
+ * `snapshots` with the two instants of each impact between them (`impact_instants`): a curve of the motion then jumps at the instant the impact struck, rather than ramping across the whole interval from the speed before it to the speed after.
+ */
+function motion_instants(snapshots: DynamicSnapshot[]): DynamicSnapshot[] {
+  const out: DynamicSnapshot[] = [];
+  for (let i = 0; i < snapshots.length; i++) {
+    const instants = i > 0 ? impact_instants(snapshots[i - 1], snapshots[i]) : null;
+    if (instants) out.push(...instants);
+    out.push(snapshots[i]);
+  }
+  return out;
+}
+
+/**
  * `get_probe_series`'s dynamic-mode counterpart: same curves, but velocity and angular velocity are read directly off `DynamicSnapshot`'s real solver state (`read_velocity`, `read_angular_velocity`) instead of finite-differenced from position — no differencing noise, since dynamic mode has the actual quantity.
  * Position/angle are otherwise identical to the kinematic case (`read_position`/`read_angle` are already generic), duplicated rather than shared with `get_probe_series`: the two only diverge on velocity, and forcing both through one body costs more indirection than the position/angle cases are worth.
  */
@@ -1475,7 +1524,7 @@ export function get_dynamic_probe_series(
       const ys: number[] = [];
       let layout: SnapshotLayout | null = null;
       let slots = NO_SLOTS;
-      for (const snap of snapshots) {
+      for (const snap of motion_instants(snapshots)) {
         if (snap.layout !== layout) {
           layout = snap.layout;
           slots = probe_slots(element, layout);
@@ -1505,7 +1554,7 @@ export function get_dynamic_probe_series(
       const vy: number[] = [];
       let layout: SnapshotLayout | null = null;
       let slots = NO_SLOTS;
-      for (const snap of snapshots) {
+      for (const snap of motion_instants(snapshots)) {
         if (snap.layout !== layout) {
           layout = snap.layout;
           slots = probe_slots(element, layout);
@@ -1559,7 +1608,7 @@ export function get_dynamic_probe_series(
       let prev: number | undefined;
       let layout: SnapshotLayout | null = null;
       let slots = NO_SLOTS;
-      for (const snap of snapshots) {
+      for (const snap of motion_instants(snapshots)) {
         if (snap.layout !== layout) {
           layout = snap.layout;
           slots = probe_slots(element, layout);
@@ -1583,7 +1632,7 @@ export function get_dynamic_probe_series(
       const omega: number[] = [];
       let layout: SnapshotLayout | null = null;
       let slots = NO_SLOTS;
-      for (const snap of snapshots) {
+      for (const snap of motion_instants(snapshots)) {
         if (snap.layout !== layout) {
           layout = snap.layout;
           slots = probe_slots(element, layout);

@@ -8,6 +8,7 @@ import {
   draw_overlay_arrow_label,
   draw_overlay_moment,
   draw_overlay_moment_label,
+  draw_label_pill,
   draw_trajectory,
   type FocusedOverlay,
   type OverlayArrow,
@@ -17,8 +18,12 @@ import {
 import type { HoveredBalanceTerm } from "../../solver/analysis/force-balance";
 import type { FloorConfig, ID, ViewportState } from "../../../types";
 import type { HoveredPart } from "../../../types/hovered-part";
-import type { Point2 } from "../../../types/point2";
+import { Point2 } from "../../../types/point2";
 import type { CanvasState } from "../../../types/canvas-state";
+import { COLORS } from "../../../theme/canvas-theme";
+import { DIM, STROKE_WIDTHS } from "../../../constants/rendering-specs";
+import { world2screen } from "../../../utils";
+import { slidep_birth_message } from "../slidep-birth";
 
 export type { CanvasDrawing, CanvasHighlight } from "./draw-mechanism";
 export { NO_HIGHLIGHT } from "./draw-mechanism";
@@ -52,6 +57,8 @@ export type MechanicalCanvasDrawing = Omit<
   overlayMoments?: OverlayMoment[];
   /** A row of the panel's force balance pointing at a reading — lights it up exactly as the cursor would. */
   hoveredBalanceTerm?: HoveredBalanceTerm | null;
+  /** What the greeting of `slidepBirth` says, in the user's language: over everything, since it is read rather than worked on. */
+  slidepBirthText?: string;
 };
 
 /** The readings drawn with their value, and the element they belong to — see `hovered_readings`.
@@ -82,6 +89,7 @@ function hovered_readings(
     !!reading &&
     reading.elementID === candidate.elementID &&
     reading.kind === candidate.kind &&
+    reading.contact === candidate.contact &&
     // No point named means the whole element's own: a member's internal effort is read along it, so it answers for either end (see `merged_internal`).
     (reading.which === undefined || reading.which === candidate.which);
   const hoveredTerms = hoveredBalanceTerm?.terms ?? [];
@@ -147,6 +155,7 @@ function draw_overlay_readings(
     !!focused &&
     candidate.elementID === focused.elementID &&
     candidate.kind === focused.kind &&
+    candidate.contact === focused.contact &&
     // Same rule as the hover above: a reading with no point named takes both ends of its member.
     (focused.which === undefined || focused.which === candidate.which);
   // Kept apart from `names_focused`: a selected-but-not-hovered reading must draw at its own, lesser width — not the width a live hover would stack on top of it.
@@ -310,4 +319,32 @@ export function draw_mechanical_canvas(
     overlayMoments,
     state.type === "SimulationDragging",
   );
+
+  const { slidepBirth, slidepBirthText, now = 0 } = drawing;
+  if (slidepBirth && slidepBirthText) {
+    const message = slidep_birth_message(now - slidepBirth.start);
+    const slidep = drawing.mechanicalElements.find(
+      (e) => e.id === slidepBirth.id && e.type === "slidep",
+    );
+    if (message && slidep && "position" in slidep) {
+      const at = world2screen(slidep.position, viewport);
+      ctx.save();
+      ctx.globalAlpha = message.opacity;
+      ctx.lineWidth = STROKE_WIDTHS.STANDARD;
+      ctx.strokeStyle = COLORS.ELEMENT_STROKE;
+      draw_label_pill(
+        ctx,
+        new Point2(
+          at.x,
+          at.y -
+            DIM.PIVOT_OUTER_RADIUS -
+            DIM.VALUE_PILL_HEIGHT / 2 -
+            4 -
+            message.rise,
+        ).as_space<"screen">(),
+        slidepBirthText,
+      );
+      ctx.restore();
+    }
+  }
 }

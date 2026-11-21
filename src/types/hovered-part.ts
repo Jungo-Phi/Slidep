@@ -15,6 +15,8 @@ export type HoveredReading = {
   elementID: ID;
   kind: ReadingKind;
   which?: "node" | "start" | "end";
+  /** The contact a reaction is read at, by its `ContactSample.id` — set for what a contact transmits, never with `which`. */
+  contact?: number;
 };
 
 /** A reading the panel can take as its subject: every one but the grab, which is only ever pointed at. */
@@ -124,7 +126,8 @@ export function same_hover_target(a: HoveredPart, b: HoveredPart): boolean {
     da.handle === db.handle &&
     da.reading?.elementID === db.reading?.elementID &&
     da.reading?.kind === db.reading?.kind &&
-    da.reading?.which === db.reading?.which
+    da.reading?.which === db.reading?.which &&
+    da.reading?.contact === db.reading?.contact
   );
 }
 

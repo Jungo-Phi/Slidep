@@ -140,6 +140,7 @@ import {
 import { actionReducer } from "./components/mechanism/action-reducer";
 import { assert_actions_preserve_validity } from "./utils/assert-mechanism";
 import { apply_actions } from "./components/mechanism/apply-actions";
+import { note_slidep_birth } from "./components/canvas/slidep-birth";
 import {
   HistorySeal,
   HistorySealContext,
@@ -765,6 +766,7 @@ const App: React.FC = () => {
       // The values coming back may be anything, not just this load's: only a full recompile takes them all.
       else if (!cutOff && is_load_value_only_bundle(actions))
         loadValueOnlyEditRef.current = true;
+      note_slidep_birth(actions);
       if (simulating && structure) goToRest();
       // An edit at rest is an edit at t=0: it cuts off the whole kept recording.
       if ((!simulating || structure) && !is_inert_bundle(actions))

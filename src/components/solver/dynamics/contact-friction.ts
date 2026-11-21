@@ -176,6 +176,10 @@ export class ContactPushes {
   readonly swept: Float64Array;
   /** By contact, the direct solve's multiplier, or nothing when the sweep holds every contact. */
   direct: ((k: number) => number) | null = null;
+  /** By contact, the tangential impulse static friction gave it, in the normal impulse's kg·m. */
+  readonly held: Float64Array;
+  /** By contact, the tangential impulse dynamic friction gave it, a plain impulse (kg·m/s). */
+  readonly slid: Float64Array;
 
   constructor(
     readonly links: Link[],
@@ -183,6 +187,8 @@ export class ContactPushes {
     readonly contactsFrom: number,
   ) {
     this.swept = new Float64Array(links.length - contactsFrom);
+    this.held = new Float64Array(links.length - contactsFrom);
+    this.slid = new Float64Array(links.length - contactsFrom);
   }
 
   /** A correction of `err` metres the sweep just made at link `k`, which counts only if `k` is a contact. */
@@ -235,6 +241,7 @@ export function hold_contacts(
     const impulse = slip / ROW.tangentW;
     if (impulse === 0 || Math.abs(impulse) > mu * normal) continue;
     apply(ROW, nodes, -impulse, nodes.x, nodes.y, nodes.angle);
+    pushes.held[k - contactsFrom] -= impulse;
   }
 }
 
@@ -254,7 +261,27 @@ export function slide_contacts(friction: ContactFrictionInput, pushes: ContactPu
     const bound = (friction.dynamic * normal) / dt;
     const impulse = Math.max(-bound, Math.min(bound, -speed / ROW.tangentW));
     apply(ROW, nodes, impulse, nodes.vx, nodes.vy, nodes.vAngle);
+    pushes.slid[k - contactsFrom] += impulse;
     const after = speed + ROW.tangentW * impulse;
     friction.lost += (speed * speed - after * after) / (2 * ROW.tangentW);
+  }
+}
+
+/**
+ * What each contact transmitted over a step of `dt`, into `out`, four numbers per contact in `ContactPushes`' order: the unit normal `nx, ny` pointing into the contact's first side, the normal force along it (N) and the friction force along `(−ny, nx)` (N).
+ * The first side is the one `tangent_row` gives the positive sign: the point or gear for a contact against a segment, a circle or the floor, `key1` for one between two circles; the second receives the opposite.
+ * A contact that did not push reads all zeros.
+ */
+export function contact_forces(pushes: ContactPushes, nodes: SolveNodes, dt: number, out: Float64Array): void {
+  out.fill(0);
+  if (dt <= 0) return;
+  const { links, slots, contactsFrom } = pushes;
+  for (let k = contactsFrom; k < links.length; k++) {
+    if (!pushes.pushed(k) || !tangent_row(links[k], slots[k], nodes, ROW)) continue;
+    const i = 4 * (k - contactsFrom);
+    out[i] = ROW.ty;
+    out[i + 1] = -ROW.tx;
+    out[i + 2] = pushes.normal(k, ROW) / (dt * dt);
+    out[i + 3] = pushes.held[k - contactsFrom] / (dt * dt) + pushes.slid[k - contactsFrom] / dt;
   }
 }

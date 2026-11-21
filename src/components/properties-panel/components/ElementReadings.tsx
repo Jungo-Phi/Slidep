@@ -1,5 +1,5 @@
 import React from "react";
-import { Box } from "@mui/material";
+import { Box, FormControlLabel, Switch, Typography } from "@mui/material";
 import {
   Action,
   AppMode,
@@ -45,6 +45,7 @@ import {
   InspectorValue,
   Reading,
   ReadingGroup,
+  element_contacts,
   element_reading_groups,
   inspector_layout,
   is_series_value,
@@ -232,7 +233,7 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
 
   // The unfolded reading is brought into view: it may sit well down the page, and a click on its arrow out on the canvas is what unfolded it.
   const unfoldedRef = React.useRef<HTMLDivElement>(null);
-  const focusKey = focused ? `${focused.kind}-${focused.which ?? ""}` : null;
+  const focusKey = focused ? `${focused.kind}-${focused.which ?? ""}-${focused.contact ?? ""}` : null;
   React.useEffect(() => {
     if (focusKey)
       unfoldedRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -259,7 +260,7 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
 
   /**
    * What one layer is called, and the eye that shows it.
-   * A support reaction has no flag of its own: its eye writes the mechanism-wide free-body switch, so turning one off turns them all off.
+   * A support reaction has no flag of its own: its eye writes the mechanism-wide free-body switch, so turning one off turns them all off — and a contact's, which shows with them, writes the same one.
    */
   const layer_display = (group: ReadingGroup) => {
     const overlay =
@@ -269,7 +270,9 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
       key,
       label: overlay
         ? tn(OVERLAY_LABEL_KEYS[overlay], 1)
-        : t("reaction_support_one"),
+        : group.layer.kind === "contacts"
+          ? t("contact_reading")
+          : t("reaction_support_one"),
       eye: {
         shown: overlay
           ? overlay_shown(element, overlay)
@@ -338,8 +341,67 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
       ));
   };
 
+  /** The contact a reading is taken at, as this element receives it. */
+  const contact_of = (reading: Reading) =>
+    reading.focus.contact === undefined
+      ? undefined
+      : element_contacts(element, snapshot).find((contact) => contact.id === reading.focus.contact);
+  /** The resultant a contact applies, laid out as any other force reads. */
+  const contact_force = (reading: Reading) => {
+    const contact = contact_of(reading);
+    return (
+      contact &&
+      format_metric({
+        metric: "force",
+        unit: "N",
+        values: [
+          { key: "x", value: contact.vector.x },
+          { key: "y", value: contact.vector.y },
+          { key: "norm", value: contact.vector.length() },
+        ],
+      })
+    );
+  };
+  /** A contact is named by what it is against: the floor, or the other element. */
+  const contact_label = (reading: Reading) => {
+    const contact = contact_of(reading);
+    const other =
+      contact?.other === undefined
+        ? t("floor")
+        : shown_element_name(analysedMechanism.mechanicalElements.find((el) => el.id === contact.other));
+    return `${t("contact_reading")} – ${other}`;
+  };
+
+  /** A contact unfolded: its resultant, the two components it adds up from, and whether the canvas and the balance read it as those two. */
+  const unfolded_contact = (reading: Reading) => {
+    const contact = contact_of(reading);
+    return (
+      <Box ref={unfoldedRef} sx={{ pb: 0.5 }}>
+        <Box sx={SUBJECT_VALUES_INSET}>
+          <ValueRow label={t("force")} formatted={contact_force(reading)} />
+          <ValueRow label={t("contact_normal")} formatted={contact && format_scalar(contact.normal, FORCE)} />
+          <ValueRow label={t("contact_friction")} formatted={contact && format_scalar(contact.friction, FORCE)} />
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={mechanism.simulation.contactComponents}
+                onChange={() =>
+                  applyActions([{ type: "SetContactComponents", enabled: !mechanism.simulation.contactComponents }])
+                }
+              />
+            }
+            label={<Typography variant="caption">{t("contact_components")}</Typography>}
+            sx={{ mr: 0 }}
+          />
+        </Box>
+      </Box>
+    );
+  };
+
   /** A reading unfolded: one line per quantity, each named for what it adds rather than for itself — the row above has already said which reading this is. */
   const unfolded = (reading: Reading) => {
+    if (reading.focus.contact !== undefined) return unfolded_contact(reading);
     // A reaction names both its quantities, but a hinge reports no couple: what has nothing to say here is left out rather than shown as a blank line.
     const spelled = reading_quantities(reading, element);
     const read = spelled.filter(
@@ -381,14 +443,18 @@ export const ElementReadings: React.FC<ElementReadingsProps> = ({
     return group.readings.map((reading) => {
       const selected = !!focused && same_reading(focused, reading.focus);
       return (
-        <React.Fragment key={`${key}-${reading.focus.which ?? "node"}`}>
+        <React.Fragment key={`${key}-${reading.focus.which ?? "node"}-${reading.focus.contact ?? ""}`}>
           <ReadingRow
             icon={reading.icon}
-            label={reading_label(label, reading.focus.which)}
+            label={reading.focus.contact !== undefined ? contact_label(reading) : reading_label(label, reading.focus.which)}
             value={
-              // A reading with no quantity to summarise shows nothing, not a dash: a beam's internal effort is a field, and there is no figure missing to announce.
-              reading.metrics.length > 0 && (
-                <MetricValues formatted={formatted_of(reading.metrics)} summary />
+              reading.focus.contact !== undefined ? (
+                <MetricValues formatted={[contact_force(reading)]} summary />
+              ) : (
+                // A reading with no quantity to summarise shows nothing, not a dash: a beam's internal effort is a field, and there is no figure missing to announce.
+                reading.metrics.length > 0 && (
+                  <MetricValues formatted={formatted_of(reading.metrics)} summary />
+                )
               )
             }
             selected={selected}

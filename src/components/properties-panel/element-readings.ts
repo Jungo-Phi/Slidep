@@ -1,7 +1,8 @@
 import { MechanicalElement, OverlayKind, Point2, ProbeMetric } from "../../types";
 import { StringKey } from "../../i18n";
 import { probe_metric_available } from "../../utils/probe-metrics";
-import { DynamicSnapshot } from "../../types/runtime-state";
+import { ContactForce, DynamicSnapshot } from "../../types/runtime-state";
+import type { ID } from "../../types/element";
 import { PhysicsOverlayKind } from "../../constants/physics-display-specs";
 import { ICON_COLORS } from "../../theme/canvas-theme";
 import { icon, icon_tinted } from "../element-palette/iconDataUris";
@@ -72,16 +73,18 @@ export interface Reading {
 /**
  * What one eye switches.
  * A support reaction has no element flag of its own: it is a property of the problem rather than of the node it sits on, and is switched mechanism-wide (see `OverlaysMenu`), so its group offers no eye.
+ * What a contact transmits is switched with them: the floor, or a part leant on, is what the mechanism rests on.
  */
 export type ReadingLayer =
   | { kind: "element-overlay"; overlay: OverlayKind }
-  | { kind: "support-reactions" };
+  | { kind: "support-reactions" }
+  | { kind: "contacts" };
 
-export type LayerKey = OverlayKind | "support-reactions";
+export type LayerKey = OverlayKind | "support-reactions" | "contacts";
 
 /** Identifies a layer among an element's own — a React key, and how the readings of one layer find each other. */
 export function layer_key(layer: ReadingLayer): LayerKey {
-  return layer.kind === "support-reactions" ? layer.kind : layer.overlay;
+  return layer.kind === "element-overlay" ? layer.overlay : layer.kind;
 }
 
 /**
@@ -122,8 +125,10 @@ export function reading_from_focus(
         : element.type === "belt"
           ? ["belt-tension"]
           : ["axial-force"]
-      : focus.kind === "reaction-support" || focus.kind === "reaction-internal"
-        ? reaction_metrics(focus.which ?? "node")
+      : focus.contact !== undefined
+        ? []
+        : focus.kind === "reaction-support" || focus.kind === "reaction-internal"
+          ? reaction_metrics(focus.which ?? "node")
         : focus.kind === "inertia" && element_has_rotational_inertia(element)
           ? ["inertia", "inertia-moment"]
           : [focus.kind];
@@ -183,6 +188,8 @@ export function reading_quantities(
         : [{ value: "inertia", labelKey: "force" }];
     case "reaction-internal":
     case "reaction-support": {
+      // A contact's quantities are no probe metric: `ElementReadings` reads them off the contact itself.
+      if (reading.focus.contact !== undefined) return [];
       // A beam says nothing here: its effort is the field the diagrams draw, not a figure.
       // A spring or a damper is a massless member with a purely axial law, so that one figure is its whole torsor — no couple at either end to read beside it (`member_axial_reaction`).
       if (merged_internal(reading.focus))
@@ -207,7 +214,7 @@ export function reading_quantities(
  * A gear's own internal reaction sits at its centre and keeps its point, having only ever had one.
  */
 export function merged_internal(focus: MeasuredReading): boolean {
-  return focus.kind === "reaction-internal" && focus.which === undefined;
+  return focus.kind === "reaction-internal" && focus.which === undefined && focus.contact === undefined;
 }
 
 /**
@@ -215,7 +222,7 @@ export function merged_internal(focus: MeasuredReading): boolean {
  * The one place an end is dropped: a click lands on one arrow, but what it names is the effort the whole member carries.
  */
 export function focus_of_reading(focus: HoveredReading): HoveredReading {
-  return focus.kind === "reaction-internal" && focus.which !== "node"
+  return focus.kind === "reaction-internal" && focus.which !== "node" && focus.contact === undefined
     ? { elementID: focus.elementID, kind: focus.kind }
     : focus;
 }
@@ -223,7 +230,7 @@ export function focus_of_reading(focus: HoveredReading): HoveredReading {
 /** Whether two readings name the same thing — a canvas click and a panel row meeting on one row. */
 export function same_reading(a: HoveredReading, b: HoveredReading): boolean {
   return (
-    a.elementID === b.elementID && a.kind === b.kind && a.which === b.which
+    a.elementID === b.elementID && a.kind === b.kind && a.which === b.which && a.contact === b.contact
   );
 }
 
@@ -292,7 +299,59 @@ export function element_reading_groups(
     if (merged && group.readings.length > 0) continue;
     group.readings.push(reading(element, kind, merged ? undefined : r.which));
   }
+
+  for (const contact of element_contacts(element, snapshot)) {
+    const kind: PhysicsOverlayKind = contact.force.bodies[1] === undefined ? "reaction-support" : "reaction-internal";
+    let group = groups.find((g) => g.layer.kind === "contacts");
+    if (!group) {
+      group = { layer: { kind: "contacts" }, icon: reading_icon(kind), color: ICON_COLORS.OVERLAY[kind], readings: [] };
+      groups.push(group);
+    }
+    group.readings.push({
+      focus: { elementID: element.id, kind, contact: contact.id },
+      metrics: [],
+      icon: reading_icon(kind),
+      color: ICON_COLORS.OVERLAY[kind],
+    });
+  }
   return groups;
+}
+
+/** A lasting contact `element` takes part in, and what it receives there: the force on its own side, and the element on the other — `undefined` for the floor. */
+export interface ElementContact {
+  id: number;
+  force: ContactForce;
+  /** N — the resultant onto `element`. */
+  vector: Point2;
+  /** N — the magnitudes of its two components, pressing across the surfaces and rubbing along them: the resultant says which way each points. */
+  normal: number;
+  friction: number;
+  other: ID | undefined;
+}
+
+/** Every lasting contact `element` takes part in at `snapshot`, in the order the solver numbers them. */
+export function element_contacts(element: MechanicalElement, snapshot: DynamicSnapshot | undefined): ElementContact[] {
+  const contacts: ElementContact[] = [];
+  for (const sample of snapshot?.contacts ?? []) {
+    const force = sample.force;
+    const side = force?.bodies.indexOf(element.id) ?? -1;
+    if (!force || side < 0) continue;
+    // The second side receives the opposite of what the first does.
+    const sign = side === 0 ? 1 : -1;
+    const vector = new Point2(force.nx, force.ny)
+      .mul(force.normal)
+      .add(new Point2(-force.ny, force.nx).mul(force.friction))
+      .mul(sign);
+    contacts.push({
+      id: sample.id,
+      force,
+      vector,
+      normal: force.normal,
+      friction: Math.abs(force.friction),
+      other: force.bodies[1 - side],
+    });
+  }
+  return contacts;
 }
 
 /**

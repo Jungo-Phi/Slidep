@@ -71,7 +71,7 @@ import {
   element_centroidal_inertia,
   element_mass,
 } from "../../../utils/element-mass";
-import { body_centre } from "../analysis/force-balance";
+import { body_centre, contact_terms } from "../analysis/force-balance";
 import { PROBE_ELEMENT_COLORS } from "../../properties-panel/probe-colors";
 import {
   CohesionField,
@@ -1016,6 +1016,7 @@ export function useSimulationPlayback({
           const namedReactions = namedReadings.filter(
             (reading) =>
               reading.elementID === el.id &&
+              reading.contact === undefined &&
               (reading.kind === "reaction-support" ||
                 reading.kind === "reaction-internal"),
           );
@@ -1104,6 +1105,24 @@ export function useSimulationPlayback({
             }
           }
         }
+        // What the contacts transmit shows with the support reactions: the floor, or a part the mechanism leans on, is what it rests on.
+        // Built from the very terms the force balance lists, so a hovered line of it lights its own arrow.
+        for (const term of contact_terms(dynSnap, mech.simulation.contactComponents)) {
+          const contact = term.contact!;
+          const kind = contact.internal ? "reaction-internal" : "reaction-support";
+          const named = namedReadings.some(
+            (reading) => reading.elementID === term.elementID && reading.kind === kind && reading.contact === contact.id,
+          );
+          if ((!supportReactions && !named) || is_negligible(term.force.length(), pool.force)) continue;
+          overlayArrows.push({
+            at: term.at,
+            vector: term.force,
+            kind,
+            id: term.id,
+            elementID: term.elementID,
+            contact: contact.id,
+          });
+        }
         // The spring the cursor holds the mechanism with, whatever the overlay settings: it is the action the user is applying, not a reading to switch on.
         // Named `"grab"` like its row of the force balance, which is how one lights the other.
         if (dynSnap.grab)
@@ -1131,6 +1150,17 @@ export function useSimulationPlayback({
               element_kinematic_velocity(el, snaps as KinematicSnapshot[], index),
               reference,
             );
+        // Where the cursor holds the mechanism: a kinematic grab has no force to show, only how far the constraints keep the grabbed point from the cursor.
+        const tether = (snapshot as KinematicSnapshot).grab;
+        if (tether)
+          overlayArrows.push({
+            at: new Point2(tether.x, tether.y),
+            vector: new Point2(0, 0),
+            kind: "grab",
+            id: "grab",
+            elementID: tether.elementID,
+            tetherTo: new Point2(tether.tx, tether.ty),
+          });
       }
       liveFrameRef.current = {
         time: snapshot.t,

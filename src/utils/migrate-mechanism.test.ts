@@ -421,6 +421,12 @@ describe("migrate_document", () => {
     });
   });
 
+  it("reads a contact as its resultant in a document saved before the choice existed", () => {
+    const { contactComponents: _, ...simulation } = DEFAULT_SIMULATION;
+    const result = migrate_document(doc({ formatVersion: 16, simulation }));
+    expect(result.simulation.contactComponents).toBe(false);
+  });
+
   it("defaults the beam-fill lens for a document saved before it existed", () => {
     const simulation = {
       gravity: true,

@@ -271,6 +271,21 @@ export interface ContactSample {
   id: number;
   x: number;
   y: number;
+  /** What the contact transmitted on that step — see `ContactForce`. Absent where it was not measured, and at an impact, whose percussion no force over a step stands for. */
+  force?: ContactForce;
+}
+
+/**
+ * The effort one contact transmits, at its `ContactSample` point: `normal` along the unit normal `(nx, ny)`, `friction` along `(−ny, nx)`, both in newtons.
+ * The first of `bodies` receives `normal·n + friction·t`, the second the opposite.
+ */
+export interface ContactForce {
+  /** The element on each side; the second is `undefined` against the floor, which is no element. */
+  bodies: [ID, ID | undefined];
+  nx: number;
+  ny: number;
+  normal: number;
+  friction: number;
 }
 
 export interface KinematicSnapshot extends SimulationSnapshot {
@@ -279,6 +294,23 @@ export interface KinematicSnapshot extends SimulationSnapshot {
    * See `SnapshotLayout`.
    */
   angles: Float64Array;
+  /** Where the cursor holds the mechanism this frame — see `GrabTether`.
+   * Undefined on frames without a grab. */
+  grab?: GrabTether;
+}
+
+/**
+ * A kinematic grab at one recorded instant: the grabbed point as solved, and the cursor it is pulled to (world).
+ * Kinematics has no force to show, only the gap the constraints leave between the two.
+ * Plain numbers, not `Point2`, so it crosses the worker boundary untouched (see `recorder-protocol.ts`).
+ */
+export interface GrabTether {
+  /** The element the cursor holds. */
+  elementID: ID;
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
 }
 
 /**

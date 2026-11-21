@@ -78,6 +78,7 @@ export function actionReducer(
   let simulationValues = simulation_values(mechanism.simulation);
   let beamStressLens = mechanism.simulation.beamStressLens;
   let supportReactions = mechanism.simulation.supportReactions;
+  let contactComponents = mechanism.simulation.contactComponents;
   let element: UnionElement;
   let material: MaterialDef;
   let profile: ProfileDef;
@@ -548,6 +549,9 @@ export function actionReducer(
       case "SetSupportReactions":
         supportReactions = action.enabled !== revert;
         break;
+      case "SetContactComponents":
+        contactComponents = action.enabled !== revert;
+        break;
       case "SetCollisions":
         collisions = action.enabled !== revert;
         break;
@@ -666,6 +670,7 @@ export function actionReducer(
       ...simulationValues,
       beamStressLens,
       supportReactions,
+      contactComponents,
     },
     mechanicalElements: mechanicalElements,
     constraintElements: constraintElements,

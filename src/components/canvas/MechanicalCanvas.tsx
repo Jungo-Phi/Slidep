@@ -53,7 +53,7 @@ import {
 import { aims_until_lift } from "./tools/touch-press";
 import { names_element } from "../../types/hovered-part";
 import { COLORS } from "../../theme/canvas-theme";
-import { CANVAS_CONTEXT_SETTINGS, CANVAS_RASTER } from "./canvas-raster";
+import { CANVAS_CONTEXT_SETTINGS } from "./canvas-raster";
 import { CONSTRAINT_REVEAL_COOLDOWN_MS, CONSTRAINT_REVEAL_FADE_MS, MODE_ANIMATION, SPACE_HOLD_MS } from "../../constants/interaction-specs";
 import { Box, Tooltip } from "@mui/material";
 import { type Instance as PopperInstance } from "@popperjs/core";
@@ -131,6 +131,7 @@ import {
 } from "../../constants/shortcuts";
 import { selected_ids } from "../../types/canvas-state";
 import { apply_actions } from "../mechanism/apply-actions";
+import { current_slidep_birth } from "./slidep-birth";
 import { transform_actions } from "../mechanism/transform-actions";
 import { draw_transform_gizmo } from "./drawing/draw-transform-gizmo";
 import {
@@ -763,14 +764,6 @@ const MechanicalCanvasView = forwardRef<
       if (showGrid) draw_grid(ctx, viewport, canvas.width, canvas.height);
 
       draw_axes(ctx, viewport, canvas.width, canvas.height);
-      // Which rasterizer a forced diagnostic run is on, so a screen recording says so (see `canvas-raster.ts`).
-      if (CANVAS_RASTER !== "auto") {
-        ctx.save();
-        ctx.font = "bold 12px sans-serif";
-        ctx.fillStyle = COLORS.ACCENT;
-        ctx.fillText(CANVAS_RASTER.toUpperCase(), 8, 16);
-        ctx.restore();
-      }
       if (showGrid)
         draw_graduations(ctx, viewport, canvas.width, canvas.height);
 
@@ -899,6 +892,8 @@ const MechanicalCanvasView = forwardRef<
         blockedMotors: blockedMotorsRef.current,
         redundancySymbols: redundancySymbolsRef.current,
         now,
+        slidepBirth: current_slidep_birth(now),
+        slidepBirthText: t("slidep_birth"),
         libraryTint: librarySectionRef.current
           ? {
               section: librarySectionRef.current,
@@ -1061,7 +1056,7 @@ const MechanicalCanvasView = forwardRef<
       for (const term of balanceHover?.terms ?? []) {
         const quantity = balanceHover!.quantity;
         const color = balance_term_color(
-          term.kind,
+          term,
           COLORS.ACCENT,
           COLORS.OVERLAY,
         );
@@ -1874,6 +1869,7 @@ const MechanicalCanvasView = forwardRef<
             elementID: hit.elementID,
             kind: hit.kind,
             which: hit.which,
+            contact: hit.contact,
           },
           position: hit.at,
         };

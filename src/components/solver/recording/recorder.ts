@@ -270,12 +270,22 @@ export class Recorder {
             supports: probe.supports,
             // `m·a` travels with the accelerations it is built from: read from the re-projection instead, it would be zero while the reactions beside it already carry the forces that produce it, and the free body's `ΣF = m·a` would fail to close by the whole of `ΣF`.
             balance: probe.balance,
+            // What the contacts carry is an effort too, and the re-projection has no time to measure it over.
+            contacts: with_forces_of(dynamicSnapshot.contacts, probe.contacts),
           };
         }
         latest = dynamicSnapshot;
       }
       // An impact between two regular instants would be drawn nowhere near touching: the interpolation between them cannot pass through a bounce it never saw.
       // Its own step is kept too, its efforts borrowed from the instant before since it was solved without them.
+      // A contact not touching on the step before is an impact: what its step measured is a percussion spread over the step, not an effort the contact holds.
+      if (stepDt > 0 && latest.contacts?.some((contact) => contact.force && !this.previousContactIDs.has(contact.id)))
+        latest = {
+          ...latest,
+          contacts: latest.contacts.map((contact) =>
+            contact.force && !this.previousContactIDs.has(contact.id) ? { id: contact.id, x: contact.x, y: contact.y } : contact,
+          ),
+        };
       const own = latest.contacts ?? [];
       const impact = own.some((contact) => !this.previousContactIDs.has(contact.id));
       this.previousContactIDs = new Set(own.map((contact) => contact.id));
@@ -305,6 +315,16 @@ export class Recorder {
 
     return { snapshots, reached, solved };
   }
+}
+
+/** `contacts`, each given the force `measured` holds for it. */
+function with_forces_of(contacts: ContactSample[] | undefined, measured: ContactSample[] | undefined): ContactSample[] | undefined {
+  if (!contacts || !measured) return contacts;
+  const forces = new Map(measured.map((contact) => [contact.id, contact.force]));
+  return contacts.map((contact) => {
+    const force = forces.get(contact.id);
+    return force ? { ...contact, force } : contact;
+  });
 }
 
 /** The ids of the contacts `snapshot` carries, none when there is no snapshot. */

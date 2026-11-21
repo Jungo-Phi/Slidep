@@ -70,8 +70,34 @@
 
 ## Slidep et l'IA
 
-- Un serveur MCP Slidep, pour qu'une IA puisse créer un mécanisme de A à Z et faire des mesures dessus.
-- Quand on demande un mécanisme à un agent IA, il cite un mécanisme existant de la bibliothèque Slidep, ou en crée un nouveau.
+- **Objectif :**
+  - Un serveur MCP Slidep, pour qu'une IA puisse créer un mécanisme de A à Z et faire des mesures dessus.
+  - Quand on demande un mécanisme à un agent IA, il cite un mécanisme existant de la bibliothèque Slidep, ou en crée un nouveau.
+
+- **Une vitrine lisible sans JavaScript :**
+  - Une page d’accueil en HTML statique qui dit ce que fait l’outil, pour qui, et ce qui le distingue
+  - Soigner la description pour la rechercher : "mechanism, linkage, kinematics, gears, physics simulation, CAD…"
+  - Des pages d’exemples (Jansen, Klann, came, engrenages) avec une image et un lien qui ouvre le mécanisme dans l’app
+  - Une documentation du format de fichier et, plus tard du MCP
+
+- **Structure :**
+  - Des noms et descriptions d’outils explicites sur le quand : par exemple create_mechanism, avec « À utiliser pour concevoir, simuler ou animer tout mécanisme articulé : bielles, engrenages, jambes marchantes… ». Je compare la demande à ces textes.
+  - 🔨 Des primitives au bon niveau : un format déclaratif (« barre de 41,5 entre B et C, pivot fixe en (−38, −7,8) ») plutôt qu’une imitation des clics de l’interface.
+  - Ajoute une bibliothèque de mécanismes classiques (Jansen, Klann, Tchebychev, Peaucellier, quadrilatère articulé) prêts à paramétrer. Moins j’ai d’appels à faire, plus je réussis.
+  - Un connecteur seul donne des outils. Un plugin ou une compétence (skill) qui l’accompagne peut ajouter le savoir-faire : comment concevoir un mécanisme qui marche, quels modèles utiliser, comment vérifier.
+
+- **Données à renvoyer :**
+  - Une image du mécanisme et de la trajectoire
+  - Des diagnostics (degrés de liberté, positions impossibles, collisions, articulations bloquées)
+  - Des données (la courbe du pied, la vitesse)
+  - Un lien vers le mécanisme ouvert et éditable dans ton application
+- (Des messages d’erreur exploitables (« la barre g ne peut pas atteindre F pour θ = 140° ») valent de l’or.)
+
+- **Exister dans la connaissance des modèles (levier lent) :**
+  - Un format de fichier ouvert, textuel et documenté : les modèles futurs sauront l’écrire, même sans MCP, et le citeront comme option.
+  - Une galerie publique de mécanismes avec des liens partageables, des tutoriels et une documentation lisible par les machines (llms.txt, exemples complets).
+  - Des communautés qui en parlent : profs de techno et de physique, makers, fans de Strandbeest. Ce sont aussi elles qui finiront par dire « fais-le dans [ton outil] ».
+- Monter un jeu de tests avec des demandes réalistes.
 
 ## Version pro
 
